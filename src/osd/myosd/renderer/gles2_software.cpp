@@ -104,6 +104,4 @@ void gles2_software::on_emulatedsize_change(int width, int height)
 
 	m_screenbuff = std::realloc(m_screenbuff, m_pitch*height*4);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-
-	glViewport(0, 0, width, height);
 }

@@ -119,9 +119,10 @@ void gles2_renderer::on_emulatedsize_change(int width, int height)
 	m_ortho = gl_utils::make_ortho(0.0f, width, height, 0.0f, -1.0f, 1.0f);
 	m_width = width; m_height = height;
 
-	m_filter.set_ortho(m_ortho);
+	//Force program reupload to update ortho matrix uniform
+	m_last_program = 0;
 
-	glViewport(0, 0, width, height);
+	m_filter.set_ortho(m_ortho);
 }
 
 void gles2_renderer::use_quad_program()
