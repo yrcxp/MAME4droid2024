@@ -97,6 +97,7 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
     protected ListPreference mPrefNavbar;
     protected EditTextPreference mPrefInstPath;
 
+	private PreferenceScreen mPrefShaderScreen;
 	protected ListPreference mPrefShader;
 
 	protected ListPreference mPrefNumProcessors;
@@ -139,6 +140,7 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 		mPrefNavbar = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_GLOBAL_NAVBAR_MODE);
 		mPrefInstPath = (EditTextPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_INSTALLATION_DIR);
 
+		mPrefShaderScreen = (PreferenceScreen)getPreferenceScreen().findPreference(PrefsHelper.PREF_SHADERS);
 		mPrefShader = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_SHADER_EFFECT);
 
 		mPrefNumProcessors = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_EMU_NUM_PROCESSORS);
@@ -177,6 +179,7 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			mPrefInstPath.setSummary("Current value is '" + mPrefInstPath.getText()+"'");
 		    mPrefNumProcessors.setSummary("Current value is '" + mPrefNumProcessors.getEntry()+"'");
 
+			updateShaderScreen();
 			updateShaderEntries(Integer.parseInt(mPrefGlobalVideoRenderMode.getValue()));
 		  	mPrefShader.setSummary("Current value is '" + mPrefShader.getEntry()+"'");
 
@@ -222,9 +225,10 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			else if(key.equals(PrefsHelper.PREF_GLOBAL_VIDEO_RENDER_MODE))
 			{
 				mPrefGlobalVideoRenderMode.setSummary("Current value is '" + mPrefGlobalVideoRenderMode.getEntry()+"'");
-				updateShaderEntries(Integer.parseInt(mPrefGlobalVideoRenderMode.getValue()));
 
+				updateShaderEntries(Integer.parseInt(mPrefGlobalVideoRenderMode.getValue()));
 				mPrefShader.setValueIndex(0);
+				updateShaderScreen();
 			}
 	        else if(key.equals(PrefsHelper.PREF_EMU_RESOLUTION))
 	        {
@@ -297,24 +301,24 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			}
 			else if(key.equals(PrefsHelper.PREF_SHADERS_ENABLED))
 			{
-				SharedPreferences.Editor edit = sharedPreferences.edit();
+				//SharedPreferences.Editor edit = sharedPreferences.edit();
 				boolean enable = sharedPreferences.getBoolean(PrefsHelper.PREF_SHADERS_ENABLED,false);
 
 				android.app.UiModeManager u = (android.app.UiModeManager) this.getSystemService(Context.UI_MODE_SERVICE);
 				boolean androidTv  = u.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
 
 				if(enable){
-					edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "0");
+					//edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "0");
 					//if(!androidTv)
 					  //edit.putString(PrefsHelper.PREF_EMU_RESOLUTION_OSD, "0");
 				}
 				else{
-					edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "1");
+					//edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "1");
 					//if(!androidTv)
 					   //edit.putString(PrefsHelper.PREF_EMU_RESOLUTION_OSD, "1");
 				}
 				mPrefShader.setEnabled(enable);
-				edit.commit();
+				//edit.commit();
 			}
 			else if(key.equals(PrefsHelper.PREF_SCRAPE_ICONS) ||
 				key.equals(PrefsHelper.PREF_SCRAPE_SNAPSHOTS) ||
@@ -461,18 +465,26 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 	 * Update shader effects entries with current selected renderer supported shaders
 	 */
 	private void updateShaderEntries(int renderer) {
-			String[] origShaders = Emulator.getShaders(renderer);
+		String[] origShaders = Emulator.getShaders(renderer);
 
-			String[] shaders = new String[origShaders.length+1];
-			shaders[0] = "none";
+		String[] shaders = new String[origShaders.length+1];
+		shaders[0] = "none";
 
-			if (origShaders.length != 0) {
-				System.arraycopy(origShaders, 0, shaders, 1, origShaders.length);
-			} else {
-				mPrefShader.setEnabled(false);
-			}
-
-			mPrefShader.setEntries(shaders);
-			mPrefShader.setEntryValues(shaders);
+		if (origShaders.length != 0) {
+			System.arraycopy(origShaders, 0, shaders, 1, origShaders.length);
 		}
+
+		mPrefShader.setEntries(shaders);
+		mPrefShader.setEntryValues(shaders);
+	}
+
+	private void updateShaderScreen() {
+		if (mPrefGlobalVideoRenderMode.getEntry().equals("Software")) {
+			mPrefShaderScreen.setSummary("Effect shaders are not supported by Software renderer");
+			mPrefShaderScreen.setEnabled(false);
+		} else {
+			mPrefShaderScreen.setSummary("Select it to configure advanced postprocessing effects");
+			mPrefShaderScreen.setEnabled(true);
+		}
+	}
 }

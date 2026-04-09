@@ -46,6 +46,7 @@ package com.seleuco.mame4droid.render;
 
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.opengl.GLES20;
 import android.opengl.GLSurfaceView.Renderer;
 import android.util.Log;
 
@@ -132,7 +133,9 @@ public final class GLRendererES20 implements Renderer, IGLRenderer {
 	@Override
 	public void onSurfaceChanged(GL10 gl, int w, int h) {
 		Log.d("GLRENDERER", "onSurfaceChanged called");
+		GLES20.glViewport(0, 0, w, h);
 		if (Emulator.isEmulating()) {
+			//This is called when you exit from the Preferences screen
 			updateVideoEngine();
 			updateShaderEffect();
 		}

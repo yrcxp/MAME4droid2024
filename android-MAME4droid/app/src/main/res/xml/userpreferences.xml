@@ -349,13 +349,12 @@
 		<PreferenceScreen
 			android:key="shaders"
 			android:persistent="false"
-			android:summary="Select it to configure advanced postprocessing effects"
 			android:title="Shaders">
 
 			<CheckBoxPreference
 				android:defaultValue="false"
 				android:key="PREF_SHADERS_ENABLED"
-				android:summary="Enable renderer to use shaders. Note: This will set the resolution to 'auto' in emulation options for the scaling shaders to work correctly and it will be used a small font also"
+				android:summary="Enable renderer to use shaders. Note: It's recommended you set Emulated Resolution to 'auto' in Emulation options for the scaling shaders to work correctly"
 				android:title="Enable Effect shaders" />
 
 			<ListPreference
