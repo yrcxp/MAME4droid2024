@@ -26,34 +26,33 @@ static void texture_copy_data(gles2_texture* texture, const render_texinfo& texi
 
 void gles2_renderer::set_shader(const char* shader_name)
 {
-	if (shader_name)
-	{
-		if (m_lastfilter != shader_name)
-		{
-			m_filter.load_filter(s_filters[shader_name]);
-
-			//Force program reload since loading filters changes it
-			m_last_program = 0;
-
-			m_lastfilter = shader_name;
-		}
-		m_usefilter = true;
-	}
-	else
-	{
-		m_usefilter = false;
-	}
+    if (shader_name)
+    {
+        if (m_lastfilter != shader_name)
+        {
+            auto it = s_filters.find(shader_name);
+            if (it != s_filters.end())
+            {
+                m_filter.load_filter(it->second);
+                m_last_program = 0;
+                m_lastfilter = shader_name;
+            }
+            else
+            {
+                return;
+            }
+        }
+        m_usefilter = true;
+    }
 }
 
 std::vector<std::string> gles2_renderer::get_shaders_supported()
 {
-	static std::vector<std::string> key_list;
+    std::vector<std::string> key_list;
+    for (const auto& [key, value] : s_filters)
+        key_list.push_back(key);
 
-	key_list.clear();
-	for (const auto& [key, value] : s_filters)
-		key_list.push_back(key);
-
-	return key_list;
+    return key_list;
 }
 
 gles2_renderer::gles2_renderer(int width, int height)

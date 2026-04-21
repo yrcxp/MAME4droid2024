@@ -134,7 +134,7 @@ std::map<std::string, std::string> filter_shader::load_filters(const std::string
 		char shader_filename[100], name[100], linear[10];
 		int version;
 
-		int ret = std::sscanf(buf, "%[^;];%[^;];%[^;];%d", shader_filename, name, linear, &version);
+        int ret = std::sscanf(buf, "%99[^;];%99[^;];%9[^;];%d", shader_filename, name, linear, &version);
 		if (ret < 4)
 		{
 			std::fclose(file);
@@ -156,8 +156,9 @@ std::map<std::string, std::string> filter_shader::load_filters(const std::string
 		auto filelen = std::ftell(shader_file);
 		std::rewind(shader_file);
 
-		if (src_buf.size() < filelen)
-			src_buf.resize(filelen);
+		//if (src_buf.size() < filelen)
+			//src_buf.resize(filelen);
+        src_buf.resize(filelen);
 
 		if (std::fread(src_buf.data(), 1, filelen, shader_file) != filelen)
 		{
@@ -165,7 +166,9 @@ std::map<std::string, std::string> filter_shader::load_filters(const std::string
 			std::fclose(shader_file);
 			throw std::runtime_error("Couldn't fully retrieve data from shader file "s + shader_filename);
 		}
-		src_buf[filelen] = '\0'; //Ensure it is a null-terminated
+
+        //src_buf[filelen] = '\0'; //Ensure it is a null-terminated
+        //not necesary already en std:string. memory leak
 
 		filters[name] = src_buf;
 

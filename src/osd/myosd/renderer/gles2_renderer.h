@@ -63,6 +63,8 @@ public:
 		void* base; //GL_ARGB format
 		bool owned; //Do we own the raw data pointer, or is it a direct reference to textinfo.base?
 
+        gles2_texture() = default;
+
 		~gles2_texture()
 		{
 			glDeleteTextures(1, &texture_id);
@@ -70,6 +72,9 @@ public:
 			if (owned)
 				std::free(base);
 		}
+
+        gles2_texture(const gles2_texture&) = delete;
+        gles2_texture& operator=(const gles2_texture&) = delete;
 	};
 
 	//GL vertex attributes
@@ -119,8 +124,8 @@ private:
 
 	int m_width, m_height;
 
-    int m_view_width = 0;
-    int m_view_height = 0;
+    int m_view_width = 1;
+    int m_view_height = 1;
     bool m_force_viewport_update = true;
 
 	std::list<gles2_texture> m_texlist; //Currently allocated textures

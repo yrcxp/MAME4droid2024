@@ -102,6 +102,12 @@ void gles2_software::on_emulatedsize_change(int width, int height)
 
 	m_pitch = width;
 
-	m_screenbuff = std::realloc(m_screenbuff, m_pitch*height*4);
+    void* new_buff = std::realloc(m_screenbuff, m_pitch * height * 4);
+    if (new_buff) {
+        m_screenbuff = new_buff;
+    } else {
+        throw std::runtime_error("GLES2 Software: Out of memory during screen buffer reallocation");
+    }
+
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 }

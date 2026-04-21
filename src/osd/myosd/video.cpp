@@ -157,7 +157,7 @@ void my_osd_interface::update(bool skip_redraw)
     if (!skip_redraw)
     {
 	    std::lock_guard lock(rend_mutex);
-	    
+
 	    if (primlist)
 		    primlist->release_lock();
 
@@ -229,7 +229,7 @@ extern "C" void myosd_video_getShaders(int renderer, const char*** list, int* n)
 {
 	static std::vector<const char*> char_list;
 
-	std::vector<std::string> shaders;
+    static std::vector<std::string> shaders;
 	switch (renderer)
 	{
 		case SOFTWARE_RENDERER:
