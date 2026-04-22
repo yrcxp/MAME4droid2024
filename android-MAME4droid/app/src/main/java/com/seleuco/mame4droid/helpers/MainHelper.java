@@ -1257,40 +1257,6 @@ galaxy sde	   --> 2560x1600 16:10
 		return orientation;
 	}
 
-	public ArrayList<ArrayList<String>> readShaderCfg(String path){
-		ArrayList<ArrayList<String>> data = new ArrayList<>();
-
-		if(path!=null) {
-
-			try(BufferedReader br = new BufferedReader(new FileReader(path+"/shaders.cfg"))) {
-				StringBuilder sb = new StringBuilder();
-				String line = br.readLine();
-
-				while (line != null) {
-					sb.append(line);
-					sb.append(System.lineSeparator());
-					line = br.readLine();
-					if(line!=null) {
-						line = line.trim();
-						if (line.length()==0)
-							continue;
-						if (line.startsWith("#"))
-							continue;
-						ArrayList<String> a = new ArrayList<>();
-						StringTokenizer tokens = new StringTokenizer(line, ";");
-						while (tokens.hasMoreTokens()) {
-							a.add(tokens.nextToken());
-						}
-						data.add(a);
-					}
-				}
-			} catch (IOException e) {
-			}
-		}
-
-		return data;
-	}
-
 	public int getControllerAlpha() {
 		int alpha=0;
 

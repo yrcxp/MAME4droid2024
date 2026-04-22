@@ -179,8 +179,10 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			mPrefInstPath.setSummary("Current value is '" + mPrefInstPath.getText()+"'");
 		    mPrefNumProcessors.setSummary("Current value is '" + mPrefNumProcessors.getEntry()+"'");
 
-			updateShaderScreen();
-			updateShaderEntries(Integer.parseInt(mPrefGlobalVideoRenderMode.getValue()));
+		    //mPrefShaderScreen.setSummary("Select it to configure advanced postprocessing effects");
+		    //mPrefShaderScreen.setEnabled(true);
+
+			updateShaderEntries(Emulator.RENDERER_GL_NATIVE);
 		  	mPrefShader.setSummary("Current value is '" + mPrefShader.getEntry()+"'");
 
 		  	// Set up a listener whenever a key changes
@@ -225,10 +227,6 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			else if(key.equals(PrefsHelper.PREF_GLOBAL_VIDEO_RENDER_MODE))
 			{
 				mPrefGlobalVideoRenderMode.setSummary("Current value is '" + mPrefGlobalVideoRenderMode.getEntry()+"'");
-
-				updateShaderEntries(Integer.parseInt(mPrefGlobalVideoRenderMode.getValue()));
-				mPrefShader.setValueIndex(0);
-				updateShaderScreen();
 			}
 	        else if(key.equals(PrefsHelper.PREF_EMU_RESOLUTION))
 	        {
@@ -316,7 +314,9 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 					//edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "1");
 					//if(!androidTv)
 					   //edit.putString(PrefsHelper.PREF_EMU_RESOLUTION_OSD, "1");
+					mPrefShader.setValueIndex(0);
 				}
+
 				mPrefShader.setEnabled(enable);
 				//edit.commit();
 			}
@@ -478,13 +478,4 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 		mPrefShader.setEntryValues(shaders);
 	}
 
-	private void updateShaderScreen() {
-		if (mPrefGlobalVideoRenderMode.getEntry().equals("Software")) {
-			mPrefShaderScreen.setSummary("Effect shaders are not supported by Software renderer");
-			mPrefShaderScreen.setEnabled(false);
-		} else {
-			mPrefShaderScreen.setSummary("Select it to configure advanced postprocessing effects");
-			mPrefShaderScreen.setEnabled(true);
-		}
-	}
 }

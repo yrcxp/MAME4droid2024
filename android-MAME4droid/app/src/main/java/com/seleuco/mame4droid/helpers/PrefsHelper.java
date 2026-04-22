@@ -84,7 +84,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	final static public String PREF_SHADERS = "shaders";
 	final static public String PREF_SHADERS_ENABLED = "PREF_SHADERS_ENABLED";
-	final static public String PREF_SHADER_EFFECT = "PREF_SHADER_EFFECT";
+	final static public String PREF_SHADER_EFFECT = "PREF_SHADER_EFFECT_2";
 
 	final static public String PREF_SCRAPE_ENABLED = "PREF_SCRAPE_ENABLED";
 	final static public String PREF_SCRAPE_ICONS = "PREF_SCRAPE_ICONS";

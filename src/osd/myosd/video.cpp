@@ -23,7 +23,7 @@
 
 #include "renderer/myosd_renderer.h"
 #include "renderer/gles2_renderer.h"
-#include "renderer/gles2_software.h"
+#include "renderer/gles1_renderer.h"
 
 #include <mutex>
 #include <vector>
@@ -173,12 +173,12 @@ void my_osd_interface::update(bool skip_redraw)
 //===============================================================================
 enum
 {
-	SOFTWARE_RENDERER = 1,
+	GLES1_RENDERER = 1,
 	GLES2_RENDERER
 };
 
 static myosd_renderer* my_renderer = nullptr;
-static int current_renderer = SOFTWARE_RENDERER;
+static int current_renderer = GLES1_RENDERER;
 
 extern "C" void myosd_video_onChooseRenderer(int renderer)
 {
@@ -190,8 +190,8 @@ extern "C" void myosd_video_onChooseRenderer(int renderer)
 
 	switch (current_renderer)
 	{
-		case SOFTWARE_RENDERER:
-			my_renderer = new gles2_software(min_width, min_height);
+		case GLES1_RENDERER:
+			my_renderer = new gles1_renderer(min_width, min_height);
 		break;
 
 		case GLES2_RENDERER:
@@ -232,8 +232,8 @@ extern "C" void myosd_video_getShaders(int renderer, const char*** list, int* n)
     static std::vector<std::string> shaders;
 	switch (renderer)
 	{
-		case SOFTWARE_RENDERER:
-			shaders = gles2_software::get_shaders_supported();
+		case GLES1_RENDERER:
+			shaders = gles1_renderer::get_shaders_supported();
 		break;
 
 		case GLES2_RENDERER:

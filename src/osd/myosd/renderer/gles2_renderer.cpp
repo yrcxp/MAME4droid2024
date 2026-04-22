@@ -4,7 +4,7 @@
 
     gles2_renderer.cpp
 
-    GLES2 renderer for MAME4droid
+    GL MAME Native renderer based on GLES 2.x for MAME4droid
 
 ***************************************************************************/
 
@@ -32,7 +32,6 @@ static void texture_copy_data(gles2_texture* texture, const render_texinfo& texi
 void gles2_renderer::set_shader(const char* shader_name)
 {
     ANDROID_LOG("set_shader %s...", shader_name);
-
     if (shader_name)
     {
         if (m_lastfilter != shader_name)
@@ -45,17 +44,23 @@ void gles2_renderer::set_shader(const char* shader_name)
                 m_filter.load_filter(it->second.source, it->second.linear);
                 m_last_program = 0;
                 m_lastfilter = shader_name;
-
-                // Forzamos limpieza para aplicar el filtrado (Linear/Nearest) del nuevo shader
-                m_flush_textures = true;
+            }
+            else
+            {
+                ANDROID_LOG("shader not found!");
+                return;
             }
         }
         m_usefilter = true;
     }
     else
     {
+        if(m_lastfilter.empty())
+        {
+            m_last_program = 0;
+        }
+        m_lastfilter = "";
         m_usefilter = false;
-        m_flush_textures = true; // Limpiamos caché para volver al filtrado por defecto
     }
 }
 
@@ -134,7 +139,7 @@ void gles2_renderer::on_emulatedsize_change(int width, int height)
 	//Force program reupload to update ortho matrix uniform
 	m_last_program = 0;
 
-    m_last_filter_mode != myosd_get(MYOSD_BITMAP_FILTERING);
+    m_last_filter_mode = myosd_get(MYOSD_BITMAP_FILTERING);
 
     m_force_viewport_update = true;
 

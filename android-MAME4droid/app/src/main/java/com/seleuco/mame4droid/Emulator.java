@@ -55,7 +55,6 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.net.Uri;
-import android.opengl.GLSurfaceView;
 import android.os.Environment;
 import android.os.Process;
 import android.util.Log;
@@ -65,7 +64,6 @@ import android.view.View;
 import com.seleuco.mame4droid.helpers.DialogHelper;
 import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.input.TouchController;
-import com.seleuco.mame4droid.render.IGLRenderer;
 import com.seleuco.mame4droid.views.EmulatorViewGL;
 import com.seleuco.mame4droid.widgets.WarnWidget;
 
@@ -691,14 +689,7 @@ public class Emulator {
 
 				mm.getMainHelper().updateEmuValues();
 
-				loadShaders(mm.getMainHelper().getInstallationDIR());
-
 				View emuView = mm.getEmuView();
-				((GLSurfaceView)emuView).queueEvent(() -> {
-					Emulator.onChooseRenderer(mm.getPrefsHelper().getVideoRenderMode());
-					String effect = mm.getPrefsHelper().getShaderEffectSelected();
-					Emulator.setShader(effect.equals("none") ? null : effect);
-				});
 
 				isEmulating = true;
 				runT();
@@ -806,8 +797,8 @@ public class Emulator {
 	public static native void onSurfaceCreated();
 	public static native void onDrawFrame();
 
-	public final static int RENDERER_SOFTWARE = 1;
-	public final static int RENDERER_GLES2 = 2;
+	public final static int RENDERER_GL_SW = 1;
+	public final static int RENDERER_GL_NATIVE = 2;
 
 	public static native void onChooseRenderer(int renderer);
 

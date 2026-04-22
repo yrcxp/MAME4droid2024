@@ -1,7 +1,7 @@
 /*
  * This file is part of MAME4droid.
  *
- * Copyright (C) 2026 Filipe Paulino (FlykeSpice)
+ * Copyright (C) 2026 Filipe Paulino (FlykeSpice) & David Valdeita (Seleuco)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,12 +59,13 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * OpenGLES 2 renderer for MAME4droid to do hardware accelerated rendering of MAME primitives
+ * OpenGLES renderer for MAME4droid
  */
-public final class GLRendererES20 implements Renderer, IGLRenderer {
+public final class GLNativeRenderer implements Renderer, IGLRenderer {
 
 	private MAME4droid mm;
 	private PrefsHelper prefsHelper;
+	private String oldEffect;
 	/**
 	 * Sets the MAME4droid instance for the renderer.
 	 * @param mm The MAME4droid application instance.
@@ -73,7 +74,6 @@ public final class GLRendererES20 implements Renderer, IGLRenderer {
 	public void setMAME4droid(MAME4droid mm) {
 		this.mm = mm;
 		prefsHelper = mm.getPrefsHelper();
-		oldEngine = prefsHelper.getVideoRenderMode();
 		oldEffect = prefsHelper.getShaderEffectSelected();
 	}
 
@@ -83,20 +83,8 @@ public final class GLRendererES20 implements Renderer, IGLRenderer {
 	 */
 	@Override
 	public void changedEmulatedSize() {
-		//FlykeSpice: We do nothing
 	}
 
-	private int oldEngine;
-	private void updateVideoEngine() {
-		int engine = prefsHelper.getVideoRenderMode();
-
-		if (oldEngine != engine) {
-			oldEngine = engine;
-			Emulator.onChooseRenderer(engine);
-		}
-	}
-
-	private String oldEffect;
 	private void updateShaderEffect() {
 		String effect = prefsHelper.isShadersEnabled() ? prefsHelper.getShaderEffectSelected() : "none";
 
@@ -123,11 +111,15 @@ public final class GLRendererES20 implements Renderer, IGLRenderer {
 	public void onSurfaceCreated(GL10 gl, EGLConfig config) {
 		//Call JNI method to do initialization stuff
 		Log.d("GLRENDERER", "onSurfaceCreated called");
+		Emulator.loadShaders(mm.getMainHelper().getInstallationDIR());
+		Emulator.onChooseRenderer(Emulator.RENDERER_GL_NATIVE);
+		Emulator.setShader(oldEffect.equals("none") ? null : oldEffect);
+		/*
 		if (Emulator.isEmulating()) {
-			Emulator.onChooseRenderer(oldEngine);
-
+			Emulator.onChooseRenderer(Emulator.RENDERER_GLES2);
 			Emulator.setShader(oldEffect.equals("none") ? null : oldEffect);
 		}
+		 */
 	}
 
 	@Override
@@ -136,14 +128,14 @@ public final class GLRendererES20 implements Renderer, IGLRenderer {
 		GLES20.glViewport(0, 0, w, h);
 		if (Emulator.isEmulating()) {
 			//This is called when you exit from the Preferences screen
-			updateVideoEngine();
+			//updateVideoEngine();
 			updateShaderEffect();
 		}
 	}
 
 	@Override
 	public void onDrawFrame(GL10 gl) {
-		//Call JNI method to do GLES2 rendering on native side
+		//Call JNI method to do GLES rendering on native side
 		Emulator.onDrawFrame();
 	}
 }

@@ -347,16 +347,16 @@
 			android:persistent="false"
 			android:title="Shaders">
 
-			<CheckBoxPreference
+			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn
 				android:defaultValue="false"
 				android:key="PREF_SHADERS_ENABLED"
-				android:summary="Enable renderer to use shaders. Note: It's recommended you set Emulated Resolution to 'auto' in Emulation options for the scaling shaders to work correctly"
-				android:title="Enable Effect shaders" />
+				android:summary="Enables MAME's native renderer instead of the legacy software renderer. Unlocks shaders and improves vector games. Important: Set Emulated Resolution to 'Native' to enjoy high-res artworks without any performance drop."
+				android:title="Native Renderer (Shaders and HD)" />
 
 			<ListPreference
 				android:defaultValue="none"
 				android:dependency="PREF_SHADERS_ENABLED"
-				android:key="PREF_SHADER_EFFECT"
+				android:key="PREF_SHADER_EFFECT_2"
 				android:title='Effect shader' />
 
 <!--			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_SHADER_30"

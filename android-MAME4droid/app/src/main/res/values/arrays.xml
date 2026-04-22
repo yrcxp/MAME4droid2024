@@ -46,12 +46,10 @@
 	</string-array>
 
 	<string-array name="pref_global_video_render_options">
-		<item>Software</item>
-		<item>GLES2</item>
+		<item>GL</item>
 	</string-array>
 	<string-array name="pref_global_video_render_values">
 		<item>1</item>
-		<item>2</item>
 	</string-array>
 
 	<string-array name="pref_controller_type_options">

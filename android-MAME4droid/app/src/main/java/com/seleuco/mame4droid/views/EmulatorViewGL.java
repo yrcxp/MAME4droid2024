@@ -46,24 +46,24 @@
 package com.seleuco.mame4droid.views;
 
 // Imports of necessary classes from Java and the Android SDK.
-import java.util.ArrayList;
+
 import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
-// Imports required for the Input Method Framework (soft keyboard).
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
-// Imports of MAME4droid specific classes.
 import com.seleuco.mame4droid.Emulator;
-import com.seleuco.mame4droid.render.GLRendererES20;
-//import com.seleuco.mame4droid.render.GLRendererES32;
 import com.seleuco.mame4droid.MAME4droid;
 import com.seleuco.mame4droid.helpers.PrefsHelper;
+import com.seleuco.mame4droid.render.GLSWRenderer;
+import com.seleuco.mame4droid.render.GLNativeRenderer;
 import com.seleuco.mame4droid.render.IGLRenderer;
+
+import java.util.ArrayList;
 
 /**
  * EmulatorViewGL is a custom view extending GLSurfaceView.
@@ -155,16 +155,15 @@ public class EmulatorViewGL extends GLSurfaceView implements IEmuView {
 
 		if(mm != null) {
 			// Check if shaders are enabled in the preferences.
-			//if (mm.getPrefsHelper().isShadersEnabled()) {
-			//	// If so, use OpenGL ES 3.2 for advanced effects.
-			//	setEGLContextClientVersion(3);
-			//	render = new GLRendererES32();
-			//} else {
-				// Otherwise, use the more faster GLES2
+			if (mm.getPrefsHelper().isShadersEnabled()) {
+			    //If so, use OpenGL ES 2.0 for advanced effects.
 				setEGLContextClientVersion(2);
-				render = new GLRendererES20();
-			//}
-
+			 	render = new GLNativeRenderer();
+			} else {
+				// Otherwise, use the more compatible GLES10
+				setEGLContextClientVersion(1);
+			    render = new GLSWRenderer();
+			}
 			// Assign the renderer to the GLSurfaceView.
 			setRenderer(render);
 			// Set the render mode to 'WHEN_DIRTY'.
