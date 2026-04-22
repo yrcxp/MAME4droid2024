@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Filipe Paulino (FlykeSpice) & Seleuco (David Valdeita)
+// copyright-holders:Filipe Paulino (FlykeSpice)& David Valdeita (Seleuco)
 /***************************************************************************
 
     gles2_renderer.h
@@ -120,13 +120,15 @@ private:
 	std::string m_lastfilter; //Last filter used
 	bool m_usefilter = false; //If any filter is being used right now
 	filter_shader m_filter; //Current filter shader used
-	inline static std::map<std::string, std::string> s_filters = {};
+    inline static std::vector<std::pair<std::string, filter_data>> s_filters = {};
 
 	int m_width, m_height;
 
     int m_view_width = 1;
     int m_view_height = 1;
     bool m_force_viewport_update = true;
+    bool m_flush_textures = false;
+    int m_last_filter_mode;
 
 	std::list<gles2_texture> m_texlist; //Currently allocated textures
 };

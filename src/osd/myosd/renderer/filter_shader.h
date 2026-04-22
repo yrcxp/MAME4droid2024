@@ -23,17 +23,23 @@
 /*
  * Encapsulates a single-screen filter GLES 2 shader for overlay effects
  */
+struct filter_data {
+    std::string source;
+    bool linear;
+};
+
 class filter_shader
 {
 public:
-	void load_filter(const std::string &filter_src);
+    void load_filter(const std::string &filter_src, bool linear);
+    bool is_linear() const { return m_linear; }
 
 	void set_input_size(int width, int height);
 	void set_ortho(std::array<float, 4*4> ortho);
 
 	void draw(int width, int height);
 
-	static std::map<std::string, std::string> load_filters(const std::string &root_path);
+    static std::vector<std::pair<std::string, filter_data>> load_filters(const std::string &root_path);
 
 	~filter_shader()
 	{
@@ -41,6 +47,8 @@ public:
 	}
 
 private:
+    bool m_linear = false;
+
 	//shader program
 	GLuint m_program = 0;
 

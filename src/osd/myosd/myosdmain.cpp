@@ -47,6 +47,7 @@ int myosd_display_width;
 int myosd_display_height;
 int myosd_display_width_osd;
 int myosd_display_height_osd;
+int myosd_bitmap_filtering;
 extern int myosd_fps;
 extern int myosd_zoom_to_window;
 
@@ -313,8 +314,11 @@ extern "C" intptr_t myosd_get(int var)
         case MYOSD_MAME_VERSION_STRING:
             return (intptr_t)(void*)emulator_info::get_build_version();
 
+        case MYOSD_BITMAP_FILTERING:
+            return myosd_bitmap_filtering;
+
         case MYOSD_FPS:
-            return 0;
+            return myosd_fps;
 
         case MYOSD_SPEED:
             return 0;
@@ -340,6 +344,9 @@ extern "C" void myosd_set(int var, intptr_t value)
             break;
         case MYOSD_DISPLAY_HEIGHT_OSD:
             myosd_display_height_osd = value;
+            break;
+        case MYOSD_BITMAP_FILTERING:
+            myosd_bitmap_filtering = value;
             break;
         case MYOSD_FPS:
             myosd_fps = value;

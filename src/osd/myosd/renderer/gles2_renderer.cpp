@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Filipe Paulino (FlykeSpice) & Seleuco (David Valdeita)
+// copyright-holders:Filipe Paulino (FlykeSpice) & David Valdeita (Seleuco)
 /***************************************************************************
 
     gles2_renderer.cpp
@@ -15,8 +15,13 @@
 
 #include "modules/render/copyutil.h"
 
+#include <android/log.h>
+
 #include <string>
 #include <stdexcept>
+#include <algorithm>
+
+#define ANDROID_LOG(...) __android_log_print(ANDROID_LOG_DEBUG, "gles2_renderer", __VA_ARGS__)
 
 using gles2_texture = gles2_renderer::gles2_texture;
 
@@ -26,23 +31,31 @@ static void texture_copy_data(gles2_texture* texture, const render_texinfo& texi
 
 void gles2_renderer::set_shader(const char* shader_name)
 {
+    ANDROID_LOG("set_shader %s...", shader_name);
+
     if (shader_name)
     {
         if (m_lastfilter != shader_name)
         {
-            auto it = s_filters.find(shader_name);
+            auto it = std::find_if(s_filters.begin(), s_filters.end(),
+                                   [&](const std::pair<std::string, filter_data>& p) { return p.first == shader_name; });
+
             if (it != s_filters.end())
             {
-                m_filter.load_filter(it->second);
+                m_filter.load_filter(it->second.source, it->second.linear);
                 m_last_program = 0;
                 m_lastfilter = shader_name;
-            }
-            else
-            {
-                return;
+
+                // Forzamos limpieza para aplicar el filtrado (Linear/Nearest) del nuevo shader
+                m_flush_textures = true;
             }
         }
         m_usefilter = true;
+    }
+    else
+    {
+        m_usefilter = false;
+        m_flush_textures = true; // Limpiamos caché para volver al filtrado por defecto
     }
 }
 
@@ -121,6 +134,8 @@ void gles2_renderer::on_emulatedsize_change(int width, int height)
 	//Force program reupload to update ortho matrix uniform
 	m_last_program = 0;
 
+    m_last_filter_mode != myosd_get(MYOSD_BITMAP_FILTERING);
+
     m_force_viewport_update = true;
 
 	m_filter.set_ortho(m_ortho);
@@ -135,7 +150,6 @@ void gles2_renderer::use_quad_program()
 		glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
 		m_last_program = m_quad_program;
 	}
-
 }
 
 void gles2_renderer::use_line_program()
@@ -193,6 +207,15 @@ void gles2_renderer::render(const render_primitive_list& primlist)
 
             m_force_viewport_update = false; // Successfully updated, clear the flag
         }
+    }
+
+    if (m_flush_textures || m_last_filter_mode != myosd_get(MYOSD_BITMAP_FILTERING))
+    {
+        //really texture cache should be empty cos UI last more than one second
+        ANDROID_LOG("Flush_textures Flush:%d Last:%d Current:%ld",m_flush_textures, m_last_filter_mode, myosd_get(MYOSD_BITMAP_FILTERING) );
+        m_last_filter_mode = myosd_get(MYOSD_BITMAP_FILTERING);
+        m_texlist.clear();
+        m_flush_textures = false;
     }
 
 	//TODO: Batch many primitives that share the same properties (format, colors..) into a single draw call
@@ -278,7 +301,8 @@ void gles2_renderer::render(const render_primitive_list& primlist)
 				}
 				else
 				{
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+                    // WARNING: Ensure no EBO is bound here, as s_quad_indices is a client-side pointer.
+                    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 					glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, s_quad_indices);
 				}
 
@@ -290,7 +314,6 @@ void gles2_renderer::render(const render_primitive_list& primlist)
 			break;
 		}
 	}
-
 }
 
 static void texture_copy_data(gles2_texture* texture, const render_texinfo& texinfo, u32 texformat)
@@ -388,12 +411,20 @@ void gles2_renderer::texture_create(const render_primitive& prim)
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texinfo.width, texinfo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture.base);
 
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //ANDROID_LOG("Filtro %ld", myosd_get(MYOSD_BITMAP_FILTERING) );
 
-    //smoothing
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    GLint filter_mode = myosd_get(MYOSD_BITMAP_FILTERING) ? GL_LINEAR : GL_NEAREST;
+
+    if (PRIMFLAG_GET_SCREENTEX(prim.flags)) {
+
+        if(m_usefilter) {
+            filter_mode = m_filter.is_linear() ? GL_LINEAR : GL_NEAREST;
+            ANDROID_LOG("Creando textura con modo %d...", m_filter.is_linear());
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter_mode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter_mode);
 
 	GLint wrapmode = PRIMFLAG_GET_TEXWRAP(prim.flags) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapmode);
@@ -441,7 +472,7 @@ gles2_texture* gles2_renderer::texture_find(const render_primitive& prim)
 		else
 		{
 			//TODO: Better offloading this to a background thread that occasionally does cleanup of unused textures?
-			if ((now - texture->last_access) > osd_ticks_per_second())
+			if ((now - texture->last_access) > osd_ticks_per_second() )
 				texture = m_texlist.erase(texture);
 			else
 				++texture;

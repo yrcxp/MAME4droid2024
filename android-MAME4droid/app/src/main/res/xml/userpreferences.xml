@@ -67,10 +67,6 @@
 			android:title="Zoom to window" android:summary="Automatically zooms the emulated display so that portrait and landscape games use the entire device window. Disable if you use artwork to zoom into the screen area in MAME video options using fixed orientation and wide resolutions"
 			android:defaultValue="true" />
 
-		<CheckBoxPreference android:key="PREF_ZOOM_40"
-			android:title="Zoom Game by 35%" android:summary="Automatically zooms the emulated display by 35%. This useful to play with some 8 bits computers like ZX Spectrum or Amstrad CPC"
-			android:defaultValue="false" />
-
 		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_EMU_DISABLE_DRC_4"
 			android:title="Disable DRC" android:summary="Disable DRC (dynamic recompiler) CPU core. Enable it to test compatibility in some games that freezes or not launch at the expense of performance"
 			android:defaultValue="false" android:disableDependentsState="true" />
@@ -418,6 +414,10 @@
 			android:title="Save States in ROMs path" android:summary="Game states will be stored under ROM files folder. This prevents Android 11+ from deleting them when using external storage for ROMs files and uninstalling the app"
 			android:defaultValue="true" />
 
+		<CheckBoxPreference android:key="PREF_BITMAP_FILTERING"
+			android:title="Smooth scaling" android:summary="Select to turn bitmap filtering on"
+			android:defaultValue="true" />
+
 		<com.seleuco.mame4droid.prefs.ListPrefWithWarn
 			android:title='Screen orientation'
 			android:key="PREF_ORIENTATION"
@@ -435,7 +435,6 @@
 		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_GLOBAL_WARN_ON_EXIT"
 			android:title="Warn on exit" android:summary="Enable it to warn when you press the exit button when gaming"
 			android:defaultValue="true" />
-
 
 	    <com.seleuco.mame4droid.prefs.ListPrefWithWarn android:key="PREF_GLOBAL_NAVBAR_MODE"
 			android:title="Navigation bar mode"
@@ -521,10 +520,6 @@
 			android:title="Touch controller visible" android:summary="Disable to hide the touch controller. Useful when you are using a GamePad"
 			android:defaultValue="true" />
 
-		<CheckBoxPreference android:key="PREF_PORTRAIT_BITMAP_FILTERING"
-			android:title="Smooth scaling" android:summary="Select to turn bitmap filtering on"
-			android:defaultValue="true" />
-
 		<CheckBoxPreference android:key="PREF_PORTRAIT_FULLSCREEN"
 			android:title="Fullscreen" android:summary="Select to enable fullscreen portrait mode"
 			android:defaultValue="false"
@@ -546,10 +541,6 @@
 -->
 		<CheckBoxPreference android:key="PREF_LANDSCAPE_TOUCH_CONTROLLER"
 			android:title="Touch controller visible" android:summary="Disable to hide the touch controller. Useful when you are using a GamePad"
-			android:defaultValue="true" />
-
-		<CheckBoxPreference android:key="PREF_LANDSCAPE_BITMAP_FILTERING"
-			android:title="Smooth scaling" android:summary="Select to turn bitmap filtering on"
 			android:defaultValue="true" />
 
 	</PreferenceCategory>

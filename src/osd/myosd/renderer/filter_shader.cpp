@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Filipe Paulino (FlykeSpice) & Seleuco (David Valdeita)
+// copyright-holders:Filipe Paulino (FlykeSpice) & David Valdeita (Seleuco)
 /***************************************************************************
 
     filter_shader.cpp
@@ -19,11 +19,14 @@
 #include <cstring> //std::strerror
 #include <cerrno>
 #include <stdexcept>
+#include <vector>
+#include <utility>
 
 #define ANDROID_LOG(...) __android_log_print(ANDROID_LOG_DEBUG, "filter_shader", __VA_ARGS__)
 
-void filter_shader::load_filter(const std::string& filter_src)
+void filter_shader::load_filter(const std::string& filter_src, bool linear)
 {
+    m_linear = linear;
     if (m_program)
     {
         glDeleteProgram(m_program);
@@ -110,15 +113,16 @@ void filter_shader::draw(int width, int height)
 
 	glUniform2f(m_uniform_OutputSize, width, height);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    // WARNING: Ensure no EBO is bound here, as s_quad_indices is a client-side pointer.
+    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, gles2_renderer::s_quad_indices);
 }
 
-std::map<std::string, std::string> filter_shader::load_filters(const std::string &root_path)
+std::vector<std::pair<std::string, filter_data>> filter_shader::load_filters(const std::string &root_path)
 {
 	using namespace std::string_literals;
 
-	std::map<std::string, std::string> filters;
+    std::vector<std::pair<std::string, filter_data>> filters;
 	std::string path;
 	std::string src_buf;
 
@@ -165,8 +169,6 @@ std::map<std::string, std::string> filter_shader::load_filters(const std::string
 		auto filelen = std::ftell(shader_file);
 		std::rewind(shader_file);
 
-		//if (src_buf.size() < filelen)
-			//src_buf.resize(filelen);
         src_buf.resize(filelen);
 
 		if (std::fread(src_buf.data(), 1, filelen, shader_file) != filelen)
@@ -176,10 +178,10 @@ std::map<std::string, std::string> filter_shader::load_filters(const std::string
 			throw std::runtime_error("Couldn't fully retrieve data from shader file "s + shader_filename);
 		}
 
-        //src_buf[filelen] = '\0'; //Ensure it is a null-terminated
-        //not necesary already en std:string. memory leak
+        std::string lin_str(linear);
+        bool is_linear = (lin_str == "true" || lin_str == "1" || lin_str == "linear" || lin_str == "LINEAR");
 
-		filters[name] = src_buf;
+        filters.push_back({name, {src_buf, is_linear}});
 
 		std::fclose(shader_file);
 	}

@@ -16,6 +16,8 @@
 #include "emucore.h"
 #include "render.h"
 
+#include "myosd.h"
+
 #include <string>
 #include <vector>
 

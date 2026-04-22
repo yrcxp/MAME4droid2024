@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:Filipe Paulino (FlykeSpice)
+// copyright-holders:Filipe Paulino (FlykeSpice) & David Valdeita (Seleuco)
 /***************************************************************************
 
     gles2_software.h
@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#pragma once 
+#pragma once
 
 #ifndef GLES2_SOFTWARE_H
 #define GLES2_SOFTWARE_H

@@ -466,6 +466,9 @@ public class MainHelper {
 
         PrefsHelper prefsHelper = mm.getPrefsHelper();
 
+		Emulator.setValue(Emulator.BITMAP_FILTERING,
+			prefsHelper.isBitmapFiltering() ? 1 : 0);
+
         Emulator.setValue(Emulator.SHOW_FPS,
                 prefsHelper.isFPSShowed() ? 1 : 0);
 
@@ -623,12 +626,12 @@ public class MainHelper {
 
 		int state = mm.getInputHandler().getTouchController().getState();
 
+		Emulator.setEmuFiltering(prefsHelper.isBitmapFiltering());
+
         if (this.getscrOrientation() == Configuration.ORIENTATION_PORTRAIT) {
 
             ((IEmuView) emuView).setScaleType(prefsHelper
                     .getPortraitScaleMode());
-
-			Emulator.setEmuFiltering(prefsHelper.isPortraitBitmapFiltering());
 
             if (state == TouchController.STATE_SHOWING_CONTROLLER
                     && !prefsHelper.isPortraitTouchController())
@@ -684,9 +687,6 @@ public class MainHelper {
         } else {
             ((IEmuView) emuView).setScaleType(mm.getPrefsHelper()
                     .getLandscapeScaleMode());
-
-			Emulator.setEmuFiltering(mm.getPrefsHelper()
-				.isLandscapeBitmapFiltering());
 
 			if (state == TouchController.STATE_SHOWING_CONTROLLER
                     && !prefsHelper.isLandscapeTouchController())
@@ -941,11 +941,6 @@ galaxy sde	   --> 2560x1600 16:10
                     heightSize *= 0.93;
                 }
 
-				if(mm.getPrefsHelper().isZoomTo40() && Emulator.isInGame()){
-					widthSize *= 1.35;
-					heightSize *= 1.35;
-				}
-
             } else {
                 widthSize = emu_w;
                 heightSize = emu_h;
@@ -1032,7 +1027,7 @@ galaxy sde	   --> 2560x1600 16:10
 
 				edit.putBoolean(PrefsHelper.PREF_HIDE_STICK, true);
 
-				edit.putBoolean(PrefsHelper.PREF_LANDSCAPE_BITMAP_FILTERING,
+				edit.putBoolean(PrefsHelper.PREF_BITMAP_FILTERING,
 					true);
 
 				edit.putBoolean(PrefsHelper.PREF_TOUCH_GAME_MOUSE,
@@ -1062,7 +1057,7 @@ galaxy sde	   --> 2560x1600 16:10
                         false);
                 edit.putString(PrefsHelper.PREF_GLOBAL_NAVBAR_MODE,
                         PrefsHelper.PREF_NAVBAR_VISIBLE + "");
-                edit.putBoolean(PrefsHelper.PREF_LANDSCAPE_BITMAP_FILTERING,
+                edit.putBoolean(PrefsHelper.PREF_BITMAP_FILTERING,
                         true);
                 edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "4");
                 edit.commit();
@@ -1078,7 +1073,7 @@ galaxy sde	   --> 2560x1600 16:10
                 edit.putBoolean("androidtv", true);
                 edit.putBoolean(PrefsHelper.PREF_LANDSCAPE_TOUCH_CONTROLLER,
                         false);
-                edit.putBoolean(PrefsHelper.PREF_LANDSCAPE_BITMAP_FILTERING,
+                edit.putBoolean(PrefsHelper.PREF_BITMAP_FILTERING,
                         true);
 
                 edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "1");

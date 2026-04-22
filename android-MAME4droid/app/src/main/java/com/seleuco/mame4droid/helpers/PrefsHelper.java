@@ -59,7 +59,6 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_INSTALLATION_DIR = "PREF_INSTALLATION_DIR";
 	final static public String PREF_OLD_INSTALLATION_DIR = "PREF_OLD_INSTALLATION_DIR";
 
-
 	final static public String PREF_GLOBAL_VIDEO_RENDER_MODE = "PREF_GLOBAL_VIDEO_RENDER_MODE";
 
 	final static public String PREF_EMU_RESOLUTION = "PREF_EMU_RESOLUTION_2";
@@ -67,7 +66,6 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_EMU_SOUND = "PREF_EMU_SOUND";
 	final static public String PREF_EMU_SHOW_FPS = "PREF_EMU_SHOW_FPS";
 	final static public String PREF_ZOOM_TO_WINDOW = "PREF_ZOOM_TO_WINDOW";
-	final static public String PREF_ZOOM_40 = "PREF_ZOOM_40";
 	final static public String PREF_EMU_AUTO_FRAMESKIP = "PREF_EMU_AUTO_FRAMESKIP";
 	final static public String CHEATS = "CHEATS";
 	final static public String SKIP_GAMEINFO = "SKIP_GAMEINFO";
@@ -93,15 +91,14 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_SCRAPE_SNAPSHOTS = "PREF_SCRAPE_SNAPSHOTS";
 	final static public String PREF_SCRAPE_ALL = "PREF_SCRAPE_ALL";
 	final static public String PREF_SCRAPE_RESIZE = "PREF_SCRAPE_RESIZE";
+	final static public String PREF_BITMAP_FILTERING = "PREF_BITMAP_FILTERING";
 
 	final static public String PREF_PORTRAIT_SCALING_MODE = "PREF_PORTRAIT_SCALING_MODE";
 	final static public String PREF_PORTRAIT_TOUCH_CONTROLLER = "PREF_PORTRAIT_TOUCH_CONTROLLER";
-	final static public String PREF_PORTRAIT_BITMAP_FILTERING = "PREF_PORTRAIT_BITMAP_FILTERING";
 	final static public String PREF_PORTRAIT_FULLSCREEN = "PREF_PORTRAIT_FULLSCREEN";
 
 	final static public String PREF_LANDSCAPE_SCALING_MODE = "PREF_LANDSCAPE_SCALING_MODE";
 	final static public String PREF_LANDSCAPE_TOUCH_CONTROLLER = "PREF_LANDSCAPE_TOUCH_CONTROLLER";
-	final static public String PREF_LANDSCAPE_BITMAP_FILTERING = "PREF_LANDSCAPE_BITMAP_FILTERING";
 	final static public String PREF_LANDSCAPE_CONTROLLER_TYPE = "PREF_LANDSCAPE_CONTROLLER_TYPE";
 
 	final static public String PREF_DEFINED_KEYS = "PREF_DEFINED_KEYS";
@@ -241,6 +238,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 		return PreferenceManager.getDefaultSharedPreferences(context);
 	}
 
+	public boolean isBitmapFiltering() {
+		return getSharedPreferences().getBoolean(PREF_BITMAP_FILTERING, true);
+	}
+
 	public int getPortraitScaleMode() {
 		return Integer.valueOf(getSharedPreferences().getString(PREF_PORTRAIT_SCALING_MODE, "1")).intValue();
 	}
@@ -261,20 +262,12 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 		return getSharedPreferences().getBoolean(PREF_PORTRAIT_TOUCH_CONTROLLER, true);
 	}
 
-	public boolean isPortraitBitmapFiltering() {
-		return getSharedPreferences().getBoolean(PREF_PORTRAIT_BITMAP_FILTERING, true);
-	}
-
 	public boolean isPortraitFullscreen() {
 		return getSharedPreferences().getBoolean(PREF_PORTRAIT_FULLSCREEN, false);
 	}
 
 	public boolean isLandscapeTouchController() {
 		return getSharedPreferences().getBoolean(PREF_LANDSCAPE_TOUCH_CONTROLLER, true);
-	}
-
-	public boolean isLandscapeBitmapFiltering() {
-		return getSharedPreferences().getBoolean(PREF_LANDSCAPE_BITMAP_FILTERING, true);
 	}
 
 	public String getDefinedKeys() {
@@ -316,10 +309,6 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public boolean isZoomToWindow() {
 		return getSharedPreferences().getBoolean(PREF_ZOOM_TO_WINDOW, true);
-	}
-
-	public boolean isZoomTo40() {
-		return getSharedPreferences().getBoolean(PREF_ZOOM_40, false);
 	}
 
 	public boolean isAutoFrameSkip() {
