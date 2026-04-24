@@ -718,9 +718,7 @@ JNIEXPORT int JNICALL Java_com_seleuco_mame4droid_Emulator_onDrawFrame
     if (onDrawFrame != NULL) {
         return onDrawFrame(renderer);
     }
-    else {
-        return -1;
-    }
+    return -1;
 }
 
 JNIEXPORT int JNICALL Java_com_seleuco_mame4droid_Emulator_setRenderer
@@ -730,9 +728,7 @@ JNIEXPORT int JNICALL Java_com_seleuco_mame4droid_Emulator_setRenderer
         setRenderer(renderer);
         return 0;
     }
-    else {
-        return -1;
-    }
+    return -1;
 }
 
 JNIEXPORT jobjectArray JNICALL Java_com_seleuco_mame4droid_Emulator_getShaders
@@ -752,8 +748,6 @@ JNIEXPORT jobjectArray JNICALL Java_com_seleuco_mame4droid_Emulator_getShaders
     {
         jstring str = (*env)->NewStringUTF(env, shader_list[i]);
         (*env)->SetObjectArrayElement(env, array, i, str);
-
-        // Opcional pero buena práctica: liberar la memoria local del string
         (*env)->DeleteLocalRef(env, str);
     }
 

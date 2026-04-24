@@ -19,7 +19,7 @@
 #include <GLES/gl.h>
 #include <GLES/glext.h>
 
-// Función para calcular la potencia de dos más cercana (como en GLRendererES10.java)
+// Función para calcular la potencia de dos más cercana
 static int get_pot_size(int size) {
     int p2Size = 1;
     while (p2Size < size) {
