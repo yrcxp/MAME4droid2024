@@ -125,7 +125,7 @@ gles2_renderer::gles2_renderer(int width, int height)
 
 	auto sampler_uniform = glGetUniformLocation(m_quad_program, "s_texture");
 	glUniform1i(sampler_uniform, 0); //set sampler2D texture unit to 0
-
+	
 	on_emulatedsize_change(width, height);
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -143,6 +143,8 @@ void gles2_renderer::on_emulatedsize_change(int width, int height)
 
     m_force_viewport_update = true;
 
+    m_flush_textures = true;
+	
 	m_filter.set_ortho(m_ortho);
 }
 
@@ -199,9 +201,14 @@ void gles2_renderer::set_blendmode(int blendmode)
 
 void gles2_renderer::render(const render_primitive_list* primlist)
 {
+	glClear(GL_COLOR_BUFFER_BIT);//if not trash if use sliders to change osd position
+	
     if (m_force_viewport_update)
     {
-        GLint viewport[4];
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	    //glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+		
+		GLint viewport[4];
         glGetIntegerv(GL_VIEWPORT, viewport);
 
         // Failsafe: Only store the values if OpenGL returns logical physical dimensions (> 0)

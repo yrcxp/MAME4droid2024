@@ -47,7 +47,7 @@ static render_primitive_list *primlist = nullptr;
 
 void my_osd_interface::video_init()
 {
-    osd_printf_verbose("my_osd_interface::video_init\n");
+	ANDROID_LOG("my_osd_interface::video_init");
 
     // create our *single* render target, we dont do multiple windows or monitors
     m_target = machine().render().target_alloc();
@@ -66,7 +66,15 @@ void my_osd_interface::video_init()
 
 void my_osd_interface::video_exit()
 {
-    osd_printf_verbose("my_osd_interface::video_exit\n");
+	ANDROID_LOG("my_osd_interface::video_exit");
+	
+	{
+        std::lock_guard lock(rend_mutex);
+        if (primlist) {
+            primlist->release_lock();
+            primlist = nullptr;
+        }
+    }
 
     // free the render target
     machine().render().target_free(m_target);

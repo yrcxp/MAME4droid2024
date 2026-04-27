@@ -64,8 +64,9 @@ gles1_renderer::gles1_renderer(int width, int height)
 
 void gles1_renderer::render(const render_primitive_list* primlist)
 {
-    //glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    //glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);//fix trash if sliders
 
     software_renderer<uint32_t, 0, 0, 0, 0, 8, 16>::draw_primitives(*primlist, m_screenbuff, m_width, m_height, m_pitch);
 
