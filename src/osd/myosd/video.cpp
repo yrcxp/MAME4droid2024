@@ -35,7 +35,8 @@
 int myosd_fps;
 int myosd_zoom_to_window;
 
-//GLES2 renderer related stuff
+//GLES renderer related stuff
+static myosd_renderer* my_renderer = nullptr;
 static std::mutex rend_mutex;
 static render_primitive_list *primlist = nullptr;
 
@@ -67,12 +68,16 @@ void my_osd_interface::video_init()
 void my_osd_interface::video_exit()
 {
 	ANDROID_LOG("my_osd_interface::video_exit");
-	
+
 	{
         std::lock_guard lock(rend_mutex);
         if (primlist) {
             primlist->release_lock();
             primlist = nullptr;
+        }
+        if (my_renderer) {
+            delete my_renderer; //force new renderer so free cached textures
+            my_renderer = nullptr;
         }
     }
 
@@ -162,7 +167,7 @@ void my_osd_interface::update(bool skip_redraw)
                 m_callbacks.video_change(min_width, min_height, vis_width, vis_height);
             }
 
-	    target()->set_bounds(min_width, min_height);
+            target()->set_bounds(min_width, min_height);
         }
     }
 
@@ -189,7 +194,6 @@ enum
 	NATIVE_RENDERER
 };
 
-static myosd_renderer* my_renderer = nullptr;
 static int current_renderer = SW_RENDERER;
 static int old_width, old_height;
 

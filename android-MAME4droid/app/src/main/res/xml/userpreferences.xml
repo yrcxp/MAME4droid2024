@@ -345,7 +345,7 @@
 		<PreferenceScreen
 			android:key="shaders"
 			android:persistent="false"
-			android:title="Renderer &amp; Shader">
+			android:title="Renderer &amp; Shaders">
 
 			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn
 				android:defaultValue="false"
