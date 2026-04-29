@@ -68,6 +68,8 @@ void gles1_renderer::render(const render_primitive_list* primlist)
 	//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);//fix trash if sliders
 
+    if (!m_screenbuff || !primlist) return;
+
     software_renderer<uint32_t, 0, 0, 0, 0, 8, 16>::draw_primitives(*primlist, m_screenbuff, m_width, m_height, m_pitch);
 
     glBindTexture(GL_TEXTURE_2D, m_texture_id);
@@ -104,31 +106,44 @@ void gles1_renderer::render(const render_primitive_list* primlist)
 
 void gles1_renderer::on_emulatedsize_change(int width, int height)
 {
+    if (width <= 0) width = 640;
+    if (height <= 0) height = 480;
+
+    GLint max_tex_size;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex_size);
+    if (max_tex_size == 0) max_tex_size = 2048;
+
+    int pot_width = get_pot_size(width);
+    int pot_height = get_pot_size(height);
+
+    if (pot_width > max_tex_size) pot_width = max_tex_size;
+    if (pot_height > max_tex_size) pot_height = max_tex_size;
+
+    if (width > max_tex_size) width = max_tex_size;
+    if (height > max_tex_size) height = max_tex_size;
+
     m_width = width;
     m_height = height;
     m_pitch = width;
 
-    // Calculamos el tamaño "Power Of Two" exigido por GLES 1.x
-    m_tex_width = get_pot_size(width);
-    m_tex_height = get_pot_size(height);
+    m_tex_width = pot_width;
+    m_tex_height = pot_height;
 
-    void* new_buff = std::realloc(m_screenbuff, m_pitch * height * 4);
+    void* new_buff = std::realloc(m_screenbuff, m_pitch * m_height * 4);
     if (new_buff) {
         m_screenbuff = new_buff;
     } else {
-        throw std::runtime_error("GLES1 Software: Out of memory during screen buffer reallocation");
+        throw std::runtime_error("GLES1 Software: Out of memory during screen buffer realloc");
     }
 
-    // Le pasamos a OpenGL el tamaño ajustado a POT (ej: 1024x512 en lugar de 640x480)
     glBindTexture(GL_TEXTURE_2D, m_texture_id);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_tex_width, m_tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-    //Precalculamos las coordenadas UV solo cuando la resolución cambia
     GLfloat max_u = (float)m_width / m_tex_width;
     GLfloat max_v = (float)m_height / m_tex_height;
 
     m_texcoords[0] = 0.0f;   m_texcoords[1] = 0.0f;  // Top-left
     m_texcoords[2] = 0.0f;   m_texcoords[3] = max_v; // Bottom-left
     m_texcoords[4] = max_u;  m_texcoords[5] = 0.0f;  // Top-right
-    m_texcoords[6] = max_u;  m_texcoords[7] = max_v; // Bottom-right
+    m_texcoords[6] = max_u;  m_texcoords[7] = max_v; // Bottom-righ
 }

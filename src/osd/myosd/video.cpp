@@ -98,6 +98,7 @@ void my_osd_interface::video_exit()
 
 //FlykeSpice: Need to hoist these variables here so they are used by GL renderer callbacks down below
 static int min_width=640, min_height=480;
+static int safe_min_width = 640, safe_min_height = 480;
 
 void my_osd_interface::update(bool skip_redraw)
 {
@@ -182,6 +183,9 @@ void my_osd_interface::update(bool skip_redraw)
             primlist = nullptr;
         }
 
+        safe_min_width = min_width;
+        safe_min_height = min_height;
+
 	    primlist = &target()->get_primitives();
 	    primlist->acquire_lock();
     }
@@ -262,12 +266,13 @@ extern "C" int myosd_video_onDrawFrame(int renderer)
         myosd_video_createRenderer(renderer); // Safe: we are in GLThread
     }
 
-    if (min_width != old_width || min_height != old_height)
-	{
-		old_width = min_width; old_height = min_height;
+    if (safe_min_width != old_width || safe_min_height != old_height) //avoid dirty reads
+    {
+        old_width = safe_min_width;
+        old_height = safe_min_height;
 
-		my_renderer->on_emulatedsize_change(min_width, min_height);
-	}
+        my_renderer->on_emulatedsize_change(safe_min_width, safe_min_height);
+    }
 
 	my_renderer->render(primlist);
 
