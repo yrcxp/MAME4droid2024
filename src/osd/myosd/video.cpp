@@ -41,6 +41,7 @@ static myosd_renderer* my_renderer = nullptr;
 static std::mutex rend_mutex;
 static render_primitive_list *primlist = nullptr;
 
+static bool force_recreate_renderer = false;
 static std::string current_shader_name = "";
 
 #define ANDROID_LOG(...) __android_log_print(ANDROID_LOG_DEBUG, "GLRENDERER", __VA_ARGS__)
@@ -58,10 +59,10 @@ void my_osd_interface::video_init()
 
     m_video_none = strcmp(options().value(OPTION_VIDEO), "none") == 0;
 
-    m_min_width = 0;
-    m_min_height = 0;
-    m_vis_width = 0;
-    m_vis_height = 0;
+    m_min_width = 2;
+    m_min_height = 2;
+    m_vis_width = 2;
+    m_vis_height = 2;
 }
 
 //============================================================
@@ -78,10 +79,8 @@ void my_osd_interface::video_exit()
             primlist->release_lock();
             primlist = nullptr;
         }
-        if (my_renderer) {
-            delete my_renderer; //force new renderer so free cached textures
-            my_renderer = nullptr;
-        }
+
+        force_recreate_renderer = true;
     }
 
     // free the render target
@@ -178,8 +177,10 @@ void my_osd_interface::update(bool skip_redraw)
     {
 	    std::lock_guard lock(rend_mutex);
 
-	    if (primlist)
-		    primlist->release_lock();
+	    if (primlist) {
+            primlist->release_lock();
+            primlist = nullptr;
+        }
 
 	    primlist = &target()->get_primitives();
 	    primlist->acquire_lock();
@@ -202,8 +203,8 @@ static int old_width, old_height;
 
 void myosd_video_createRenderer(int renderer)
 {
-    old_width = 0;
-    old_height = 0;
+    old_width = 1;
+    old_height = 1;
 
     ANDROID_LOG("create renderer %d",renderer);
 
@@ -225,7 +226,7 @@ void myosd_video_createRenderer(int renderer)
             current_renderer = SW_RENDERER; // Sync the state variable
             break;
     }
-	
+
 	if (current_renderer == NATIVE_RENDERER && my_renderer != nullptr && !current_shader_name.empty()) {
         try {
             my_renderer->set_shader(current_shader_name.c_str());
@@ -236,26 +237,30 @@ void myosd_video_createRenderer(int renderer)
     }
 }
 
-extern "C" void myosd_video_setRenderer(int renderer)
+extern "C" void myosd_video_newRenderer()
 {
 	std::lock_guard lock(rend_mutex);
-
-	if (my_renderer)
-		delete my_renderer;
-
-    myosd_video_createRenderer(renderer);
+    force_recreate_renderer = true;
 }
 
 extern "C" int myosd_video_onDrawFrame(int renderer)
 {
 	std::lock_guard lock(rend_mutex);
 
-    if(my_renderer == nullptr) {
-        myosd_video_createRenderer(renderer);
+    if (force_recreate_renderer) {
+        if (my_renderer) {
+            delete my_renderer; // Safe: We are in GLThread
+            my_renderer = nullptr;
+        }
+        force_recreate_renderer = false;
     }
 
     if(primlist == nullptr)
         return -1;
+
+    if(my_renderer == nullptr) { //not till primlist
+        myosd_video_createRenderer(renderer); // Safe: we are in GLThread
+    }
 
     if (min_width != old_width || min_height != old_height)
 	{
@@ -297,7 +302,7 @@ extern "C" void myosd_video_getShaders(const char*** list, int* n)
 extern "C" bool myosd_video_setShader(const char* shader_name)
 {
 	std::lock_guard lock(rend_mutex);
-	
+
 	if (shader_name != nullptr) {
         current_shader_name = shader_name;
     } else {

@@ -224,8 +224,8 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_onDrawFrame
  * Method:    setRenderer
  * Signature: (I)V
  */
-JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_setRenderer
-        (JNIEnv *, jclass, jint);
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_newRenderer
+        (JNIEnv *, jclass);
 
 /*
  * Class:     com_seleuco_mame4droid_Emulator
