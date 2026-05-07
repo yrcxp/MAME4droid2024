@@ -93,6 +93,8 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_HISCORE 73L
 #undef com_seleuco_mame4droid_Emulator_BITMAP_FILTERING
 #define com_seleuco_mame4droid_Emulator_BITMAP_FILTERING 74L
+#undef com_seleuco_mame4droid_Emulator_VECTOR_BLOOM
+#define com_seleuco_mame4droid_Emulator_VECTOR_BLOOM 75L
 #undef com_seleuco_mame4droid_Emulator_SAF_PATH
 #define com_seleuco_mame4droid_Emulator_SAF_PATH 1L
 #undef com_seleuco_mame4droid_Emulator_ROM_NAME

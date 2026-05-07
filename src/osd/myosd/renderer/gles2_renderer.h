@@ -152,6 +152,13 @@ private:
 	void update_texture_cache(const render_primitive& prim, std::shared_ptr<gles2_texture>& out_tex);
 	std::shared_ptr<gles2_texture> texture_find(const render_primitive& prim, osd_ticks_t now);
 	std::shared_ptr<gles2_texture> texture_create(const render_primitive& prim);
+	void cleanup_texture_cache();
+	
+	void upload_pending_textures(std::vector<local_primitive>& draw_prims);
+	void calculate_vector_bounds(const std::vector<local_primitive>& draw_prims, render_bounds& out_bounds);
+	void draw_vector_fbo(const render_bounds& v_bounds);
+	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_bloom);
+	void process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend);
 
 	//Shader program to render a quad primitive
 	//each one deals with a specific texture format

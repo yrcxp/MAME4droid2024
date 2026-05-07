@@ -136,6 +136,7 @@ public class Emulator {
 	final static public int HISCORE = 73;
 
 	final static public int BITMAP_FILTERING = 74;
+	final static public int VECTOR_BLOOM = 75;
 
 	//set str
 	final static public int SAF_PATH = 1;
@@ -396,7 +397,7 @@ public class Emulator {
 			e.printStackTrace();
 		}
 	}
-	
+
 	static public void initInput() {
 		Log.d("initInput", "initInput isInGame:" + isInGame() + " isInMenu:" + isInMenu());
 		mm.runOnUiThread(new Runnable() {

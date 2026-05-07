@@ -100,6 +100,7 @@ static std::string myosd_droid_statepath;
 static int myosd_droid_warn_on_exit = 1;
 static int myosd_droid_show_fps = 1;
 static int myosd_droid_bitmap_filtering = 1;
+static int myosd_droid_vector_bloom = 0;
 static int myosd_droid_zoom_to_window = 1;
 static std::string myosd_droid_selected_game;
 static std::string myosd_droid_rom_name;
@@ -316,6 +317,9 @@ void myosd_droid_setMyValue(int key, int i, int value) {
         case com_seleuco_mame4droid_Emulator_BITMAP_FILTERING:
             myosd_droid_bitmap_filtering = value;
             //__android_log_print(ANDROID_LOG_DEBUG, "libMAME4droid.so", "setMyValue  %d,%d:%d",key,i,value);
+            break;
+        case com_seleuco_mame4droid_Emulator_VECTOR_BLOOM:
+            myosd_droid_vector_bloom = value;;
             break;
         case com_seleuco_mame4droid_Emulator_SHOW_FPS:
             myosd_droid_show_fps = value;
@@ -1036,6 +1040,7 @@ static void droid_video_change_cb(int width, int height,int vis_width, int vis_h
 static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int running) {
 
     myosd_set(MYOSD_BITMAP_FILTERING, myosd_droid_bitmap_filtering);
+    myosd_set(MYOSD_VECTOR_BLOOM, myosd_droid_vector_bloom);
     myosd_set(MYOSD_FPS, myosd_droid_show_fps);
     myosd_set(MYOSD_ZOOM_TO_WINDOW, myosd_droid_zoom_to_window);
 

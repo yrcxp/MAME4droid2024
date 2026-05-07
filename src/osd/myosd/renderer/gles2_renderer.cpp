@@ -25,6 +25,37 @@
 
 #define ANDROID_LOG(...) __android_log_print(ANDROID_LOG_DEBUG, "gles2_renderer", __VA_ARGS__)
 
+constexpr int VECTOR_FBO_HEIGHT =  480; 
+
+
+// =======================================================================
+// VECTOR BLOOM EFFECT CONFIGURATION
+// =======================================================================
+// Light falloff curve (CRT Phosphor)
+// High values (5.5 - 6.0) = Pure Arcade, very bright core and tight halo.
+// Low values (3.0 - 4.0) = Modern HDR Bloom, soft and nebulous halo.
+constexpr float BLOOM_PHOSPHOR_FALLOFF = 5.5f;
+
+// Lines (Standard vectors)
+constexpr float BLOOM_LINE_WIDTH_MULT = 4.0f;  
+constexpr float BLOOM_LINE_ALPHA      = 0.65f; 
+
+// Points (Stars / Shots)
+constexpr float BLOOM_POINT_WIDTH_MULT = 2.2f; 
+constexpr float BLOOM_POINT_ALPHA      = 0.42f;
+
+// -----------------------------------------------------------------------
+// EXCESS LIGHT PHYSICS (OVERBRIGHT / HDR)
+// -----------------------------------------------------------------------
+// Maximum extra energy a vector can receive (Safety ceiling)
+constexpr float BLOOM_OVERBRIGHT_MAX = 1.25f; 
+
+// How much they physically expand when receiving excess light
+constexpr float BLOOM_OVERBRIGHT_LINE_MULT  = 0.35f; 
+constexpr float BLOOM_OVERBRIGHT_POINT_MULT = 0.28f; 
+// =======================================================================
+
+
 struct line_aa_step {
 	float xoffs, yoffs;
 	float weight;
@@ -159,21 +190,26 @@ gles2_renderer::gles2_renderer(int width, int height)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	glGenTextures(1, &m_glow_texture);
+	glGenTextures(1, &m_glow_texture); // GLOW texture
 	glBindTexture(GL_TEXTURE_2D, m_glow_texture);
-	uint32_t glow_pixels[64];
-	for (int i = 0; i < 64; i++) {
-		float dist = std::fabs((i - 31.5f) / 31.5f);
-		float intensity = 1.0f - (dist * dist); 
-		if (intensity < 0.0f) intensity = 0.0f;
-		uint8_t a = (uint8_t)(intensity * 255.0f);
-		glow_pixels[i] = (a << 24) | 0x00FFFFFF; 
+	uint32_t glow_pixels[64 * 64];
+	for (int y = 0; y < 64; y++) {
+		for (int x = 0; x < 64; x++) {
+			float dx = (x - 31.5f) / 31.5f;
+			float dy = (y - 31.5f) / 31.5f;
+			float dist = std::sqrt(dx*dx + dy*dy);
+			
+			float intensity = std::exp(-(dist * dist) * BLOOM_PHOSPHOR_FALLOFF); 
+			
+			uint8_t a = (uint8_t)(intensity * 255.0f);
+			glow_pixels[y * 64 + x] = (a << 24) | 0x00FFFFFF; 
+		}
 	}
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, glow_pixels);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, glow_pixels);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	
 	m_batch_vertices.reserve(4096); 
 	m_batch_indices.reserve(6144);
@@ -216,6 +252,9 @@ void gles2_renderer::create_fbo(int width, int height) {
     glGenFramebuffers(1, &m_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_fbo_texture, 0);
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) 
+		ANDROID_LOG("Error creando FBO: %d", status);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -256,32 +295,8 @@ void gles2_renderer::set_blendmode(int blendmode)
 
 void gles2_renderer::sync_state(const render_primitive_list* primlist)
 {
-    if (m_flush_textures || m_last_filter_mode != myosd_get(MYOSD_BITMAP_FILTERING))
-	{
-        m_last_filter_mode = myosd_get(MYOSD_BITMAP_FILTERING);
-		for (auto& tex : m_texlist) {
-            if (tex->texture_id != 0) m_textures_to_delete.push_back(tex->texture_id);
-        }		
-        m_texlist.clear();
-		m_flush_textures = false;
-    }
-	
 	//clean old textures
-	osd_ticks_t now = osd_ticks();
-	for (auto it = m_texlist.begin(); it != m_texlist.end(); )
-	{
-		if ((now - (*it)->last_access) > osd_ticks_per_second())
-		{
-			if ((*it)->texture_id > 0) {
-				m_textures_to_delete.push_back((*it)->texture_id);
-			}				
-			it = m_texlist.erase(it);
-	}	
-		else
-		{
-			++it;
-		}
-	}	
+	cleanup_texture_cache();
 	
 	std::vector<local_primitive> temp_prims;
 
@@ -347,7 +362,7 @@ void gles2_renderer::sync_state(const render_primitive_list* primlist)
 
 void gles2_renderer::push_quad(const float* verts, const float* uv, const render_color& color) 
 {
-	if (m_batch_vertices.size() >= 65000) {
+	if (m_batch_vertices.size() >= 60000) {
         flush_batch();
     }
 	
@@ -392,6 +407,203 @@ void gles2_renderer::flush_batch()
     m_batch_indices.clear();
 }
 
+void gles2_renderer::upload_pending_textures(std::vector<local_primitive>& draw_prims)
+{
+	for (local_primitive& prim : draw_prims) {
+		if (prim.texture && (prim.texture->needs_gl_init || prim.needs_texture_upload)) {
+			if (prim.texture->needs_gl_init) {
+				glGenTextures(1, &prim.texture->texture_id);
+				glBindTexture(GL_TEXTURE_2D, prim.texture->texture_id);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, prim.texture->texinfo.width, prim.texture->texinfo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, prim.upload_ptr);
+				
+				GLint filter_mode = myosd_get(MYOSD_BITMAP_FILTERING) ? GL_LINEAR : GL_NEAREST;
+				if (PRIMFLAG_GET_SCREENTEX(prim.flags) && m_usefilter) {
+					filter_mode = m_filter.is_linear() ? GL_LINEAR : GL_NEAREST;
+				}
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter_mode);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter_mode);
+				GLint wrapmode = PRIMFLAG_GET_TEXWRAP(prim.flags) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapmode);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapmode);
+				prim.texture->needs_gl_init = false;
+			} else if (prim.needs_texture_upload) {
+				glBindTexture(GL_TEXTURE_2D, prim.texture->texture_id);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, prim.texture->texinfo.width, prim.texture->texinfo.height, GL_RGBA, GL_UNSIGNED_BYTE, prim.upload_ptr);
+			}
+			prim.needs_texture_upload = false; 
+		}
+	}
+}
+
+void gles2_renderer::calculate_vector_bounds(const std::vector<local_primitive>& draw_prims, render_bounds& out_bounds)
+{
+    out_bounds = { 99999.0f, 99999.0f, -99999.0f, -99999.0f };
+    bool has_vectors = false;
+    
+    for (const local_primitive& prim : draw_prims) {
+        if (PRIMFLAG_GET_VECTOR(prim.flags)) {
+            float min_x = std::min(prim.bounds.x0, prim.bounds.x1); float max_x = std::max(prim.bounds.x0, prim.bounds.x1);
+            float min_y = std::min(prim.bounds.y0, prim.bounds.y1); float max_y = std::max(prim.bounds.y0, prim.bounds.y1);
+            out_bounds.x0 = std::min(out_bounds.x0, min_x); out_bounds.y0 = std::min(out_bounds.y0, min_y);
+            out_bounds.x1 = std::max(out_bounds.x1, max_x); out_bounds.y1 = std::max(out_bounds.y1, max_y);
+            has_vectors = true;
+        }
+    }
+
+    if (has_vectors) {
+        out_bounds.x0 = std::max(0.0f, out_bounds.x0 - 15.0f); out_bounds.y0 = std::max(0.0f, out_bounds.y0 - 15.0f);
+        out_bounds.x1 = std::min((float)m_width, out_bounds.x1 + 15.0f); out_bounds.y1 = std::min((float)m_height, out_bounds.y1 + 15.0f);
+    }
+    
+}
+
+void gles2_renderer::draw_vector_fbo(const render_bounds& v_bounds)
+{
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    float u0 = v_bounds.x0 / m_width; float u1 = v_bounds.x1 / m_width;
+    float v0 = 1.0f - (v_bounds.y0 / m_height); float v1 = 1.0f - (v_bounds.y1 / m_height);
+
+    float fbo_verts[8] = { v_bounds.x0, v_bounds.y0, v_bounds.x0, v_bounds.y1, v_bounds.x1, v_bounds.y1, v_bounds.x1, v_bounds.y0 };
+    float fbo_uv[8] = { u0, v0, u0, v1, u1, v1, u1, v0 };
+
+    float view_w = v_bounds.x1 - v_bounds.x0; float view_h = v_bounds.y1 - v_bounds.y0;
+    if (view_h <= 0.1f) view_h = 1.0f;
+    
+    int tex_h = VECTOR_FBO_HEIGHT; 
+    int tex_w = (int)(tex_h * (view_w / view_h));		
+
+    m_filter.draw_quad(m_fbo_texture, fbo_verts, fbo_uv, tex_w, tex_h, m_view_width, m_view_height);
+    
+    glUseProgram(m_quad_program);
+    m_current_texture = 0; m_last_blendmode = -1;
+}
+
+void gles2_renderer::process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_bloom)
+{
+    float effwidth = std::max(prim.width, 1.0f);
+    
+    float dx = prim.bounds.x1 - prim.bounds.x0;
+    float dy = prim.bounds.y1 - prim.bounds.y0;
+	bool is_point = (std::abs(dx) < 0.001f && std::abs(dy) < 0.001f);
+
+    float raw_intensity = prim.color.a * 255.0f; 
+    float core_alpha = std::min(raw_intensity, 1.0f);
+    
+    float overbright_raw = std::max(raw_intensity - 1.0f, 0.0f);
+    float overbright = std::min(std::pow(overbright_raw, 0.7f), BLOOM_OVERBRIGHT_MAX);
+
+    float bloom_scale = m_usefilter ? 0.6f : 1.0f;
+
+    if (is_point) {
+		
+        if (is_vector && enable_bloom) {
+            float dynamic_width = BLOOM_POINT_WIDTH_MULT + (overbright * BLOOM_OVERBRIGHT_POINT_MULT);
+            float bloom_w = effwidth * dynamic_width * bloom_scale;
+            
+            m_quad_verts[0] = prim.bounds.x0 - bloom_w; m_quad_verts[1] = prim.bounds.y0 - bloom_w; 
+            m_quad_verts[2] = prim.bounds.x0 - bloom_w; m_quad_verts[3] = prim.bounds.y0 + bloom_w; 
+            m_quad_verts[4] = prim.bounds.x0 + bloom_w; m_quad_verts[5] = prim.bounds.y0 + bloom_w; 
+            m_quad_verts[6] = prim.bounds.x0 + bloom_w; m_quad_verts[7] = prim.bounds.y0 - bloom_w; 
+            
+            float bloom_uv[8] = { 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f };
+            
+            float max_alpha = 0.85f + (overbright * 0.1f);
+            float safe_bloom_alpha = std::min(raw_intensity * BLOOM_POINT_ALPHA, max_alpha);
+            render_color c_bloom = { safe_bloom_alpha, prim.color.r, prim.color.g, prim.color.b };
+            
+            push_quad(m_quad_verts, bloom_uv, c_bloom);
+        }
+
+        float half_w = effwidth * 0.5f;
+        m_quad_verts[0] = prim.bounds.x0 - half_w; m_quad_verts[1] = prim.bounds.y0 - half_w; 
+        m_quad_verts[2] = prim.bounds.x0 - half_w; m_quad_verts[3] = prim.bounds.y0 + half_w; 
+        m_quad_verts[4] = prim.bounds.x0 + half_w; m_quad_verts[5] = prim.bounds.y0 + half_w; 
+        m_quad_verts[6] = prim.bounds.x0 + half_w; m_quad_verts[7] = prim.bounds.y0 - half_w; 
+        
+        float core_uv[8] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+        render_color c_core = { core_alpha, prim.color.r, prim.color.g, prim.color.b };
+        push_quad(m_quad_verts, is_vector ? core_uv : nullptr, c_core);
+        
+    } else {
+
+        if (is_vector && enable_bloom) {
+            float length = std::sqrt(dx*dx + dy*dy);
+            float length_factor = std::min(length / (0.15f * m_height), 1.0f); 
+            
+            float dynamic_bloom_mult = (BLOOM_LINE_WIDTH_MULT * (0.5f + 0.5f * length_factor)) + (overbright * BLOOM_OVERBRIGHT_LINE_MULT);
+            float bloom_width = effwidth * dynamic_bloom_mult * bloom_scale;
+            
+            auto [bb0, bb1] = render_line_to_quad(prim.bounds, bloom_width, 0.0f);
+
+            m_quad_verts[0] = bb0.x0; m_quad_verts[1] = bb0.y0; 
+            m_quad_verts[2] = bb0.x1; m_quad_verts[3] = bb0.y1; 
+            m_quad_verts[4] = bb1.x1; m_quad_verts[5] = bb1.y1; 
+            m_quad_verts[6] = bb1.x0; m_quad_verts[7] = bb1.y0; 
+
+            float bloom_uv[8] = { 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 1.0f, 0.5f, 0.0f };
+            
+            float max_alpha = 0.85f + (overbright * 0.1f);
+            float safe_bloom_alpha = std::min(raw_intensity * BLOOM_LINE_ALPHA, max_alpha);
+            render_color c_bloom = { safe_bloom_alpha, prim.color.r, prim.color.g, prim.color.b };
+            
+            push_quad(m_quad_verts, bloom_uv, c_bloom);
+        }
+
+        auto [b0, b1] = render_line_to_quad(prim.bounds, effwidth, 0.0f);
+		bool use_aa = PRIMFLAG_GET_ANTIALIAS(prim.flags) && !enable_bloom;
+        const line_aa_step* step = use_aa ? line_aa_4step : line_aa_1step;
+        
+        for (; step->weight != 0.0f; step++) {
+            render_color c;
+            c.a = core_alpha * step->weight; 
+            c.r = prim.color.r;
+            c.g = prim.color.g;
+            c.b = prim.color.b;
+
+            m_quad_verts[0] = b0.x0 + step->xoffs; m_quad_verts[1] = b0.y0 + step->yoffs; 
+            m_quad_verts[2] = b0.x1 + step->xoffs; m_quad_verts[3] = b0.y1 + step->yoffs; 
+            m_quad_verts[4] = b1.x1 + step->xoffs; m_quad_verts[5] = b1.y1 + step->yoffs; 
+            m_quad_verts[6] = b1.x0 + step->xoffs; m_quad_verts[7] = b1.y0 + step->yoffs; 
+
+            float core_uv[8] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
+            push_quad(m_quad_verts, is_vector ? core_uv : nullptr, c);
+        }
+    }
+}
+
+void gles2_renderer::process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend)
+{
+    m_quad_verts[0] = prim.bounds.x0; m_quad_verts[1] = prim.bounds.y0; 
+    m_quad_verts[2] = prim.bounds.x0; m_quad_verts[3] = prim.bounds.y1; 
+    m_quad_verts[4] = prim.bounds.x1; m_quad_verts[5] = prim.bounds.y1; 
+    m_quad_verts[6] = prim.bounds.x1; m_quad_verts[7] = prim.bounds.y0; 
+
+    if (prim.texture) {
+        const render_quad_texuv& texuv = prim.texcoords;
+        m_quad_uv[0] = texuv.tl.u; m_quad_uv[1] = texuv.tl.v;
+        m_quad_uv[2] = texuv.bl.u; m_quad_uv[3] = texuv.bl.v;
+        m_quad_uv[4] = texuv.br.u; m_quad_uv[5] = texuv.br.v;
+        m_quad_uv[6] = texuv.tr.u; m_quad_uv[7] = texuv.tr.v;
+
+        if (m_usefilter && is_screen) {
+
+            flush_batch();
+            set_blendmode(needed_blend);
+            m_filter.draw_quad(m_current_texture, m_quad_verts, m_quad_uv, prim.texture->texinfo.width, prim.texture->texinfo.height, m_view_width, m_view_height);
+            glUseProgram(m_quad_program);
+            m_current_texture = 0; m_last_blendmode = -1;
+        } else {
+
+            push_quad(m_quad_verts, m_quad_uv, prim.color);
+        }
+    } else {
+
+        push_quad(m_quad_verts, nullptr, prim.color);
+    }
+}
+
 void gles2_renderer::render()
 {
 	std::vector<local_primitive> draw_prims;
@@ -410,23 +622,7 @@ void gles2_renderer::render()
     }
 	
     render_bounds v_bounds = { 99999.0f, 99999.0f, -99999.0f, -99999.0f };
-    bool has_vectors = false;
-    for (const local_primitive& prim : draw_prims) {
-        if (PRIMFLAG_GET_VECTOR(prim.flags)) {
-            float min_x = std::min(prim.bounds.x0, prim.bounds.x1); float max_x = std::max(prim.bounds.x0, prim.bounds.x1);
-            float min_y = std::min(prim.bounds.y0, prim.bounds.y1); float max_y = std::max(prim.bounds.y0, prim.bounds.y1);
-            v_bounds.x0 = std::min(v_bounds.x0, min_x); v_bounds.y0 = std::min(v_bounds.y0, min_y);
-            v_bounds.x1 = std::max(v_bounds.x1, max_x); v_bounds.y1 = std::max(v_bounds.y1, max_y);
-            has_vectors = true;
-        }
-    }
-
-    if (has_vectors) {
-        v_bounds.x0 = std::max(0.0f, v_bounds.x0 - 15.0f); v_bounds.y0 = std::max(0.0f, v_bounds.y0 - 15.0f);
-        v_bounds.x1 = std::min((float)m_width, v_bounds.x1 + 15.0f); v_bounds.y1 = std::min((float)m_height, v_bounds.y1 + 15.0f);
-    }
-
-    GLint viewport[4]; glGetIntegerv(GL_VIEWPORT, viewport);
+    calculate_vector_bounds(draw_prims, v_bounds);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -446,38 +642,7 @@ void gles2_renderer::render()
         }
     }
 
-	for (local_primitive& prim : draw_prims)
-	{
-		if (prim.texture && (prim.texture->needs_gl_init || prim.needs_texture_upload))
-		{
-			if (prim.texture->needs_gl_init) {
-				glGenTextures(1, &prim.texture->texture_id);
-				glBindTexture(GL_TEXTURE_2D, prim.texture->texture_id);
-
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, prim.texture->texinfo.width, prim.texture->texinfo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, prim.upload_ptr);
-				
-				GLint filter_mode = myosd_get(MYOSD_BITMAP_FILTERING) ? GL_LINEAR : GL_NEAREST;
-				if (PRIMFLAG_GET_SCREENTEX(prim.flags) && m_usefilter) {
-					filter_mode = m_filter.is_linear() ? GL_LINEAR : GL_NEAREST;
-				}
-				
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter_mode);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter_mode);
-				
-				GLint wrapmode = PRIMFLAG_GET_TEXWRAP(prim.flags) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapmode);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapmode);
-				
-				prim.texture->needs_gl_init = false;
-			}
-			else if (prim.needs_texture_upload) {
-				glBindTexture(GL_TEXTURE_2D, prim.texture->texture_id);
-				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, prim.texture->texinfo.width, prim.texture->texinfo.height, GL_RGBA, GL_UNSIGNED_BYTE, prim.upload_ptr);
-			}
-			
-			prim.needs_texture_upload = false; 
-		}
-	}
+	upload_pending_textures(draw_prims);
 
 	glUseProgram(m_quad_program);
 	glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
@@ -485,34 +650,8 @@ void gles2_renderer::render()
 	m_current_texture = 0; 
     m_last_blendmode = -1; 
 	
-    bool enable_bloom = true;
+    bool enable_bloom = myosd_get(MYOSD_VECTOR_BLOOM) ? true : false;
 	bool fbo_active = false;
-
-    auto draw_vector_fbo = [&]() {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE, GL_ONE);
-
-        float u0 = v_bounds.x0 / m_width; float u1 = v_bounds.x1 / m_width;
-        float v0 = 1.0f - (v_bounds.y0 / m_height); float v1 = 1.0f - (v_bounds.y1 / m_height);
-
-        float fbo_verts[8] = { v_bounds.x0, v_bounds.y0, v_bounds.x0, v_bounds.y1, v_bounds.x1, v_bounds.y1, v_bounds.x1, v_bounds.y0 };
-        float fbo_uv[8] = { u0, v0, u0, v1, u1, v1, u1, v0 };
-
-        float view_w = v_bounds.x1 - v_bounds.x0; float view_h = v_bounds.y1 - v_bounds.y0;
-        if (view_h <= 0.1f) view_h = 1.0f;
-        
-        //int tex_h = 480;
-        //int tex_w = (int)(640.0f * (view_w / view_h));
-
-		int tex_h = 480; 
-        int tex_w = (int)(tex_h * (view_w / view_h));		
-
-        m_filter.draw_quad(m_fbo_texture, fbo_verts, fbo_uv, tex_w, tex_h, m_view_width, m_view_height);
-        
-        glUseProgram(m_quad_program);
-        m_current_texture = 0; m_last_blendmode = -1;
-    };
-
 
 	for (const local_primitive& prim : draw_prims)
 	{
@@ -531,9 +670,9 @@ void gles2_renderer::render()
         } else if (fbo_active && !is_vector) {
             flush_batch(); 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(viewport[0], viewport[1], viewport[2], viewport[3]); // RESTAURAR VIEWPORT
+            glViewport(0, 0, m_view_width, m_view_height); 
             fbo_active = false;
-            draw_vector_fbo(); 
+            draw_vector_fbo(v_bounds); 
         }
 
 		GLuint needed_tex = (prim.texture != nullptr) ? prim.texture->texture_id : (is_vector ? m_glow_texture : m_white_texture);
@@ -549,93 +688,14 @@ void gles2_renderer::render()
 		{
 			case render_primitive::LINE:
 			{
-				float effwidth = std::max(prim.width, 1.0f);
-				bool is_point = ((prim.bounds.x1 - prim.bounds.x0) == 0.0f) && ((prim.bounds.y1 - prim.bounds.y0) == 0.0f);
-
-				if (is_point) {
-					float half_w = effwidth * 0.5f;
-					m_quad_verts[0] = prim.bounds.x0 - half_w; m_quad_verts[1] = prim.bounds.y0 - half_w; 
-					m_quad_verts[2] = prim.bounds.x0 - half_w; m_quad_verts[3] = prim.bounds.y0 + half_w; 
-					m_quad_verts[4] = prim.bounds.x0 + half_w; m_quad_verts[5] = prim.bounds.y0 + half_w; 
-					m_quad_verts[6] = prim.bounds.x0 + half_w; m_quad_verts[7] = prim.bounds.y0 - half_w; 
-					
-					float core_uv[8] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
-					render_color c_core = { std::min(prim.color.a * 255.0f, 1.0f), prim.color.r, prim.color.g, prim.color.b };
-					push_quad(m_quad_verts, is_vector ? core_uv : nullptr, c_core);
-					
-					if (is_vector && enable_bloom) {
-						float bloom_w = effwidth * 2.0f;
-						m_quad_verts[0] = prim.bounds.x0 - bloom_w; m_quad_verts[1] = prim.bounds.y0 - bloom_w; 
-						m_quad_verts[2] = prim.bounds.x0 - bloom_w; m_quad_verts[3] = prim.bounds.y0 + bloom_w; 
-						m_quad_verts[4] = prim.bounds.x0 + bloom_w; m_quad_verts[5] = prim.bounds.y0 + bloom_w; 
-						m_quad_verts[6] = prim.bounds.x0 + bloom_w; m_quad_verts[7] = prim.bounds.y0 - bloom_w; 
-						
-						float bloom_uv[8] = { 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 1.0f, 0.5f, 0.0f };
-						render_color c_bloom = { std::min(prim.color.a * 255.0f, 1.0f) * 0.25f, prim.color.r, prim.color.g, prim.color.b };
-						push_quad(m_quad_verts, bloom_uv, c_bloom);
-					}
-				} else {
-					auto [b0, b1] = render_line_to_quad(prim.bounds, effwidth, 0.0f);
-					const line_aa_step* step = PRIMFLAG_GET_ANTIALIAS(prim.flags) ? line_aa_4step : line_aa_1step;
-					
-					for (; step->weight != 0.0f; step++) {
-						render_color c;
-						c.a = std::min(prim.color.a * 255.0f, 1.0f); 
-						c.r = std::min(prim.color.r * step->weight, 1.0f);
-						c.g = std::min(prim.color.g * step->weight, 1.0f);
-						c.b = std::min(prim.color.b * step->weight, 1.0f);
-
-						m_quad_verts[0] = b0.x0 + step->xoffs; m_quad_verts[1] = b0.y0 + step->yoffs; 
-						m_quad_verts[2] = b0.x1 + step->xoffs; m_quad_verts[3] = b0.y1 + step->yoffs; 
-						m_quad_verts[4] = b1.x1 + step->xoffs; m_quad_verts[5] = b1.y1 + step->yoffs; 
-						m_quad_verts[6] = b1.x0 + step->xoffs; m_quad_verts[7] = b1.y0 + step->yoffs; 
-
-						float core_uv[8] = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f };
-						push_quad(m_quad_verts, is_vector ? core_uv : nullptr, c);
-					}
-
-					if (is_vector && enable_bloom) {
-						float bloom_width = effwidth * 4.0f;
-						auto [bb0, bb1] = render_line_to_quad(prim.bounds, bloom_width, 0.0f);
-
-						m_quad_verts[0] = bb0.x0; m_quad_verts[1] = bb0.y0; 
-						m_quad_verts[2] = bb0.x1; m_quad_verts[3] = bb0.y1; 
-						m_quad_verts[4] = bb1.x1; m_quad_verts[5] = bb1.y1; 
-						m_quad_verts[6] = bb1.x0; m_quad_verts[7] = bb1.y0; 
-
-						float bloom_uv[8] = { 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 1.0f, 0.5f, 0.0f };
-						render_color c_bloom = { std::min(prim.color.a * 255.0f, 1.0f) * 0.40f, prim.color.r, prim.color.g, prim.color.b };
-						push_quad(m_quad_verts, bloom_uv, c_bloom);
-					}
-				}
+				process_line_primitive(prim, is_vector, enable_bloom);
+				
 			} break;
 
 			case render_primitive::QUAD:
 			{
-				m_quad_verts[0] = prim.bounds.x0; m_quad_verts[1] = prim.bounds.y0; 
-				m_quad_verts[2] = prim.bounds.x0; m_quad_verts[3] = prim.bounds.y1; 
-				m_quad_verts[4] = prim.bounds.x1; m_quad_verts[5] = prim.bounds.y1; 
-				m_quad_verts[6] = prim.bounds.x1; m_quad_verts[7] = prim.bounds.y0; 
-
-				if (prim.texture) {
-					const render_quad_texuv& texuv = prim.texcoords;
-					m_quad_uv[0] = texuv.tl.u; m_quad_uv[1] = texuv.tl.v;
-					m_quad_uv[2] = texuv.bl.u; m_quad_uv[3] = texuv.bl.v;
-					m_quad_uv[4] = texuv.br.u; m_quad_uv[5] = texuv.br.v;
-					m_quad_uv[6] = texuv.tr.u; m_quad_uv[7] = texuv.tr.v;
-
-                    if (m_usefilter && is_screen) {
-                        flush_batch();
-                        set_blendmode(needed_blend);
-                        m_filter.draw_quad(m_current_texture, m_quad_verts, m_quad_uv, prim.texture->texinfo.width, prim.texture->texinfo.height, m_view_width, m_view_height);
-                        glUseProgram(m_quad_program);
-                        m_current_texture = 0; m_last_blendmode = -1;
-                    } else {
-					    push_quad(m_quad_verts, m_quad_uv, prim.color);
-                    }
-				} else {
-					push_quad(m_quad_verts, nullptr, prim.color);
-				}
+				process_quad_primitive(prim, is_screen, needed_blend);
+				
 			} break;
 
 			case render_primitive::INVALID: break;
@@ -646,8 +706,8 @@ void gles2_renderer::render()
 	
 	if (m_usefilter && fbo_active) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-        draw_vector_fbo();
+        glViewport(0, 0, m_view_width, m_view_height);
+        draw_vector_fbo(v_bounds);
     }
 
 	if (!delete_texs.empty()) 
@@ -726,6 +786,36 @@ std::shared_ptr<gles2_renderer::gles2_texture> gles2_renderer::texture_find(cons
 		}
 	}
 	return nullptr;
+}
+
+void gles2_renderer::cleanup_texture_cache()
+{
+    if (m_flush_textures || m_last_filter_mode != myosd_get(MYOSD_BITMAP_FILTERING))
+	{
+        m_last_filter_mode = myosd_get(MYOSD_BITMAP_FILTERING);
+		for (auto& tex : m_texlist) {
+            if (tex->texture_id != 0) m_textures_to_delete.push_back(tex->texture_id);
+        }		
+        m_texlist.clear();
+		m_flush_textures = false;
+    }
+	
+	//clean old textures
+	osd_ticks_t now = osd_ticks();
+	for (auto it = m_texlist.begin(); it != m_texlist.end(); )
+	{
+		if ((now - (*it)->last_access) > osd_ticks_per_second())
+		{
+			if ((*it)->texture_id > 0) {
+				m_textures_to_delete.push_back((*it)->texture_id);
+			}				
+			it = m_texlist.erase(it);
+	    }	
+		else
+		{
+			++it;
+		}
+	}	
 }
 
 //=========================================================

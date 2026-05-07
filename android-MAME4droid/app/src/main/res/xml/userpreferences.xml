@@ -78,9 +78,9 @@
 	    <PreferenceScreen android:key="vector" android:title="Vector"
 	        android:summary="Select it to open vector games options" android:persistent="false">
 
-	    <com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_BEAM2X"
+	    <com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_BEAM2X_2"
 			android:title="Beam 2x" android:summary="Sets the width of the vectors to 2x"
-			android:defaultValue="true" />
+			android:defaultValue="false" />
 
 	    <com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_FLICKER"
 			android:title="Flicker" android:summary="Simulates a vector flicker effect"
@@ -362,6 +362,13 @@
 			<CheckBoxPreference android:key="PREF_BITMAP_FILTERING"
 				android:title="Smooth scaling" android:summary="Select to turn bitmap filtering on"
 				android:defaultValue="true" />
+
+			<CheckBoxPreference
+				android:key="PREF_VECTOR_BLOOM"
+				android:dependency="PREF_SHADERS_ENABLED"
+				android:title="Vector Bloom Effect"
+				android:summary="Adds a glow effect to vector graphics. (Only works with Native renderer)"
+				android:defaultValue="false" />
 
 <!--			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_SHADER_30"
 				android:dependency="PREF_SHADERS_ENABLED"

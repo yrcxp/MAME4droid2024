@@ -469,6 +469,9 @@ public class MainHelper {
 		Emulator.setValue(Emulator.BITMAP_FILTERING,
 			prefsHelper.isBitmapFiltering() ? 1 : 0);
 
+		Emulator.setValue(Emulator.VECTOR_BLOOM,
+			prefsHelper.isVectorBloom() ? 1 : 0);
+
         Emulator.setValue(Emulator.SHOW_FPS,
                 prefsHelper.isFPSShowed() ? 1 : 0);
 

@@ -92,6 +92,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_SCRAPE_ALL = "PREF_SCRAPE_ALL";
 	final static public String PREF_SCRAPE_RESIZE = "PREF_SCRAPE_RESIZE";
 	final static public String PREF_BITMAP_FILTERING = "PREF_BITMAP_FILTERING";
+	final static public String PREF_VECTOR_BLOOM = "PREF_VECTOR_BLOOM";
 
 	final static public String PREF_PORTRAIT_SCALING_MODE = "PREF_PORTRAIT_SCALING_MODE";
 	final static public String PREF_PORTRAIT_TOUCH_CONTROLLER = "PREF_PORTRAIT_TOUCH_CONTROLLER";
@@ -154,7 +155,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NODEADZONEANDSAT = "PREF_NODEADZONEANDSAT";
 	final static public String SAVESATES_IN_ROM_PATH = "SAVESATES_IN_ROM_PATH";
 
-	final static public String PREF_BEAM2X = "PREF_BEAM2X";
+	final static public String PREF_BEAM2X = "PREF_BEAM2X_2";
 	final static public String PREF_FLICKER = "PREF_FLICKER";
 
 	final static public String PREF_GLOBAL_NAVBAR_MODE = "PREF_GLOBAL_NAVBAR_MODE";
@@ -240,6 +241,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public boolean isBitmapFiltering() {
 		return getSharedPreferences().getBoolean(PREF_BITMAP_FILTERING, true);
+	}
+
+	public boolean isVectorBloom() {
+		return getSharedPreferences().getBoolean(PREF_VECTOR_BLOOM, false);
 	}
 
 	public int getPortraitScaleMode() {
