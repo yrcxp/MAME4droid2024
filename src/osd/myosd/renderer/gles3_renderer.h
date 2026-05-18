@@ -120,7 +120,7 @@ public:
 		
 		if (m_white_texture) glDeleteTextures(1, &m_white_texture);
 		if (m_glow_texture) glDeleteTextures(1, &m_glow_texture);
-		delete_fbo();
+		delete_fbos();
 
         if (!m_textures_to_delete.empty()) {
             glDeleteTextures(m_textures_to_delete.size(), m_textures_to_delete.data());
@@ -157,7 +157,6 @@ private:
 	
 	void upload_pending_textures(std::vector<local_primitive>& draw_prims);
 	void calculate_vector_bounds(const std::vector<local_primitive>& draw_prims, render_bounds& out_bounds);
-	void draw_vector_fbo(const render_bounds& v_bounds);
 	void process_dwell_point(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time, float& prev_x, float& prev_y, float& prev_dx_norm, float& prev_dy_norm);
 	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time);
 	void process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend);
@@ -167,22 +166,29 @@ private:
 	GLuint m_quad_program;
 	GLint m_uniform_ortho_quad;
 	
-	// --- ELEMENTOS PARA TRUE HDR ---
+	// HDR stuff
 	GLuint m_hdr_program;
 	GLint m_uniform_ortho_hdr;
 	GLint m_uniform_exposure_hdr;
-	bool m_fbo_is_hdr = false;
-    // --------------------------------------
 
 	GLuint m_white_texture = 0;
 	GLuint m_glow_texture = 0;	
 	
+	// --- DUAL FBO SYSTEM ---
 	bool m_fbo_dirty = false;	
-	GLuint m_fbo = 0;
-	GLuint m_fbo_texture = 0;
-	void create_fbo(int width, int height, bool is_hdr);
-	void delete_fbo();
 	
+	GLuint m_fbo_hdr = 0;
+	GLuint m_fbo_texture_hdr = 0;
+	
+	GLuint m_fbo_sdr = 0;
+	GLuint m_fbo_texture_sdr = 0;
+	
+	void create_fbos(int width, int height, bool need_hdr, bool need_sdr);
+	void delete_fbos();
+	void resolve_hdr(GLuint target_fbo, float layout_w, float layout_h, 
+		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho);
+	void switch_fbo_target(int target_fbo, int& current_fbo, bool require_sdr, float layout_w, float layout_h, 
+		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho);
 	std::vector<instance_data> m_batch_instances;
     
     // Native OpenGL buffers
