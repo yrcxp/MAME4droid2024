@@ -34,7 +34,7 @@ typedef uintptr_t HashT;
 class gles3_renderer : public myosd_renderer
 {
 public:
-	gles3_renderer(int width, int height);
+	gles3_renderer(int width, int height, bool use_hdr_display = false, float peak_multiplier = 3.0f);
 
 	void end_renderer() override;
 
@@ -156,11 +156,13 @@ private:
 	void cleanup_texture_cache();
 	
 	void upload_pending_textures(std::vector<local_primitive>& draw_prims);
-	void calculate_vector_bounds(const std::vector<local_primitive>& draw_prims, render_bounds& out_bounds);
-	void process_dwell_point(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time, float& prev_x, float& prev_y, float& prev_dx_norm, float& prev_dy_norm);
+	
 	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time);
 	void process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend);
 
+	void apply_magnetic_jitter(float& px0, float& py0, float& px1, float& py1, bool is_vector, bool enable_bloom, float current_time);	
+	void process_dwell_point(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time, float& prev_x, float& prev_y, float& prev_dx_norm, float& prev_dy_norm);
+	
 	//Shader program to render a quad primitive
 	//each one deals with a specific texture format
 	GLuint m_quad_program;
@@ -170,9 +172,14 @@ private:
 	GLuint m_hdr_program;
 	GLint m_uniform_ortho_hdr;
 	GLint m_uniform_exposure_hdr;
+	GLint m_uniform_use_hdr_display;
+	GLint m_uniform_peak_multiplier;
 
 	GLuint m_white_texture = 0;
-	GLuint m_glow_texture = 0;	
+	GLuint m_glow_texture = 0;
+	
+	// Auto-Exposure temporal memory
+    float m_current_exposure = 1.5f;
 	
 	// --- DUAL FBO SYSTEM ---
 	bool m_fbo_dirty = false;	
@@ -185,6 +192,7 @@ private:
 	
 	void create_fbos(int width, int height, bool need_hdr, bool need_sdr);
 	void delete_fbos();
+	bool calculate_auto_exposure(const std::vector<local_primitive>& draw_prims);	
 	void resolve_hdr(GLuint target_fbo, float layout_w, float layout_h, 
 		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho);
 	void switch_fbo_target(int target_fbo, int& current_fbo, bool require_sdr, float layout_w, float layout_h, 
@@ -217,6 +225,9 @@ private:
     bool m_init = true;
     bool m_flush_textures = false;
     int m_last_filter_mode;
+	
+	bool m_use_hdr_display = false;
+	float m_peak_multiplier;
 	
 	std::list<std::shared_ptr<gles_texture>> m_texlist; //Currently allocated textures
 };

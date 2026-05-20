@@ -228,7 +228,7 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_setTouchData
  * Signature: ()V
  */
 JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_onDrawFrame
-  (JNIEnv *, jclass, jint);
+  (JNIEnv *, jclass, jint, jint);
 
 /*
  * Class:     com_seleuco_mame4droid_Emulator

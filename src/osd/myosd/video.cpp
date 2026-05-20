@@ -62,14 +62,14 @@ static std::string current_shader_name = "";
 void my_osd_interface::video_init()
 {
 	ANDROID_LOG("my_osd_interface::video_init");
-	
+
 	{
        std::lock_guard lock(rend_mutex);
 
 	   if(my_renderer){
 		   my_renderer->init_renderer();
 	   }
-		   
+
     }
 
     // create our *single* render target, we dont do multiple windows or monitors
@@ -98,8 +98,8 @@ void my_osd_interface::video_exit()
 	   if(my_renderer){
 		   my_renderer->end_renderer();
 	   }
-	   
-	   rendering = false;		   
+
+	   rendering = false;
     }
 
     // free the render target
@@ -152,9 +152,9 @@ void my_osd_interface::update(bool skip_redraw)
             } else {
 
                 target()->compute_minimum_size( min_width, min_height);
-				
+
 				if (min_width <= 0) min_width = 640;
-                if (min_height <= 0) min_height = 480;				
+                if (min_height <= 0) min_height = 480;
                 if(min_width>640)min_width=640;
                 if(min_height>480)min_height=480;
 
@@ -164,9 +164,9 @@ void my_osd_interface::update(bool skip_redraw)
                                                target()->orientation(), vis_width, vis_height);
 
                 target()->set_keepaspect(false);
-				
+
 				if (vis_height <= 0) vis_height = min_height;
-                if (vis_width <= 0) vis_width = min_width;				
+                if (vis_width <= 0) vis_width = min_width;
 
 				float display_aspect = (float)vis_width / (float)vis_height;
                 float texture_aspect = (float)min_width / (float)min_height;
@@ -231,9 +231,9 @@ void my_osd_interface::update(bool skip_redraw)
 //	JNI callbacks called from GL thread (GLViewSurface.Renderer)
 //===============================================================================
 
-void myosd_video_createRenderer(int renderer)
+void myosd_video_createRenderer(int renderer, int hdr)
 {
-    ANDROID_LOG("create renderer %d",renderer);
+    ANDROID_LOG("create renderer %d %d",renderer, hdr);
 
     current_renderer = renderer;
 
@@ -244,7 +244,7 @@ void myosd_video_createRenderer(int renderer)
             break;
 
         case NATIVE_RENDERER:
-            my_renderer = new gles3_renderer(render_width, render_height);
+            my_renderer = new gles3_renderer(render_width, render_height, hdr > 0 ? true: false, hdr > 0 ? ((float)hdr / 100.0f) : 0);
             break;
         default:
             ANDROID_LOG("Error create renderer: Renderer %d not found!", current_renderer);
@@ -272,7 +272,7 @@ extern "C" void myosd_video_newRenderer()
     force_recreate_renderer = true;
 }
 
-extern "C" int myosd_video_onDrawFrame(int renderer)
+extern "C" int myosd_video_onDrawFrame(int renderer, int hdr)
 {
 	myosd_renderer* current_renderer = nullptr;
 
@@ -286,24 +286,24 @@ extern "C" int myosd_video_onDrawFrame(int renderer)
             }
             force_recreate_renderer = false;
         }
-        
+
         if(!rendering)
             return -1;
 
         if(my_renderer == nullptr) {
-            myosd_video_createRenderer(renderer); 
+            myosd_video_createRenderer(renderer, hdr);
         }
 
         current_renderer = my_renderer;
-    } 
+    }
 
     //now render async
     if (current_renderer) {
         current_renderer->render();
     }
-	
+
 	return 0;
-}	
+}
 
 extern "C" void myosd_video_getShaders(const char*** list, int* n)
 {

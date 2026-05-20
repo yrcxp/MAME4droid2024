@@ -63,7 +63,7 @@ int  (*setMouseData)(int i, int mouseAction, int button, float x, float y)=NULL;
 int  (*setTouchData)(int i, int touchAction, float x, float y)=NULL;
 
 void (*onSurfaceCreated)(void) = NULL;
-int (*onDrawFrame)(int) = NULL;
+int (*onDrawFrame)(int, int) = NULL;
 int (*newRenderer)() = NULL;
 
 void (*getShaders)(const char***, int*) = NULL;
@@ -713,10 +713,10 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_setTouchData
 }
 
 JNIEXPORT int JNICALL Java_com_seleuco_mame4droid_Emulator_onDrawFrame
-	(JNIEnv* env, jclass c, jint renderer)
+	(JNIEnv* env, jclass c, jint renderer, jint hdr)
 {
     if (onDrawFrame != NULL) {
-        return onDrawFrame(renderer);
+        return onDrawFrame(renderer, hdr);
     }
     return -1;
 }

@@ -9,15 +9,23 @@
 ***************************************************************************/
 
 
-//=================================================
-// Quad primitive program
-// ================================================
+// license:BSD-3-Clause
+// copyright-holders:David Valdeita (Seleuco) & Filipe Paulino (FlykeSpice)
+/***************************************************************************
+
+    shader_sources.hxx
+
+    Shader sources for GLES renderer
+
+***************************************************************************/
+
 
 //=================================================
-// Quad primitive program
+// Quad primitive program (TRUE HDR READY)
 // ================================================
 
 static const char* quad_vertex_shader_src = 
+    "precision highp float;\n"
     "in float a_corner;\n"
     "in vec4 i_p0p1;\n"
     "in vec4 i_p2p3;\n"
@@ -41,6 +49,7 @@ static const char* quad_vertex_shader_src =
     "}\n";
 
 static const char* quad_frag_shader_src = 
+    "precision highp float;\n" 
     "in vec2 v_texuv;\n"
     "in vec4 v_color;\n"
     "uniform sampler2D s_texture;\n"
@@ -49,10 +58,6 @@ static const char* quad_frag_shader_src =
     "    fragColor = texture(s_texture, v_texuv) * v_color;\n"
     "}\n";
 	
-	
-//=================================================
-// HDR Tone Mapping Program
-// ================================================
 
 static const char* hdr_frag_shader_src = 
     "precision highp float;\n"
@@ -60,11 +65,33 @@ static const char* hdr_frag_shader_src =
     "in vec4 v_color;\n"
     "uniform sampler2D s_texture;\n"
     "uniform float u_exposure;\n"
+    "uniform float u_peak_multiplier;\n" 
+    "uniform int u_use_hdr_display;\n" 
     "out vec4 fragColor;\n"
     "void main() {\n"
     "    vec4 hdrColor = texture(s_texture, v_texuv);\n"
-    "    // Exponential Tone Mapping (Soft mapping from HDR to LDR)\n"
-    "    vec3 mapped = vec3(1.0) - exp(-hdrColor.rgb * u_exposure);\n"
+    "    vec3 mapped;\n"
+    "\n"
+    "    if (u_use_hdr_display == 1) {\n"
+    "        // TRUE FP16 PATH (scRGB linear space)\n"
+    "        vec3 linear_light = hdrColor.rgb * u_exposure;\n"
+    "\n"
+    "        // --- HDR CONTRAST PINCH (Anti-Fattening) ---\n"
+    "        // By raising the light to a power, we crush the faint halos so they don't\n"
+    "        // turn into solid white walls when multiplied by the display's peak brightness.\n"
+    "        // - 1.0 = No correction (Fat, washed-out glowing blobs)\n"
+    "        // - 1.5 = Balanced (Bright laser core, smooth gradient preserved)\n"
+    "        // - 1.8+ = Extremely sharp (Very thin and dark lines)\n"
+    "        vec3 pinched_light = pow(max(linear_light, vec3(0.0)), vec3(1.6));\n"
+    "\n"
+    "        // Now we safely scale it to the hardware's physical maximum\n"
+    "        mapped = pinched_light * u_peak_multiplier;\n" 
+    "    } else {\n"
+    "        // Classic SDR Path: Standard Exponential Tone Mapping\n"
+    "        mapped = vec3(1.0) - exp(-hdrColor.rgb * u_exposure);\n"
+    "    }\n"
+    "\n"
     "    fragColor = vec4(mapped, hdrColor.a) * v_color;\n"
     "}\n";
-	
+
+

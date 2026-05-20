@@ -48,7 +48,9 @@ package com.seleuco.mame4droid.views;
 // Imports of necessary classes from Java and the Android SDK.
 
 import android.content.Context;
+import android.graphics.Color;
 import android.opengl.GLSurfaceView;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.inputmethod.BaseInputConnection;
@@ -62,6 +64,7 @@ import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.render.GLSWRenderer;
 import com.seleuco.mame4droid.render.GLNativeRenderer;
 import com.seleuco.mame4droid.render.IGLRenderer;
+import com.seleuco.mame4droid.widgets.WarnWidget;
 
 import java.util.ArrayList;
 
@@ -70,6 +73,8 @@ import java.util.ArrayList;
  * Its purpose is to render the emulator's output using OpenGL
  */
 public class EmulatorViewGL extends GLSurfaceView implements IEmuView {
+
+	final String TAG = "EmulatorViewGL";
 
 	// Stores the current screen scaling type (e.g., Original, Fullscreen).
 	protected int scaleType = PrefsHelper.PREF_ORIGINAL;
@@ -154,21 +159,148 @@ public class EmulatorViewGL extends GLSurfaceView implements IEmuView {
 		this.requestFocus();
 
 		if(mm != null) {
-			// Check if shaders are enabled in the preferences.
-			if (mm.getPrefsHelper().isShadersEnabled()) {
-			    //If so, use OpenGL ES 3.0 for advanced effects.
-				setEGLContextClientVersion(3);
-			 	render = new GLNativeRenderer();
-			} else {
-				// Otherwise, use the more compatible GLES10
-				setEGLContextClientVersion(1);
-			    render = new GLSWRenderer();
+			boolean useHDR = mm.getPrefsHelper().isHDRDisplayEnabled();
+			boolean fp16Supported = false;
+
+			// =================================================================
+			// PHASE 1: EGL PRE-FLIGHT PROBE on the Main Thread
+			// =================================================================
+			if (useHDR) {
+				android.util.Log.d(TAG, "Initializing context: Probing hardware for FP16 support...");
+
+				javax.microedition.khronos.egl.EGL10 egl = (javax.microedition.khronos.egl.EGL10) javax.microedition.khronos.egl.EGLContext.getEGL();
+				javax.microedition.khronos.egl.EGLDisplay display = egl.eglGetDisplay(javax.microedition.khronos.egl.EGL10.EGL_DEFAULT_DISPLAY);
+				int[] version = new int[2];
+
+				if (egl.eglInitialize(display, version)) {
+					final int EGL_OPENGL_ES3_BIT = 64;
+					final int EGL_COLOR_COMPONENT_TYPE_EXT = 0x3339;
+					final int EGL_COLOR_COMPONENT_TYPE_FLOAT_EXT = 0x333B;
+
+					int[] attribsFp16 = {
+						javax.microedition.khronos.egl.EGL10.EGL_RED_SIZE, 16,
+						javax.microedition.khronos.egl.EGL10.EGL_GREEN_SIZE, 16,
+						javax.microedition.khronos.egl.EGL10.EGL_BLUE_SIZE, 16,
+						javax.microedition.khronos.egl.EGL10.EGL_ALPHA_SIZE, 16,
+						javax.microedition.khronos.egl.EGL10.EGL_DEPTH_SIZE, 0,
+						javax.microedition.khronos.egl.EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+						EGL_COLOR_COMPONENT_TYPE_EXT, EGL_COLOR_COMPONENT_TYPE_FLOAT_EXT,
+						javax.microedition.khronos.egl.EGL10.EGL_NONE
+					};
+
+					javax.microedition.khronos.egl.EGLConfig[] configs = new javax.microedition.khronos.egl.EGLConfig[1];
+					int[] numConfigs = new int[1];
+
+					// Ask the driver if it has any FP16 configuration
+					egl.eglChooseConfig(display, attribsFp16, configs, 1, numConfigs);
+					if (numConfigs[0] > 0) {
+						fp16Supported = true; // Hardware supports it!
+					}
+
+					// We do not call eglTerminate to let GLSurfaceView handle the natural lifecycle
+				}
 			}
-			// Assign the renderer to the GLSurfaceView.
+
+			// =================================================================
+			// PHASE 2: SAFE CONFIGURATION AND FALLBACK APPLICATION
+			// =================================================================
+			if (useHDR && fp16Supported) {
+				android.util.Log.d(TAG, "SUCCESS: Hardware supports FP16. Initializing true HDR path.");
+
+				// 1. Configure the Android window safely (On the Main Thread)
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+						mm.getWindow().setColorMode(android.content.pm.ActivityInfo.COLOR_MODE_HDR);
+					} else {
+						mm.getWindow().setColorMode(android.content.pm.ActivityInfo.COLOR_MODE_WIDE_COLOR_GAMUT);
+					}
+				}
+
+				// 2. NOW it is 100% safe to set the 16-bit format in the Holder
+				getHolder().setFormat(android.graphics.PixelFormat.RGBA_F16);
+				setEGLContextClientVersion(3);
+
+				// 3. Force the selection of the config we already know exists
+				setEGLConfigChooser(new EGLConfigChooser() {
+					@Override
+					public javax.microedition.khronos.egl.EGLConfig chooseConfig(
+						javax.microedition.khronos.egl.EGL10 egl, javax.microedition.khronos.egl.EGLDisplay display) {
+
+						int[] attribsFp16 = {
+							javax.microedition.khronos.egl.EGL10.EGL_RED_SIZE, 16,
+							javax.microedition.khronos.egl.EGL10.EGL_GREEN_SIZE, 16,
+							javax.microedition.khronos.egl.EGL10.EGL_BLUE_SIZE, 16,
+							javax.microedition.khronos.egl.EGL10.EGL_ALPHA_SIZE, 16,
+							javax.microedition.khronos.egl.EGL10.EGL_DEPTH_SIZE, 0,
+							javax.microedition.khronos.egl.EGL10.EGL_RENDERABLE_TYPE, 64, // EGL_OPENGL_ES3_BIT
+							0x3339, 0x333B, // FLOAT EXTENSIONS
+							javax.microedition.khronos.egl.EGL10.EGL_NONE
+						};
+						javax.microedition.khronos.egl.EGLConfig[] configs = new javax.microedition.khronos.egl.EGLConfig[1];
+						int[] numConfigs = new int[1];
+						egl.eglChooseConfig(display, attribsFp16, configs, 1, numConfigs);
+						return configs[0];
+					}
+				});
+
+				// =================================================================
+				// DYNAMIC PEAK MULTIPLIER (HDR Nits Calculation)
+				// =================================================================
+				float peakMultiplier = 3.0f; // Safe fallback value (approx 300 nits peak)
+
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+					android.view.Display display = mm.getWindow().getWindowManager().getDefaultDisplay();
+					android.view.Display.HdrCapabilities hdrCaps = display.getHdrCapabilities();
+
+					if (hdrCaps != null) {
+						float maxNits = hdrCaps.getDesiredMaxLuminance();
+						// Standard SDR white is universally defined as 100 nits.
+						// If the display can output more, we calculate the exact headroom multiplier.
+
+						// COMFORT AND HISTORICAL ACCURACY CLAMP:
+						// An original arcade CRT vector monitor rarely exceeded 400 nits.
+						// If the phone has a 1500-nit panel, we cap it at 400 nits to avoid blinding the user.
+						float safePeakNits = Math.min(maxNits, 300.0f);
+						if (maxNits > 100.0f) {
+							peakMultiplier = safePeakNits / 100.0f;
+							android.util.Log.d(TAG, "Hardware Max Luminance: " + maxNits + " nits. Dynamic Multiplier: " + peakMultiplier);
+						} else {
+							android.util.Log.d(TAG, "Warning: Display returned low max nits (" + maxNits + "). Using fallback 3.0.");
+						}
+					}
+				}
+
+				// 4. Instantiate C++ passing the dynamic multiplier
+				render = new GLNativeRenderer(true, (int)(peakMultiplier * 100.0f));
+
+			} else if (useHDR && !fp16Supported) {
+
+				android.util.Log.d(TAG, "WARNING: Hardware rejected HDR 16-bit. Falling back to SDR 8-bit.");
+				new WarnWidget.WarnWidgetHelper(mm, "WARNING: Hardware rejected HDR 16-bit. Falling back to SDR.", 3, Color.RED, false);
+
+				setEGLContextClientVersion(3);
+				setEGLConfigChooser(8, 8, 8, 8, 0, 0);
+
+				// C++ will securely know it is in SDR
+				render = new GLNativeRenderer(false, 0);
+
+			} else if (mm.getPrefsHelper().isShadersEnabled()) {
+				// Classic route (SDR)
+				android.util.Log.d(TAG, "Initializing context: SDR Path selected (GLES 3.0 / Shaders).");
+				setEGLContextClientVersion(3);
+				setEGLConfigChooser(8, 8, 8, 8, 0, 0);
+				render = new GLNativeRenderer(false, 0);
+
+			} else {
+				// Legacy route (GLES 1)
+				android.util.Log.d(TAG, "Initializing context: Legacy Path selected (GLES 1.0).");
+				setEGLContextClientVersion(1);
+				setEGLConfigChooser(8, 8, 8, 8, 0, 0);
+				render = new GLSWRenderer();
+			}
+
+			// Assign everything after having cleaned up the logic
 			setRenderer(render);
-			// Set the render mode to 'WHEN_DIRTY'.
-			// This means the view is only redrawn when we explicitly request it
-			// (e.g., when a new frame arrives from the emulator), which saves battery.
 			setRenderMode(RENDERMODE_WHEN_DIRTY);
 		}
 	}

@@ -67,6 +67,13 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 	private PrefsHelper prefsHelper;
 	private boolean init = false;
 	private String oldEffect;
+	private boolean isHdr;
+	private int maxnits;
+
+	public GLNativeRenderer(boolean hdr, int nits){
+		isHdr = hdr;
+		maxnits = nits;
+	}
 
 	/**
 	 * Sets the MAME4droid instance for the renderer.
@@ -131,7 +138,7 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 	@Override
 	public void onDrawFrame(GL10 gl) {
 		//Call JNI method to do GLES rendering on native side
-		int res = Emulator.onDrawFrame(Emulator.RENDERER_GL_NATIVE);
+		int res = Emulator.onDrawFrame(Emulator.RENDERER_GL_NATIVE, isHdr? maxnits : 0);
 		if(res==-1)
 		{
 			gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

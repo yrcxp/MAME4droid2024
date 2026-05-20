@@ -93,7 +93,7 @@ public final class GLSWRenderer implements Renderer, IGLRenderer {
 	@Override
 	public void onDrawFrame(GL10 gl) {
 		//Call JNI method to do GLES rendering on native side
-		int res = Emulator.onDrawFrame(Emulator.RENDERER_GL_SW);
+		int res = Emulator.onDrawFrame(Emulator.RENDERER_GL_SW, 0);
 		if(res==-1)
 		{
 			gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

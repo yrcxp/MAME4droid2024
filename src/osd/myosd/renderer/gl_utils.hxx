@@ -8,18 +8,6 @@
 
 ***************************************************************************/
 
-
-// license:BSD-3-Clause
-// copyright-holders:Filipe Paulino (FlykeSpice)
-/***************************************************************************
-
-    gl_utils.hxx
-
-    Common GLES utilities for MAME4droid
-
-***************************************************************************/
-
-
 #pragma once
 
 #ifndef MAME4DROID_GLUTILS
@@ -76,7 +64,6 @@ namespace gl_utils
 		if (shader == 0)
 			throw std::runtime_error("GLES3: unable to allocate a shader object");
 
-		// --- EL GRAN CAMBIO: Inyectamos versión de GLES3 ---
 		std::string _shaderSrc = "#version 300 es\n"; //GLES3 glsl version
 		
 		if (type == GL_FRAGMENT_SHADER)

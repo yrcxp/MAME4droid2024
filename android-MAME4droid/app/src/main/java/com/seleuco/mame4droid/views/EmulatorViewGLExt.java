@@ -65,6 +65,8 @@ import com.seleuco.mame4droid.input.TouchController;
  */
 public class EmulatorViewGLExt extends EmulatorViewGL implements android.view.View.OnSystemUiVisibilityChangeListener {
 
+	//final String TAG = "EmulatorViewGLExt";
+
 	// Stores the last known System UI visibility flags to detect changes.
 	protected int mLastSystemUiVis;
 

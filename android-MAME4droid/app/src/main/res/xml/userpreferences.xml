@@ -376,6 +376,13 @@
 				android:summary="Adds a glow effect to vector graphics. (Only works with Native renderer)"
 				android:defaultValue="false" />
 
+			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn
+				android:key="PREF_HDR_DISPLAY"
+				android:dependency="PREF_VECTOR_BLOOM"
+				android:title="True HDR Display"
+				android:summary="Unlocks peak panel brightness and Wide Color Gamut for vector bloom. Requires an HDR-capable screen."
+				android:defaultValue="false" />
+
 <!--			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_SHADER_30"
 				android:dependency="PREF_SHADERS_ENABLED"
 				android:title="Force shaders as 3.0" android:summary="Force shaders to use 3.0 shader language for better accuracy, but some shaders may fail on older devices"

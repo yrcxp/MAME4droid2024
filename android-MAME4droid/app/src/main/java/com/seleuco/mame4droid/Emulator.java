@@ -819,7 +819,7 @@ public class Emulator {
 	public final static int RENDERER_GL_NATIVE = 2;
 
 	public static native int newRenderer();
-	public static native int onDrawFrame(int renderer);
+	public static native int onDrawFrame(int renderer, int isHdr);
 
 	public static native String[] getShaders();
 	public static native boolean setShader(String shader);
