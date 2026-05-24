@@ -48,7 +48,7 @@ int myosd_display_height;
 int myosd_display_width_osd;
 int myosd_display_height_osd;
 int myosd_bitmap_filtering;
-int myosd_vector_bloom;
+int myosd_vector_improved;
 extern int myosd_fps;
 extern int myosd_zoom_to_window;
 
@@ -318,8 +318,8 @@ extern "C" intptr_t myosd_get(int var)
         case MYOSD_BITMAP_FILTERING:
             return myosd_bitmap_filtering;
 
-        case MYOSD_VECTOR_BLOOM:
-            return myosd_vector_bloom;
+        case MYOSD_VECTOR_IMPROVED:
+            return myosd_vector_improved;
 
         case MYOSD_FPS:
             return myosd_fps;
@@ -352,8 +352,8 @@ extern "C" void myosd_set(int var, intptr_t value)
         case MYOSD_BITMAP_FILTERING:
             myosd_bitmap_filtering = value;
             break;
-        case MYOSD_VECTOR_BLOOM:
-            myosd_vector_bloom = value;
+        case MYOSD_VECTOR_IMPROVED:
+            myosd_vector_improved = value;
             break;
         case MYOSD_FPS:
             myosd_fps = value;

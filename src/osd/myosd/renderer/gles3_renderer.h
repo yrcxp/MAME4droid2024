@@ -28,6 +28,7 @@
 #include <string>
 #include <mutex>
 #include <memory>
+#include <atomic>
 
 typedef uintptr_t HashT;
 
@@ -113,33 +114,11 @@ public:
 	static constexpr GLuint ATTRIB_COLOR = 2;
 
 	static constexpr u8 s_quad_indices[] = { 0, 1, 2, 0, 2, 3 }; //Indices to draw a quad with glDrawElements
-
-    ~gles3_renderer() override
-    {
-        glDeleteProgram(m_quad_program);
-		
-		if (m_white_texture) glDeleteTextures(1, &m_white_texture);
-		if (m_glow_texture) glDeleteTextures(1, &m_glow_texture);
-		delete_fbos();
-
-        if (!m_textures_to_delete.empty()) {
-            glDeleteTextures(m_textures_to_delete.size(), m_textures_to_delete.data());
-            m_textures_to_delete.clear();
-        }
-		
-		if (!m_render_textures_to_delete.empty()) {
-            glDeleteTextures(m_render_textures_to_delete.size(), m_render_textures_to_delete.data());
-            m_render_textures_to_delete.clear();
-        }		
-
-        for (auto& tex : m_texlist) {
-            if (tex->texture_id > 0) {
-                glDeleteTextures(1, &tex->texture_id);
-            }
-        }
-        m_texlist.clear();
-    }
-
+	
+	~gles3_renderer() override;
+	
+	inline void set_fbo_dirty() { m_fbo_dirty = true; }
+	
 private:
 	std::mutex m_render_mutex;
 
@@ -157,11 +136,12 @@ private:
 	
 	void upload_pending_textures(std::vector<local_primitive>& draw_prims);
 	
-	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time);
+	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time);
 	void process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend);
 
-	void apply_magnetic_jitter(float& px0, float& py0, float& px1, float& py1, bool is_vector, bool enable_bloom, float current_time);	
-	void process_dwell_point(const local_primitive& prim, bool is_vector, bool enable_bloom, float current_time, float& prev_x, float& prev_y, float& prev_dx_norm, float& prev_dy_norm);
+	void apply_phosphor_persistence(float fbo_w, float fbo_h);
+	void apply_magnetic_jitter(float& px0, float& py0, float& px1, float& py1, bool is_vector, bool enable_advanced_effects, float current_time);	
+	void process_dwell_point(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time, float& prev_x, float& prev_y, float& prev_dx_norm, float& prev_dy_norm);
 	
 	//Shader program to render a quad primitive
 	//each one deals with a specific texture format
@@ -173,7 +153,9 @@ private:
 	GLint m_uniform_ortho_hdr;
 	GLint m_uniform_exposure_hdr;
 	GLint m_uniform_use_hdr_display;
-	GLint m_uniform_peak_multiplier;
+	GLint m_uniform_base_nits;
+    GLint m_uniform_max_nits;	
+	GLint m_uniform_peak_nits;
 
 	GLuint m_white_texture = 0;
 	GLuint m_glow_texture = 0;
@@ -181,27 +163,40 @@ private:
 	// Auto-Exposure temporal memory
     float m_current_exposure = 1.5f;
 	
-	// --- DUAL FBO SYSTEM ---
-	bool m_fbo_dirty = false;	
+	// TRUE if the GPU fails to allocate FP16 FBOs and we must force SDR rendering
+	bool m_hdr_fallback_active = false;
 	
-	GLuint m_fbo_hdr = 0;
-	GLuint m_fbo_texture_hdr = 0;
+	// --- DUAL FBO SYSTEM ---	
+	bool m_fbo_dirty = false;
+		
+	// Ping-Pong FBOs for HDR Temporal Accumulation
+	GLuint m_fbo_hdr[2] = {0, 0};
+	GLuint m_fbo_texture_hdr[2] = {0, 0};
+	int m_current_hdr_fbo = 0;
+	bool m_history_valid = false;
+	bool m_multi_monitor_detected = false;
 	
 	GLuint m_fbo_sdr = 0;
 	GLuint m_fbo_texture_sdr = 0;
 	
-	void create_fbos(int width, int height, bool need_hdr, bool need_sdr);
+	//Intermediate FBO for applying standard filters in HDR display mode before linearizing
+	GLuint m_fbo_filter = 0;
+	GLuint m_fbo_texture_filter = 0;
+	
+	void create_fbos(int width, int height, bool need_hdr, bool need_sdr, bool need_filter);
 	void delete_fbos();
 	bool calculate_auto_exposure(const std::vector<local_primitive>& draw_prims);	
 	void resolve_hdr(GLuint target_fbo, float layout_w, float layout_h, 
 		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho);
 	void switch_fbo_target(int target_fbo, int& current_fbo, bool require_sdr, float layout_w, float layout_h, 
-		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho);
+		const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho, bool has_vectors);
+		
 	std::vector<instance_data> m_batch_instances;
     
     // Native OpenGL buffers
     GLuint m_corner_vbo = 0;
     GLuint m_instance_vbo = 0;
+	GLuint m_vao = 0;
 
 	void flush_batch();
 	void push_quad(const float* verts, const float* uv, const render_color& color);
@@ -217,17 +212,20 @@ private:
 	bool m_usefilter = false; //If any filter is being used right now
 	filter_shader m_filter; //Current filter shader used
     inline static std::vector<std::pair<std::string, filter_data>> s_filters = {};
+	
+	GLint m_uniform_is_vector_quad;
+	int m_last_is_vector = -1;
 
 	int m_width, m_height;
 
     int m_view_width = 1;
     int m_view_height = 1;
     bool m_init = true;
-    bool m_flush_textures = false;
+	std::atomic<bool> m_flush_textures{false};
     int m_last_filter_mode;
 	
 	bool m_use_hdr_display = false;
-	float m_peak_multiplier;
+	float m_peak_nits;
 	
 	std::list<std::shared_ptr<gles_texture>> m_texlist; //Currently allocated textures
 };

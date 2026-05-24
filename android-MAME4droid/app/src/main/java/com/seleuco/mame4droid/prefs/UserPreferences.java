@@ -66,6 +66,7 @@ import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.helpers.ScraperHelper;
 import com.seleuco.mame4droid.input.ControlCustomizer;
 import com.seleuco.mame4droid.input.GameController;
+import com.seleuco.mame4droid.render.GLNativeRenderer;
 
 public class UserPreferences extends PreferenceActivity implements OnSharedPreferenceChangeListener {
 
@@ -329,6 +330,12 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			{
 				mPrefNumProcessors.setSummary("Current value is '" + mPrefNumProcessors.getEntry()+"'");
 			}
+			else if (key.startsWith("PREF_VECTOR_EFFECT_") || key.startsWith("PREF_BLOOM_"))
+			{
+				if (Emulator.isEmulating()) {
+					GLNativeRenderer.syncRendererParameters(sharedPreferences);
+				}
+			}
 	    }
 
 		@Override
@@ -435,6 +442,23 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 		    	       });
 			    	Dialog dialog = builder.create();
 			    	dialog.show();
+			}
+			else if (pref.getKey().equals("defaultVectorData")) {
+				AlertDialog.Builder builder = new AlertDialog.Builder(this);
+				builder.setMessage("Are you sure to restore CRT settings to factory defaults?")
+					.setCancelable(false)
+					.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int id) {
+							GLNativeRenderer.restoreVectorDefaults(settings);
+						}
+					})
+					.setNegativeButton("No", new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int id) {
+							dialog.cancel();
+						}
+					});
+				Dialog dialog = builder.create();
+				dialog.show();
 			}
 
 			return super.onPreferenceTreeClick(preferenceScreen, pref);

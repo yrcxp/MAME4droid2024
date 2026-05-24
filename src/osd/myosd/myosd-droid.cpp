@@ -102,7 +102,7 @@ static std::string myosd_droid_statepath;
 static int myosd_droid_warn_on_exit = 1;
 static int myosd_droid_show_fps = 1;
 static int myosd_droid_bitmap_filtering = 1;
-static int myosd_droid_vector_bloom = 0;
+static int myosd_droid_vector_improved = 0;
 static int myosd_droid_zoom_to_window = 1;
 static std::string myosd_droid_selected_game;
 static std::string myosd_droid_rom_name;
@@ -320,8 +320,8 @@ void myosd_droid_setMyValue(int key, int i, int value) {
             myosd_droid_bitmap_filtering = value;
             //__android_log_print(ANDROID_LOG_DEBUG, "libMAME4droid.so", "setMyValue  %d,%d:%d",key,i,value);
             break;
-        case com_seleuco_mame4droid_Emulator_VECTOR_BLOOM:
-            myosd_droid_vector_bloom = value;;
+        case com_seleuco_mame4droid_Emulator_VECTOR_IMPROVED:
+            myosd_droid_vector_improved = value;;
             break;
         case com_seleuco_mame4droid_Emulator_SHOW_FPS:
             myosd_droid_show_fps = value;
@@ -533,10 +533,10 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
     if (i < 0) return;
 
     bool mirror_to_all = (i == 0 && myosd_droid_pxasp1 && !myosd_droid_inMenu && myosd_droid_num_of_joys <= 1);
-	
-	if (t == com_seleuco_mame4droid_Emulator_LEFT_STICK_DATA || 
+
+	if (t == com_seleuco_mame4droid_Emulator_LEFT_STICK_DATA ||
         t == com_seleuco_mame4droid_Emulator_RIGHT_STICK_DATA) {
-        
+
         if (v1 != 0.0f || v2 != 0.0f) {
             for(int g = 0; g < MYOSD_NUM_GUN; g++) {
                 lightgun_x[g] = 0.0f;
@@ -548,7 +548,7 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
     switch(t) {
         case com_seleuco_mame4droid_Emulator_LEFT_STICK_DATA:
             if (i >= MYOSD_NUM_JOY) return;
-            
+
             if (mirror_to_all) {
                 for(int j = 0; j < MYOSD_NUM_JOY; j++) {
                     joy_analog_x[j] = v1;
@@ -562,7 +562,7 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
 
         case com_seleuco_mame4droid_Emulator_RIGHT_STICK_DATA:
             if (i >= MYOSD_NUM_JOY) return;
-            
+
             if (mirror_to_all) {
                 for(int j = 0; j < MYOSD_NUM_JOY; j++) {
                     joy_analog_x_r[j] = v1;
@@ -576,7 +576,7 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
 
         case com_seleuco_mame4droid_Emulator_TRIGGER_DATA:
             if (i >= MYOSD_NUM_JOY) return;
-            
+
             if (mirror_to_all) {
                 for(int j = 0; j < MYOSD_NUM_JOY; j++) {
                     joy_analog_trigger_x[j] = v1;
@@ -590,7 +590,7 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
 
         case com_seleuco_mame4droid_Emulator_LIGHTGUN_DATA:
             if (i >= MYOSD_NUM_GUN) return;
-            
+
             if (mirror_to_all) {
                 for(int j = 0; j < MYOSD_NUM_GUN; j++) {
                     lightgun_x[j] = v1;
@@ -600,11 +600,11 @@ void myosd_droid_setAnalogData(int t, int i, float v1, float v2) {
                 lightgun_x[i] = v1;
                 lightgun_y[i] = v2;
             }
-            break;			
             break;
-            
+            break;
+
         default:
-		
+
             break;
     }
 
@@ -889,10 +889,10 @@ static void droid_init_input(){
 
     memset(joy_analog_x,0, sizeof(joy_analog_x));
     memset(joy_analog_y,0, sizeof(joy_analog_y));
-	
+
 	memset(joy_analog_x,0, sizeof(joy_analog_x_r));
     memset(joy_analog_y,0, sizeof(joy_analog_y_r));
-	
+
 	memset(joy_analog_x,0, sizeof(joy_analog_trigger_x));
     memset(joy_analog_y,0, sizeof(joy_analog_trigger_y));
 
@@ -1099,7 +1099,7 @@ static void droid_video_change_cb(int width, int height,int vis_width, int vis_h
 static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int running) {
 
     myosd_set(MYOSD_BITMAP_FILTERING, myosd_droid_bitmap_filtering);
-    myosd_set(MYOSD_VECTOR_BLOOM, myosd_droid_vector_bloom);
+    myosd_set(MYOSD_VECTOR_IMPROVED, myosd_droid_vector_improved);
     myosd_set(MYOSD_FPS, myosd_droid_show_fps);
     myosd_set(MYOSD_ZOOM_TO_WINDOW, myosd_droid_zoom_to_window);
 
@@ -1156,7 +1156,7 @@ static void droid_input_poll_cb(bool relative_reset,
                                 myosd_input_state *input, size_t state_size) {
 
     for(int i=0; i<MYOSD_NUM_JOY; i++) {
-		
+
 		input->joy_status[i] = joy_status[i];
 
         input->joy_analog[i][MYOSD_AXIS_LX] = joy_analog_x[i];
@@ -1164,7 +1164,7 @@ static void droid_input_poll_cb(bool relative_reset,
 
         input->joy_analog[i][MYOSD_AXIS_RX] = joy_analog_x_r[i];
         input->joy_analog[i][MYOSD_AXIS_RY] = joy_analog_y_r[i];
-		
+
         input->joy_analog[i][MYOSD_AXIS_RZ] = joy_analog_trigger_x[i];
         input->joy_analog[i][MYOSD_AXIS_LZ] = joy_analog_trigger_y[i];
 

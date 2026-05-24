@@ -93,8 +93,8 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_HISCORE 73L
 #undef com_seleuco_mame4droid_Emulator_BITMAP_FILTERING
 #define com_seleuco_mame4droid_Emulator_BITMAP_FILTERING 74L
-#undef com_seleuco_mame4droid_Emulator_VECTOR_BLOOM
-#define com_seleuco_mame4droid_Emulator_VECTOR_BLOOM 75L
+#undef com_seleuco_mame4droid_Emulator_VECTOR_IMPROVED
+#define com_seleuco_mame4droid_Emulator_VECTOR_IMPROVED 75L
 #undef com_seleuco_mame4droid_Emulator_SAF_PATH
 #define com_seleuco_mame4droid_Emulator_SAF_PATH 1L
 #undef com_seleuco_mame4droid_Emulator_ROM_NAME
@@ -253,6 +253,14 @@ JNIEXPORT jobjectArray JNICALL Java_com_seleuco_mame4droid_Emulator_getShaders
  */
 JNIEXPORT jboolean JNICALL Java_com_seleuco_mame4droid_Emulator_setShader
         (JNIEnv *, jclass, jstring);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    setRendererParameters
+ * Signature: ([Ljava/lang/String;[Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameters
+        (JNIEnv *, jclass, jobjectArray, jobjectArray);
 
 #ifdef __cplusplus
 }

@@ -70,6 +70,8 @@ void (*getShaders)(const char***, int*) = NULL;
 bool (*setShader)(const char*) = NULL;
 void (*loadShaders)(const char*) = NULL;
 
+void (*setRendererParameters)(const char**, const char**, int) = NULL;
+
 /* Callbacks to Android */
 jmethodID android_dumpVideo;
 jmethodID android_changeVideo;
@@ -174,6 +176,9 @@ static void load_lib(const char *str)
 
     loadShaders = dlsym(libdl, "myosd_video_loadShaders");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "myosd_video_loadShaders %d\n", loadShaders != NULL);
+
+    setRendererParameters = dlsym(libdl, "gles3_renderer_setParameters");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "gles3_renderer_setParameters %d\n", setRendererParameters != NULL);
 }
 
 void myJNI_dumpVideo()
@@ -799,4 +804,44 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_loadShaders
     loaded = true;
 
     return 0;
+}
+
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameters
+        (JNIEnv* env, jclass c, jobjectArray jKeys, jobjectArray jValues)
+{
+    if (setRendererParameters == NULL || jKeys == NULL || jValues == NULL) {
+        return;
+    }
+
+    jsize count = (*env)->GetArrayLength(env, jKeys);
+    if (count != (*env)->GetArrayLength(env, jValues)) {
+        return;
+    }
+
+    const char** keys = (const char**) malloc(count * sizeof(char*));
+    const char** values = (const char**) malloc(count * sizeof(char*));
+    jstring* jKeyStrs = (jstring*) malloc(count * sizeof(jstring));
+    jstring* jValStrs = (jstring*) malloc(count * sizeof(jstring));
+
+    for (int i = 0; i < count; i++) {
+        jKeyStrs[i] = (jstring) (*env)->GetObjectArrayElement(env, jKeys, i);
+        jValStrs[i] = (jstring) (*env)->GetObjectArrayElement(env, jValues, i);
+
+        keys[i] = (*env)->GetStringUTFChars(env, jKeyStrs[i], NULL);
+        values[i] = (*env)->GetStringUTFChars(env, jValStrs[i], NULL);
+    }
+
+    setRendererParameters(keys, values, (int)count);
+
+    for (int i = 0; i < count; i++) {
+        (*env)->ReleaseStringUTFChars(env, jKeyStrs[i], keys[i]);
+        (*env)->ReleaseStringUTFChars(env, jValStrs[i], values[i]);
+        (*env)->DeleteLocalRef(env, jKeyStrs[i]);
+        (*env)->DeleteLocalRef(env, jValStrs[i]);
+    }
+
+    free(keys);
+    free(values);
+    free(jKeyStrs);
+    free(jValStrs);
 }

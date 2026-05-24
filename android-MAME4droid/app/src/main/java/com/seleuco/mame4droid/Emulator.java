@@ -137,7 +137,7 @@ public class Emulator {
 	final static public int HISCORE = 73;
 
 	final static public int BITMAP_FILTERING = 74;
-	final static public int VECTOR_BLOOM = 75;
+	final static public int VECTOR_IMPROVED = 75;
 
 	//set str
 	final static public int SAF_PATH = 1;
@@ -824,4 +824,6 @@ public class Emulator {
 	public static native String[] getShaders();
 	public static native boolean setShader(String shader);
 	public static native int loadShaders(String path);
+
+	public static native void setRendererParameters(String[] keys, String[] values);
 }

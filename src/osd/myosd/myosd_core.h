@@ -270,7 +270,7 @@ enum {
     MYOSD_DISPLAY_WIDTH_OSD,        // SET: maximum width and height of "screen" to display (OSD)
     MYOSD_DISPLAY_HEIGHT_OSD,
     MYOSD_BITMAP_FILTERING,
-    MYOSD_VECTOR_BLOOM,
+    MYOSD_VECTOR_IMPROVED,
     MYOSD_FPS,                  // GET, SET: show framerate
     MYOSD_ZOOM_TO_WINDOW,                  // GET, SET: show framerate
     MYOSD_SPEED,                // GET, SET: emulation speed (100 = 100%)

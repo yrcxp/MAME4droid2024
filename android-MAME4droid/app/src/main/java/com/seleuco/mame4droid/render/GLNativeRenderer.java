@@ -63,6 +63,87 @@ import javax.microedition.khronos.opengles.GL10;
  */
 public final class GLNativeRenderer implements Renderer, IGLRenderer {
 
+	// =======================================================================
+	// CENTRALIZED VECTOR PHYSICS CONSTANTS
+	// =======================================================================
+	public static final String[] VECTOR_KEYS_BOOL = {
+		"PREF_VECTOR_EFFECT_FBO_HALF_RES",
+		"PREF_VECTOR_EFFECT_BLOOM",
+		"PREF_VECTOR_EFFECT_AUTO_EXPOSURE",
+		"PREF_VECTOR_EFFECT_OVERBRIGHT",
+		"PREF_VECTOR_EFFECT_BEAM_DYNAMICS",
+		"PREF_VECTOR_EFFECT_CORNER_BURN",
+		"PREF_VECTOR_EFFECT_PHOSPHOR_RESPONSE",
+		"PREF_VECTOR_EFFECT_PERSISTENCE",
+		"PREF_VECTOR_EFFECT_JITTER"
+	};
+
+	public static final boolean[] DEF_BOOL_VALUES = {
+		true,  // HALF_RES
+		true,  // BLOOM
+		true,  // AUTO_EXPOSURE
+		true,  // OVERBRIGHT
+		true,  // BEAM_DYNAMICS
+		true,  // CORNER_BURN
+		false, // PHOSPHOR_RESPONSE (Desactivado por defecto para ahorrar CPU)
+		true,  // PERSISTENCE
+		true   // JITTER
+	};
+
+	public static final String[] VECTOR_KEYS_INT = {
+		"PREF_BLOOM_LINE_WIDTH",
+		"PREF_BLOOM_LINE_ALPHA",
+		"PREF_BLOOM_POINT_WIDTH",
+		"PREF_BLOOM_POINT_ALPHA",
+		"PREF_BLOOM_GLOBAL_DRIVE",
+		"PREF_BLOOM_BASE_NITS",
+		"PREF_BLOOM_MAX_NITS",
+		"PREF_BLOOM_FIXED_EXPOSURE",
+		"PREF_BLOOM_AUTO_EXPOSURE_MULT",
+		"PREF_BLOOM_AUTO_EXPOSURE_THRESHOLD",
+		"PREF_BLOOM_OVERBRIGHT_MAX",
+		"PREF_BLOOM_OVERBRIGHT_LINE_MULT",
+		"PREF_BLOOM_OVERBRIGHT_POINT_MULT",
+		"PREF_BLOOM_OVERBRIGHT_CROSSTALK",
+		"PREF_BLOOM_SHORT_LINE_INTENSITY",
+		"PREF_BLOOM_SHORT_LINE_WIDTH",
+		"PREF_BLOOM_CORNER_DOT_THRESHOLD",
+		"PREF_BLOOM_CORNER_BURN_BOOST",
+		"PREF_BLOOM_CORNER_BURN_WIDTH_MULT",
+		"PREF_BLOOM_PHOSPHOR_BASE_RESPONSE",
+		"PREF_BLOOM_PHOSPHOR_LUMA_BOOST",
+		"PREF_BLOOM_PHOSPHOR_DECAY",
+		"PREF_BLOOM_BEAM_JITTER_AMOUNT",
+		"PREF_BLOOM_BEAM_FLICKER_AMOUNT"
+	};
+
+	public static final int[] DEF_INT_VALUES = {
+		55, // LINE_WIDTH
+		55, // LINE_ALPHA
+		45, // POINT_WIDTH
+		85, // POINT_ALPHA
+		35, // GLOBAL_DRIVE
+		20, // BASE_NITS (300 nits)
+		30, // MAX_NITS (400 nits)
+		35, // FIXED_EXPOSURE (1.2f)
+		40, // AUTO_EXPOSURE_MULT
+		50, // AUTO_EXPOSURE_THRESHOLD
+		50, // OVERBRIGHT_MAX
+		42, // OVERBRIGHT_LINE_MULT
+		47, // OVERBRIGHT_POINT_MULT
+		50, // OVERBRIGHT_CROSSTALK
+		25, // SHORT_LINE_INTENSITY
+		10, // SHORT_LINE_WIDTH
+		50, // CORNER_DOT_THRESHOLD
+		25, // CORNER_BURN_BOOST
+		20, // CORNER_BURN_WIDTH_MULT
+		40, // PHOSPHOR_BASE_RESPONSE
+		60, // PHOSPHOR_LUMA_BOOST
+		40, // PHOSPHOR_DECAY
+		30, // BEAM_JITTER_AMOUNT
+		30  // BEAM_FLICKER_AMOUNT
+	};
+
 	private MAME4droid mm;
 	private PrefsHelper prefsHelper;
 	private boolean init = false;
@@ -120,6 +201,53 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 			}
 		}
 	}
+
+	/**
+	 * Sends all current SharedPreferences to the C++ Renderer
+	 */
+	public static void syncRendererParameters(SharedPreferences prefs) {
+		int totalSize = VECTOR_KEYS_BOOL.length + VECTOR_KEYS_INT.length;
+		String[] keys = new String[totalSize];
+		String[] values = new String[totalSize];
+
+		int idx = 0;
+
+		for (int i = 0; i < VECTOR_KEYS_BOOL.length; i++) {
+			keys[idx] = VECTOR_KEYS_BOOL[i];
+			values[idx] = prefs.getBoolean(VECTOR_KEYS_BOOL[i], DEF_BOOL_VALUES[i]) ? "1" : "0";
+			idx++;
+		}
+
+		for (int i = 0; i < VECTOR_KEYS_INT.length; i++) {
+			keys[idx] = VECTOR_KEYS_INT[i];
+			values[idx] = String.valueOf(prefs.getInt(VECTOR_KEYS_INT[i], DEF_INT_VALUES[i]));
+			idx++;
+		}
+
+		Emulator.setRendererParameters(keys, values);
+	}
+
+	/**
+	 * Hard-resets all Vector parameters to their optimal Arcade defaults
+	 */
+	public static void restoreVectorDefaults(SharedPreferences prefs) {
+		SharedPreferences.Editor editor = prefs.edit();
+
+		for (int i = 0; i < VECTOR_KEYS_BOOL.length; i++) {
+			editor.putBoolean(VECTOR_KEYS_BOOL[i], DEF_BOOL_VALUES[i]);
+		}
+
+		for (int i = 0; i < VECTOR_KEYS_INT.length; i++) {
+			editor.putInt(VECTOR_KEYS_INT[i], DEF_INT_VALUES[i]);
+		}
+		editor.commit();
+
+		// Live-update C++ if a game is running
+		if (Emulator.isEmulating()) {
+			syncRendererParameters(prefs);
+		}
+	}
+
 	@Override
 	public void onSurfaceCreated(GL10 gl, EGLConfig config) {
 		//Call JNI method to do initialization stuff
@@ -149,6 +277,7 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 		{
 			Emulator.loadShaders(mm.getMainHelper().getInstallationDIR());
 			Emulator.setShader(oldEffect.equals("none") ? null : oldEffect);
+			syncRendererParameters(prefsHelper.getSharedPreferences());
 			init = true;
 		}
 	}
