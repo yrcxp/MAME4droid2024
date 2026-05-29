@@ -100,6 +100,11 @@ static bool VECTOR_EFFECT_AUTO_EXPOSURE_ENABLED = true;
 // Render optical passes at half resolution. Saves GPU fillrate and provides softness.
 static bool VECTOR_FBO_HALF_RES = true;
 
+// 10. Linear Light Physics (Voltage to Photons)
+// Converts the raw electrical voltage (0-255 alpha) into physical light energy
+// using the CRT's natural Gamma curve (~2.5). Essential for accurate color mixing in both HDR and SDR.
+static bool VECTOR_EFFECT_LINEAR_GAMMA = true;
+
 
 // -----------------------------------------------------------------------
 // RENDER TARGET OPTIMIZATION (FILLRATE SAVINGS)
@@ -229,7 +234,6 @@ static float BLOOM_SHORT_LINE_WIDTH_BOOST = 0.20f;
 
 // What percentage of the screen height dictates a "short" line for halo compression.
 // - Purpose: Shrinks the halo of small elements (like text) so they don't become blurry blobs.
-// - Purpose: Shrinks the halo of small elements (like text) so they don't become blurry blobs.
 constexpr float BLOOM_HALO_LENGTH_THRESHOLD_PCT = 0.15f;
 
 // =======================================================================
@@ -250,7 +254,6 @@ static float BLOOM_CORNER_BURN_BOOST = 1.5f;
 // 3. Corner Burn Physical Size
 // - Purpose: Confines the extra light inside the vector path to prevent spherical blobs at vertices.
 // - Suggested Range: [0.15f - 0.30f]. (0.20f keeps the burn intense but visually sharp).
-//constexpr float BLOOM_CORNER_BURN_WIDTH_MULT = 0.20f;
 static float BLOOM_CORNER_BURN_WIDTH_MULT = 0.20f;
 
 // -----------------------------------------------------------------------
@@ -464,9 +467,13 @@ gles3_renderer::gles3_renderer(int width, int height, bool use_hdr_display, floa
 
 	m_uniform_ortho_quad = glGetUniformLocation(m_quad_program, "u_ortho");
 	m_uniform_is_vector_quad = glGetUniformLocation(m_quad_program, "u_is_vector");
+	
+	m_loc_quad_use_hdr = glGetUniformLocation(m_quad_program, "u_use_hdr_display");
 
 	auto sampler_uniform = glGetUniformLocation(m_quad_program, "s_texture");
-	glUniform1i(sampler_uniform, 0); //set sampler2D texture unit to 0
+	glUseProgram(m_quad_program);
+	glUniform1i(sampler_uniform, 0); // Set sampler2D texture unit to 0
+    glUseProgram(0);	
 
 	glGenTextures(1, &m_white_texture);
 	glActiveTexture(GL_TEXTURE0);
@@ -501,6 +508,19 @@ gles3_renderer::gles3_renderer(int width, int height, bool use_hdr_display, floa
 			// Add both lobes and clamp to 1.0 for mathematical safety
 			float intensity = std::min(core + glow, 1.0f);
 			// ---------------------------------
+
+			// --- GAMMA EDGES (FADE TO BLACK) ---
+			// Force the intensity to drop to absolute 0.0 at the edge (dist >= 0.85)
+			// to prevent the Gamma correction from revealing the hard Quad borders.
+			float fade = 1.0f;
+			if (dist > 0.6f) { // Start fading out past 60% of the radius
+				float t = (dist - 0.6f) / (0.85f - 0.6f);
+				if (t > 1.0f) t = 1.0f;
+				// Mathematical Smoothstep curve: 3t^2 - 2t^3
+				fade = 1.0f - (t * t * (3.0f - 2.0f * t)); 
+			}
+			intensity *= fade;
+			// ---------------------------------------
 
 			// --- PRE-MULTIPLIED ALPHA FOR PURE ADDITIVE BLENDING ---
 			// Bake the intensity directly into the RGB channels.
@@ -678,7 +698,12 @@ void gles3_renderer::create_fbos(int width, int height, bool need_hdr, bool need
     if (need_filter && m_fbo_filter == 0) {
         glGenTextures(1, &m_fbo_texture_filter);
         glBindTexture(GL_TEXTURE_2D, m_fbo_texture_filter);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        
+        // EXACT PHYSICAL SIZING FOR SHADERS ---
+        // The Filter FBO MUST be a 1:1 mirror of the physical screen (m_view_width x m_view_height).
+        // If we use smaller layout sizes, CRT shaders lack the physical pixels
+        // to draw their high-res scanlines/masks, and their OutputSize math fails.
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_view_width, m_view_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -698,6 +723,8 @@ void gles3_renderer::delete_fbos() {
     }
 
 	m_history_valid = false; // Reset history if FBOs are destroyed
+	
+	m_current_hdr_fbo = 0;
 
     if (m_fbo_sdr) glDeleteFramebuffers(1, &m_fbo_sdr);
     if (m_fbo_texture_sdr) glDeleteTextures(1, &m_fbo_texture_sdr);
@@ -742,7 +769,7 @@ void gles3_renderer::set_blendmode(int blendmode)
 
 void gles3_renderer::sync_state(const render_primitive_list* primlist)
 {
-	//clean old textures
+	// clean old textures
 	cleanup_texture_cache();
 
 	std::vector<local_primitive> temp_prims;
@@ -789,19 +816,19 @@ void gles3_renderer::sync_state(const render_primitive_list* primlist)
                                            m_textures_to_delete.end());
         m_textures_to_delete.clear();
 /*
-		std::string traza = "";
-		int estaticas = 0, dinamicas = 0;
+		std::string trace_info = "";
+		int static_count = 0, dynamic_count = 0;
 
 		for (const auto& tex : m_texlist) {
-			bool es_dinamica = (tex->base_back != nullptr);
-			es_dinamica ? dinamicas++ : estaticas++;
+			bool is_dynamic = (tex->base_back != nullptr);
+			is_dynamic ? dynamic_count++ : static_count++;
 			char buf[64];
 			snprintf(buf, sizeof(buf), "[ID:%u %dx%d %s]",
 					 tex->texture_id, tex->texinfo.width, tex->texinfo.height,
-					 es_dinamica ? "DIN" : "EST");
-			traza += buf;
-    }
-		ANDROID_LOG("CACHE TOTAL -> Elementos: %zu (Estaticas: %d | Dinamicas: %d) Info: %s", m_texlist.size(), estaticas, dinamicas, traza.c_str());
+					 is_dynamic ? "DYN" : "STA");
+			trace_info += buf;
+        }
+		ANDROID_LOG("TOTAL CACHE -> Elements: %zu (Static: %d | Dynamic: %d) Info: %s", m_texlist.size(), static_count, dynamic_count, trace_info.c_str());
 */
 	}
 
@@ -907,21 +934,39 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
     float total_weight_area = 0.0f;
     int vector_count = 0;
 
+    // Convert logical MAME layout units to physical screen pixels.
+    // This prevents the Pythagorean theorem from stretching/distorting line lengths
+    // when the aspect ratio is non-square or the device is rotated.
+    float scale_x = (float)m_view_width / (float)std::max(m_width, 1);
+    float scale_y = (float)m_view_height / (float)std::max(m_height, 1);
+    
+    // We use the average scale to approximate the physical thickness of the vector core
+    float scale_avg = (scale_x + scale_y) * 0.5f;
+
     for (const auto& prim : draw_prims) {
         if (PRIMFLAG_GET_VECTOR(prim.flags)) {
             has_vectors = true;
             vector_count++;
 
-            float dx = prim.bounds.x1 - prim.bounds.x0;
-            float dy = prim.bounds.y1 - prim.bounds.y0;
-            float len = std::sqrt(dx*dx + dy*dy);
+            // Map logical distances to physical screen pixels BEFORE calculating length
+            float phys_dx = (prim.bounds.x1 - prim.bounds.x0) * scale_x;
+            float phys_dy = (prim.bounds.y1 - prim.bounds.y0) * scale_y;
+            float phys_len = std::sqrt(phys_dx * phys_dx + phys_dy * phys_dy);
 
-            if (len < 0.001f) continue;
+            if (phys_len < 0.001f) continue;
 
-            float ideal_width = std::max(prim.width, 0.01f);
+            // Scale the geometric width to physical pixels as well
+            float phys_width = std::max(prim.width * scale_avg, 0.01f);
 
-            // 1. Raw MAME intensity
+			// 1. Raw MAME intensity (Voltage from 0.0 to 1.0)
             float base_intensity = prim.color.a;
+
+            // --- CRT ELECTRON GUN PHYSICS (Voltage to Linear Light) ---
+            if (VECTOR_EFFECT_AUTO_EXPOSURE_ENABLED && VECTOR_EFFECT_LINEAR_GAMMA) {
+                // For the radar to measure real accumulated photons and output a correct average,
+                // we must translate the initial voltage to linear light energy.
+                base_intensity = std::pow(base_intensity, 2.5f);
+            }
 
             // --- FAITHFUL PHYSICS PRE-CALCULATION ---
             float phosphor_response = 1.0f;
@@ -934,21 +979,22 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
 
             // --- TRACK PRE-DYNAMICS STATE ---
             float pre_dyn_energy = simulated_energy;
-            float pre_dyn_width = ideal_width;
+            float pre_dyn_width = phys_width;
 
             // 2. Beam Dynamics (Short Line Boost)
             if (VECTOR_EFFECT_BEAM_DYNAMICS_ENABLED) {
-                float threshold = m_height * BLOOM_SHORT_LINE_THRESHOLD_PCT;
-                if (len < threshold && len > 0.1f) {
-                    float shortness = 1.0f - (len / threshold);
+                // Threshold must also be evaluated in physical pixels
+                float threshold = (float)m_view_height * BLOOM_SHORT_LINE_THRESHOLD_PCT;
+                if (phys_len < threshold && phys_len > 0.1f) {
+                    float shortness = 1.0f - (phys_len / threshold);
                     simulated_energy *= (1.0f + shortness * BLOOM_SHORT_LINE_INTENSITY_BOOST);
-                    ideal_width *= (1.0f + shortness * BLOOM_SHORT_LINE_WIDTH_BOOST);
+                    phys_width *= (1.0f + shortness * BLOOM_SHORT_LINE_WIDTH_BOOST);
                 }
             }
 
             // --- CALCULATE BEAM DYNAMICS CONTRIBUTION ---
-            float dyn_energy_delta = (simulated_energy * ideal_width) - (pre_dyn_energy * pre_dyn_width);
-            sum_dyn_added += dyn_energy_delta * len; 
+            float dyn_energy_delta = (simulated_energy * phys_width) - (pre_dyn_energy * pre_dyn_width);
+            sum_dyn_added += dyn_energy_delta * phys_len; 
 
             // 3. Overbright Physical Expansion
             float overbright_raw = std::max(simulated_energy - 1.0f, 0.0f);
@@ -957,19 +1003,16 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
 
             // --- 4. PRECISE OPTICAL ENERGY INTEGRAL ---
             // A. Core Energy (The physical laser beam)
-            float core_area = len * ideal_width;
+            float core_area = phys_len * phys_width;
             float core_energy_total = core_area * simulated_energy;
             
             float total_vector_energy = core_energy_total;
 
             #if INCLUDE_BLOOM_IN_EXPOSURE
             // B. Bloom Energy (The scattered light halo)
-            // We calculate the full physical width of the halo (Base UI width + Overbright expansion)
-            float bloom_width = ideal_width * (BLOOM_LINE_WIDTH_MULT + (overbright * BLOOM_OVERBRIGHT_LINE_MULT));
-            float bloom_area = len * bloom_width;
+            float bloom_width = phys_width * (BLOOM_LINE_WIDTH_MULT + (overbright * BLOOM_OVERBRIGHT_LINE_MULT));
+            float bloom_area = phys_len * bloom_width;
             
-            // The halo is not a solid block of light; it's a Gaussian gradient.
-            // We multiply by BLOOM_LINE_ALPHA (its starting opacity) and 0.25f (the approximate integral of the optical falloff).
             float bloom_energy_total = bloom_area * (simulated_energy * BLOOM_LINE_ALPHA) * 0.25f;
             
             total_vector_energy += bloom_energy_total;
@@ -979,7 +1022,6 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
             scene_energy += total_vector_energy;
 
             // --- METRICS COLLECTION ---
-            // We use the core_area for the statistical weights so the Averages remain intuitive and represent the lines, not the fog.
             min_base = std::min(min_base, base_intensity);
             max_base = std::max(max_base, base_intensity);
             sum_base += base_intensity * core_area;
@@ -1004,7 +1046,8 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
         float avg_ob = (total_weight_area > 0.0f) ? (sum_ob / total_weight_area) : 0.0f;
 
         // 5. RESOLUTION-INDEPENDENT 2D NORMALIZATION
-        float screen_area = (float)(std::max(m_width, 1) * std::max(m_height, 1));
+        // USE PHYSICAL VIEWPORT AREA ---
+        float screen_area = (float)(std::max(m_view_width, 1) * std::max(m_view_height, 1));
         float safe_threshold = std::max(BLOOM_AUTO_EXPOSURE_THRESHOLD, 0.001f);
         float normalized_energy = scene_energy / (screen_area * safe_threshold);
 
@@ -1062,36 +1105,14 @@ bool gles3_renderer::calculate_auto_exposure(const std::vector<local_primitive>&
     return has_vectors;
 }
 
-
 void gles3_renderer::resolve_hdr(GLuint target_fbo, float layout_w, float layout_h,
 	const render_bounds& layout_bounds, const std::array<float, 16>& vector_ortho)
 {
     // Bind destination (Screen or SDR FBO)
     glBindFramebuffer(GL_FRAMEBUFFER, target_fbo);
-
-    float fbo_verts[8] = { layout_bounds.x0, layout_bounds.y0, layout_bounds.x0, layout_bounds.y1, layout_bounds.x1, layout_bounds.y1, layout_bounds.x1, layout_bounds.y0 };
-    float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
-
     glUseProgram(m_hdr_program);
 
-    if (target_fbo == 0) {
-        // Resolving directly to Screen: Use global mobile viewports and screen ortho matrix
-        glViewport(0, 0, m_view_width, m_view_height);
-        glUniformMatrix4fv(m_uniform_ortho_hdr, 1, GL_FALSE, m_ortho.data());
-
-		// Update display path uniform based on target surface capabilities
-        glUniform1i(m_uniform_use_hdr_display, m_use_hdr_display ? 1 : 0);
-    } else {
-        // Resolving to SDR FBO: Use layout dimensions and specialized vector layout ortho matrix
-        glViewport(0, 0, (GLsizei)layout_w, (GLsizei)layout_h);
-        glUniformMatrix4fv(m_uniform_ortho_hdr, 1, GL_FALSE, vector_ortho.data());
-
-		glUniform1i(m_uniform_use_hdr_display, 0);
-    }
-
-    // CRITICAL: Vectors are pure light. Add light to the background, never overwrite it.
     glEnable(GL_BLEND);
-
 	// --- ALPHA PROTECTION FIX ---
     // Use Blend Separate to add light to RGB, but protect the Screen's Alpha channel
     // (GL_ZERO, GL_ONE).
@@ -1105,8 +1126,38 @@ void gles3_renderer::resolve_hdr(GLuint target_fbo, float layout_w, float layout
     glBindTexture(GL_TEXTURE_2D, m_current_texture);
 
     render_color white = { 1.0f, 1.0f, 1.0f, 1.0f };
-    push_quad(fbo_verts, fbo_uv, white);
-    flush_batch();
+
+    if (target_fbo == 0) {
+        // Resolving directly to Screen: Use global mobile viewports and screen ortho matrix
+        glViewport(0, 0, m_view_width, m_view_height);
+        glUniformMatrix4fv(m_uniform_ortho_hdr, 1, GL_FALSE, m_ortho.data());
+		// Update display path uniform based on target surface capabilities
+        glUniform1i(m_uniform_use_hdr_display, m_use_hdr_display ? 1 : 0);
+
+        float fbo_verts[8] = { layout_bounds.x0, layout_bounds.y0, layout_bounds.x0, layout_bounds.y1, layout_bounds.x1, layout_bounds.y1, layout_bounds.x1, layout_bounds.y0 };
+        float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
+        
+        push_quad(fbo_verts, fbo_uv, white);
+        flush_batch();
+    } else {
+        // --- KALEIDOSCOPE FIX (FRACTIONAL PIXELS) ---
+        // Resolving to SDR FBO: We must use a pure integer orthographic matrix
+        // to ensure a perfect 1:1 pixel copy. Using layout_bounds and vector_ortho
+        // introduces floating-point sub-pixel resampling that causes kaleidoscope/blur artifacts.
+        glViewport(0, 0, (GLsizei)layout_w, (GLsizei)layout_h);
+        
+        float fw = (float)(int)layout_w;
+        float fh = (float)(int)layout_h;
+        std::array<float, 16> exact_ortho = gl_utils::make_ortho(0.0f, fw, fh, 0.0f, -1.0f, 1.0f);
+        glUniformMatrix4fv(m_uniform_ortho_hdr, 1, GL_FALSE, exact_ortho.data());
+        glUniform1i(m_uniform_use_hdr_display, 0);
+
+        float exact_verts[8] = { 0.0f, 0.0f, 0.0f, fh, fw, fh, fw, 0.0f };
+        float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
+        
+        push_quad(exact_verts, fbo_uv, white);
+        flush_batch();
+    }
 
     // CRITICAL: Only clear the FBO if persistence is disabled or multi-monitor is active.
     // If persistence is ON, we MUST keep the accumulated light in the FBO for the next frame's Ping-Pong copy!
@@ -1133,129 +1184,155 @@ void gles3_renderer::switch_fbo_target(int target_fbo, int& current_fbo, bool re
 
     // --- PIPELINE UNWINDING (Cascading Resolve) ---
 
-    // Step 1: If leaving HDR FBO, resolve its light down the chain safely via Tone Mapper
+    // 1. Leaving Filter FBO (Background Game Art) -> Draw to Screen with HDR
+    if (current_fbo == 3) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, m_view_width, m_view_height);
+        glUseProgram(m_quad_program);
+        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
+        
+        // Apply the HDR Linear conversion to the filtered background using cached uniform
+        glUniform1i(m_loc_quad_use_hdr, m_use_hdr_display ? 1 : 0);
+        glUniform1i(m_uniform_is_vector_quad, 0); 
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_fbo_texture_filter);
+
+        glEnable(GL_BLEND);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        
+        render_color white = { 1.0f, 1.0f, 1.0f, 1.0f };
+        
+        // -- FULL SCREEN BLIT ---
+        // Since m_fbo_filter is a 1:1 physical mirror of the screen, we blit it using 
+        // the full logical coordinates of the screen matrix (0 to m_width/m_height).
+        float full_verts[8] = { 0.0f, 0.0f, 0.0f, (float)m_height, (float)m_width, (float)m_height, (float)m_width, 0.0f };
+        float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
+        
+        push_quad(full_verts, fbo_uv, white);
+        flush_batch();
+        
+        m_current_texture = 0;
+        m_last_blendmode = -1;
+        m_last_is_vector = -1;
+        
+        // Clear Filter FBO for reuse
+        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_filter);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        current_fbo = 0;
+    }
+
+    // 2. Leaving HDR Vector FBO -> Resolve its light down to SDR
     if (current_fbo == 2) {
         GLuint resolve_target = require_sdr ? m_fbo_sdr : 0;
         resolve_hdr(resolve_target, layout_w, layout_h, layout_bounds, vector_ortho);
-        current_fbo = require_sdr ? 1 : 0; // State drops to SDR (1) or Screen (0)
+        current_fbo = require_sdr ? 1 : 0; 
     }
 
-    // Step 2: If we are now in SDR, and the target is Screen, apply CRT filter
+    // 3. Leaving SDR Vector FBO -> Draw vectors to Screen
     if (current_fbo == 1 && target_fbo == 0) {
-        // PIXEL-PERFECT RASTER EQUIVALENT: Render the CRT filter exactly on the layout box area
-        // using pure normalized UV coordinates (0.0 to 1.0) because the FBO is now a clean texture.
         float fbo_verts[8] = { layout_bounds.x0, layout_bounds.y0, layout_bounds.x0, layout_bounds.y1, layout_bounds.x1, layout_bounds.y1, layout_bounds.x1, layout_bounds.y0 };
-        float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
-
-        // Pass layout dimensions as the clean native texture size
-        int tex_w = (int)layout_w;
-        int tex_h = (int)layout_h;
+        float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f }; 
+        
+        render_color white = { 1.0f, 1.0f, 1.0f, 1.0f };
 
         if (m_use_hdr_display && m_usefilter) {
-            // --- HDR + FILTER PIPELINE BRANCH ---
-            // Render the filter from SDR FBO into the intermediate Filter FBO.
-            // This guarantees that the custom filter shader works inside the standard 8-bit SDR space.
+            // Apply filter over the VECTORS before drawing to screen (HDR Path)
             glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_filter);
-            glViewport(0, 0, (GLsizei)layout_w, (GLsizei)layout_h);
             
-            // Clear Filter FBO with completely transparent black to guard existing artworks beneath
-            glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            // Re-bind the layout matrix for the filter pass
-            m_filter.set_ortho(vector_ortho);
+            // Act as a 1:1 screen mirror
+            glViewport(0, 0, m_view_width, m_view_height);
+            m_filter.set_ortho(m_ortho);
             
             glEnable(GL_BLEND); 
-            glBlendFunc(GL_ONE, GL_ZERO); // Opaque blit to preserve alpha info
+            glBlendFunc(GL_ONE, GL_ZERO); 
             
-            m_filter.draw_quad(m_fbo_texture_sdr, fbo_verts, fbo_uv, tex_w, tex_h, (int)layout_w, (int)layout_h);
+            // Pass physical dimensions to ensure OutputSize is correct. 
+            m_filter.draw_quad(m_fbo_texture_sdr, fbo_verts, fbo_uv, (int)layout_w, (int)layout_h, m_view_width, m_view_height);
             
-            // Revert filter matrix back to screen-space coordinates
-            m_filter.set_ortho(m_ortho);
-
-            // Resolve the processed texture from the Filter FBO to the primary display surface via Quad Shader
+            // Resolve the FULL FBO to the screen using the HDR quad
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, m_view_width, m_view_height);
             glUseProgram(m_quad_program);
             
-            // Set screen projection matrix to guarantee perfect sizing and positioning
             glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
-            
-            // Set flag to 0 so the fragment shader triggers the sRGB to scRGB Linear conversion
+            glUniform1i(m_loc_quad_use_hdr, 1);
             glUniform1i(m_uniform_is_vector_quad, 0); 
             
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, m_fbo_texture_filter);
 
-            glEnable(GL_BLEND);
-            if (has_vectors) {
-                // CRITICAL: Pure additive blend (GL_ONE, GL_ONE) to add filtered vectors over the background artwork
-                glBlendFunc(GL_ONE, GL_ONE);
-            } else {
-                // Regular safe alpha blend for raster-only setups over background artworks
-                glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-            }
-
-            render_color white = { 1.0f, 1.0f, 1.0f, 1.0f };
-            push_quad(fbo_verts, fbo_uv, white);
-            flush_batch();
+            float full_verts[8] = { 0.0f, 0.0f, 0.0f, (float)m_height, (float)m_width, (float)m_height, (float)m_width, 0.0f };
             
-            // Clean state indicators
-            m_current_texture = 0; 
-            m_last_blendmode = -1;
-            m_last_is_vector = -1;
+            glEnable(GL_BLEND);
+            if (has_vectors) glBlendFunc(GL_ONE, GL_ONE); // Pure Additive over background
+            else glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-	        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_sdr);
-            glClearColor(0.0f, 0.0f, 0.0f, has_vectors ? 0.1f : 0.0f);
-         	glClear(GL_COLOR_BUFFER_BIT);
-
+            push_quad(full_verts, fbo_uv, white);
+            flush_batch();
         } else {
-            // EXISTING STANDARD SDR BEHAVIOR
+            // Standard SDR Path for vectors
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, m_view_width, m_view_height);
-
-            // CRITICAL: Pure additive blend (GL_ONE, GL_ONE) to add filtered vectors over the background artwork
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE, GL_ONE);
-            m_filter.draw_quad(m_fbo_texture_sdr, fbo_verts, fbo_uv, tex_w, tex_h, m_view_width, m_view_height);
-
             glUseProgram(m_quad_program);
-            glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data()); // Restore main ortho
-            m_current_texture = 0; m_last_blendmode = -1;
+            glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, m_fbo_texture_sdr);
+            
+            if (m_usefilter) {
+                m_filter.draw_quad(m_fbo_texture_sdr, fbo_verts, fbo_uv, (int)layout_w, (int)layout_h, m_view_width, m_view_height);
+                glUseProgram(m_quad_program);
+            }
 
-			// Clear SDR FBO immediately so it's clean for the next batch of vectors
-	        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_sdr);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-         	glClear(GL_COLOR_BUFFER_BIT);
+            glEnable(GL_BLEND);
+            if (has_vectors) glBlendFunc(GL_ONE, GL_ONE); // Pure Additive over background
+            else glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+            if (!m_usefilter) {
+                push_quad(fbo_verts, fbo_uv, white);
+                flush_batch();
+            }
         }
 
+        m_current_texture = 0; 
+        m_last_blendmode = -1;
 
+        // Clear SDR FBO for next frame
+        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_sdr);
+        glClearColor(0.0f, 0.0f, 0.0f, has_vectors ? 0.1f : 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
     }
 
-    // --- PIPELINE SETUP ---
+    // --- PIPELINE SETUP (Binding the requested FBO) ---
 
-    // Step 3: Bind the newly requested target and update projection matrices dynamically.
-    // CRITICAL: glUniformMatrix4fv only affects the CURRENTLY bound shader program.
-    // We must explicitly bind m_quad_program before uploading the ortho matrix to ensure
-    // state isolation and prevent uniform leakage into external filter shaders.
-    if (target_fbo == 2) {
-		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_hdr[m_current_hdr_fbo]);
+    if (target_fbo == 3) {
+        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_filter);
+        glViewport(0, 0, m_view_width, m_view_height); 
+        glUseProgram(m_quad_program);
+        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
+        glUniform1i(m_loc_quad_use_hdr, 0);
+    } else if (target_fbo == 2) {
+        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_hdr[m_current_hdr_fbo]);
         glViewport(0, 0, (GLsizei)layout_w, (GLsizei)layout_h);
-        glUseProgram(m_quad_program); // Ensure base shader is active
-        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, vector_ortho.data()); // Apply vector layout matrix
+        glUseProgram(m_quad_program);
+        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, vector_ortho.data());
     } else if (target_fbo == 1) {
         glBindFramebuffer(GL_FRAMEBUFFER, m_fbo_sdr);
         glViewport(0, 0, (GLsizei)layout_w, (GLsizei)layout_h);
         glUseProgram(m_quad_program);
         glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, vector_ortho.data());
+        glUniform1i(m_loc_quad_use_hdr, 0);        
     } else if (target_fbo == 0) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, m_view_width, m_view_height);
         glUseProgram(m_quad_program);
-        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data()); // Restore global screen matrix
+        glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
+        glUniform1i(m_loc_quad_use_hdr, m_use_hdr_display ? 1 : 0);
     }
 
-    // Save the new state
     current_fbo = target_fbo;
 }
 
@@ -1307,10 +1384,17 @@ void gles3_renderer::process_dwell_point(const local_primitive& prim, bool is_ve
 				// Boost the point's energy based on turn sharpness
 				float energy_boost = 1.0f + (sharpness * BLOOM_CORNER_BURN_BOOST);
 
-				// --- TRUE HDR PHYSICS ---
-				// We DO NOT clamp to 1.0f anymore. The 16-bit FBO needs to receive
-				// values way above 1.0 to trigger the physical 'Overbright' bloom expansion!
-				corner_prim.color.a = prim.color.a * energy_boost;
+				// --- TRUE HDR PHYSICS & INVERSE GAMMA COMPENSATION ---
+				if (enable_advanced_effects && VECTOR_EFFECT_LINEAR_GAMMA) {
+					// 'prim.color.a' stores VOLTAGE, but our boost is calculated in physical LIGHT ENERGY.
+					// We must apply the inverse of the CRT Gamma (1.0 / 2.5 = 0.4) to the boost 
+					// before multiplying, so it scales correctly when converted later in process_line_primitive.
+					float voltage_boost = std::pow(energy_boost, 0.4f);
+					corner_prim.color.a = prim.color.a * voltage_boost;
+				} else {
+					// Standard linear multiplier for legacy pipelines
+					corner_prim.color.a = prim.color.a * energy_boost;
+				}
 
                 // Draw the bright point before drawing the actual line
                 process_line_primitive(corner_prim, is_vector, enable_advanced_effects, current_time);
@@ -1357,6 +1441,10 @@ void gles3_renderer::apply_phosphor_persistence(float fbo_w, float fbo_h)
 
     // Perfect quad covering from 0 to Width/Height without fractional decimals
     float fbo_verts[8] = { 0.0f, 0.0f, 0.0f, fh, fw, fh, fw, 0.0f };
+    
+    // --- UNIFIED UV MAPPING ---
+    // Since our Ortho matrix sets (0,0) at the Top-Left for ALL FBOs and Screen,
+    // we MUST always use standard flipped UVs to preserve visual orientation.
     float fbo_uv[8] = { 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f };
 
     push_quad(fbo_verts, fbo_uv, decay_color);
@@ -1423,7 +1511,6 @@ void gles3_renderer::apply_magnetic_jitter(float& px0, float& py0, float& px1, f
 
 void gles3_renderer::process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time)
 {
-    //float effwidth = std::max(prim.width, 1.0f);
     // --- SUB-PIXEL FIX: Do not force width to 1.0f here. We rescue the real (ideal) width requested by MAME. ---
     float ideal_width = std::max(prim.width, 0.01f);
 
@@ -1440,8 +1527,8 @@ void gles3_renderer::process_line_primitive(const local_primitive& prim, bool is
     bool is_point = (std::abs(dx) < 0.001f && std::abs(dy) < 0.001f);
     float length = is_point ? 0.0f : std::sqrt(dx*dx + dy*dy);
 
-    // 1. Get raw MAME intensity (0.0 to 1.0)
-    float base_intensity = prim.color.a;
+	// 1. Get raw MAME intensity (VOLTAGE from 0.0 to 1.0)
+    float voltage = prim.color.a;
 
     // --- VOLTAGE FLICKER (The ultimate anti-AA jitter) ---
     // High DPI screens hide positional jumps with anti-aliasing.
@@ -1450,9 +1537,18 @@ void gles3_renderer::process_line_primitive(const local_primitive& prim, bool is
     if (is_vector && enable_advanced_effects && VECTOR_EFFECT_BEAM_JITTER_ENABLED) {
         float hash = std::sin((px0 * 12.989f + py0 * 78.233f + current_time) * 437.58f);
 
-        // Dims the beam randomly by up to 15% to simulate voltage drops
+        // Flicker simulates a voltage drop, so it multiplies the voltage directly
         float flicker = 1.0f - (std::abs(hash) * BLOOM_BEAM_FLICKER_AMOUNT);
-        base_intensity *= flicker;
+        voltage *= flicker;
+    }
+
+    float base_intensity = voltage;
+
+    // --- CRT ELECTRON GUN PHYSICS (Voltage to Linear Light) ---
+    if (enable_advanced_effects && VECTOR_EFFECT_LINEAR_GAMMA) {
+        // Convert electrical voltage into physical light energy (photons)
+        // using the characteristic Gamma curve of a CRT tube (~2.5).
+        base_intensity = std::pow(voltage, 2.5f);
     }
 
     // --- PHOSPHOR COLOR RESPONSE (Luminance & Bleed) ---
@@ -1690,20 +1786,20 @@ void gles3_renderer::process_quad_primitive(const local_primitive& prim, bool is
         m_quad_uv[4] = texuv.br.u; m_quad_uv[5] = texuv.br.v;
         m_quad_uv[6] = texuv.tr.u; m_quad_uv[7] = texuv.tr.v;
 
-        // Only invoke direct screen drawing if we are NOT using the HDR pipeline branch.
-        // If m_use_hdr_display is active, the quad is safely pushed to the SDR FBO batch instead.
-        if (m_usefilter && is_screen && !m_use_hdr_display) {
-
+        if (m_usefilter && is_screen) {
             flush_batch();
             set_blendmode(needed_blend);
- 
-            // Standard SDR surface behavior
+
+            // --- FIX: SHADER SCALING ON DIFFERENT WINDOW SIZES ---
+            // Pass the actual physical viewport dimensions (m_view_width, m_view_height) 
+            // as the OutputSize to the shader, just like in the SDR path.
+            // This ensures resolution-dependent effects (like CRT Mattias or Pixelate)
+            // scale perfectly and don't appear distorted or disproportionately huge.
             m_filter.draw_quad(m_current_texture, m_quad_verts, m_quad_uv, prim.texture->texinfo.width, prim.texture->texinfo.height, m_view_width, m_view_height);
 
             glUseProgram(m_quad_program);
             m_current_texture = 0; 
             m_last_blendmode = -1;
-
         } else {
             push_quad(m_quad_verts, m_quad_uv, prim.color);
         }
@@ -1753,6 +1849,12 @@ void gles3_renderer::render()
     glGetIntegerv(GL_VIEWPORT, viewport);
     if (viewport[2] > 0 && viewport[3] > 0)
     {
+        // --- ROTATION & RESIZE DETECTION ---
+        // Force FBOs to be rebuilt if the physical viewport dimensions change 
+        // (e.g., device rotation or window resize) to prevent "cut off" screen artifacts.
+        if (m_view_width != viewport[2] || m_view_height != viewport[3]) {
+            m_fbo_dirty = true;
+        }
         m_view_width = viewport[2];
         m_view_height = viewport[3];
     }
@@ -1761,6 +1863,8 @@ void gles3_renderer::render()
 
 	glUseProgram(m_quad_program);
 	glUniformMatrix4fv(m_uniform_ortho_quad, 1, GL_FALSE, m_ortho.data());
+	
+	glUniform1i(glGetUniformLocation(m_quad_program, "u_use_hdr_display"), m_use_hdr_display ? 1 : 0);	
 
 	m_current_texture = 0;
     m_last_blendmode = -1;
@@ -1926,8 +2030,9 @@ void gles3_renderer::render()
             if (require_hdr) target_fbo = 2;
             else if (require_sdr) target_fbo = 1;
         } else if (is_screen && require_filter_fbo) {
-            //Divert screen into the SDR FBO first when rendering inside the HDR pipeline
-            target_fbo = 1;
+            // Route the raw low-res game screen directly to the Filter FBO
+            // so pixel-art shaders can detect the native resolution properly.
+            target_fbo = 3; 
         }
 
         // --- PIPELINE FLUSH ---
@@ -2067,7 +2172,7 @@ void gles3_renderer::cleanup_texture_cache()
 		m_flush_textures = false;
     }
 
-	//clean old textures
+	// clean old textures
 	osd_ticks_t now = osd_ticks();
 	for (auto it = m_texlist.begin(); it != m_texlist.end(); )
 	{
@@ -2191,17 +2296,29 @@ extern "C" {
             else if (key == "PREF_VECTOR_EFFECT_PHOSPHOR_RESPONSE") VECTOR_EFFECT_PHOSPHOR_RESPONSE_ENABLED = parse_bool(key, val);
             else if (key == "PREF_BLOOM_PHOSPHOR_BASE_RESPONSE") BLOOM_PHOSPHOR_BASE_RESPONSE = map_slider(key, std::stoi(val), 0.0f, 1.0f);
             else if (key == "PREF_BLOOM_PHOSPHOR_LUMA_BOOST") BLOOM_PHOSPHOR_LUMA_BOOST = map_slider(key, std::stoi(val), 0.0f, 1.0f);
-
-            else if (key == "PREF_VECTOR_EFFECT_PERSISTENCE") VECTOR_EFFECT_PHOSPHOR_PERSISTENCE_ENABLED = parse_bool(key, val);
+			else if (key == "PREF_VECTOR_EFFECT_PERSISTENCE") {
+                bool new_persistence = parse_bool(key, val);
+                if (new_persistence != VECTOR_EFFECT_PHOSPHOR_PERSISTENCE_ENABLED) {
+                    VECTOR_EFFECT_PHOSPHOR_PERSISTENCE_ENABLED = new_persistence;
+                    // Toggling persistence changes the required number of HDR FBOs (1 vs 2).
+                    // We must flag the FBOs as dirty to force an immediate safe unwinding and 
+                    // reallocation, preventing Dangling Index crashes on the GPU.
+                    if (g_current_renderer != nullptr) {
+                        g_current_renderer->set_fbo_dirty();
+                    }
+                }
+            }
+					
             else if (key == "PREF_BLOOM_PHOSPHOR_DECAY") BLOOM_PHOSPHOR_DECAY = map_slider(key, std::stoi(val), 0.0f, 1.0f);
 
             // --- 6. ANALOG WEAR & TEAR (JITTER) ---
             else if (key == "PREF_VECTOR_EFFECT_JITTER") VECTOR_EFFECT_BEAM_JITTER_ENABLED = parse_bool(key, val);
             else if (key == "PREF_BLOOM_BEAM_JITTER_AMOUNT") BLOOM_BEAM_JITTER_AMOUNT = map_slider(key, std::stoi(val), 0.0f, 0.50f);
             else if (key == "PREF_BLOOM_BEAM_FLICKER_AMOUNT") BLOOM_BEAM_FLICKER_AMOUNT = map_slider(key, std::stoi(val), 0.0f, 0.50f);
+			
+			else if (key == "PREF_VECTOR_EFFECT_LINEAR_GAMMA") VECTOR_EFFECT_LINEAR_GAMMA = parse_bool(key, val);
 
         }
     }
 
 }
-

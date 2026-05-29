@@ -539,6 +539,12 @@
 						android:summary="Simulates the beam burning harder on short strokes (like text and ships)."
 						android:defaultValue="true" />
 
+					<CheckBoxPreference
+						android:key="PREF_VECTOR_EFFECT_LINEAR_GAMMA"
+						android:title="Enable Linear Light Physics"
+						android:summary="Converts the raw electrical voltage into physical light energy using the CRT's natural Gamma curve (~2.5). Essential for accurate color mixing."
+						android:defaultValue="true" />
+
 					<SeekBarPreference
 						android:key="PREF_BLOOM_SHORT_LINE_INTENSITY"
 						android:dependency="PREF_VECTOR_EFFECT_BEAM_DYNAMICS"

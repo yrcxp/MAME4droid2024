@@ -156,6 +156,9 @@ private:
 	GLint m_uniform_base_nits;
     GLint m_uniform_max_nits;	
 	GLint m_uniform_peak_nits;
+	
+	GLint m_loc_quad_use_hdr = -1;
+	
 
 	GLuint m_white_texture = 0;
 	GLuint m_glow_texture = 0;

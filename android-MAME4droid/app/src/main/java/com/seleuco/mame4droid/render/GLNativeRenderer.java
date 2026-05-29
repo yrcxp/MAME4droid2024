@@ -75,7 +75,8 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 		"PREF_VECTOR_EFFECT_CORNER_BURN",
 		"PREF_VECTOR_EFFECT_PHOSPHOR_RESPONSE",
 		"PREF_VECTOR_EFFECT_PERSISTENCE",
-		"PREF_VECTOR_EFFECT_JITTER"
+		"PREF_VECTOR_EFFECT_JITTER",
+		"PREF_VECTOR_EFFECT_LINEAR_GAMMA"
 	};
 
 	public static final boolean[] DEF_BOOL_VALUES = {
@@ -87,7 +88,8 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 		true,  // CORNER_BURN
 		false, // PHOSPHOR_RESPONSE (Desactivado por defecto para ahorrar CPU)
 		true,  // PERSISTENCE
-		true   // JITTER
+		true,   // JITTER
+		true   // LINEAR_GAMMA
 	};
 
 	public static final String[] VECTOR_KEYS_INT = {
@@ -119,9 +121,9 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 
 	public static final int[] DEF_INT_VALUES = {
 		55, // LINE_WIDTH
-		55, // LINE_ALPHA
-		45, // POINT_WIDTH
-		85, // POINT_ALPHA
+		15, // LINE_ALPHA
+		55, // POINT_WIDTH
+		15, // POINT_ALPHA
 		35, // GLOBAL_DRIVE
 		20, // BASE_NITS (300 nits)
 		30, // MAX_NITS (400 nits)
