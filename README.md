@@ -36,7 +36,7 @@ For the best experience and to save internal storage, it is recommended to store
 4.  **Grant Permission**:
     * The Android file picker will open. Navigate to your external storage, select the folder you created, and tap **"Use this folder"**.
     * Tap **Allow** to give MAME4droid permission to access that directory.
-5.  **Romset Version**: Ensure you are using the **'0.287'** romset for compatibility.
+5.  **Romset Version**: Ensure you are using the **'0.288'** romset for compatibility.
 
 *Note: If you already installed it, you can change the path in **Options > Settings > General > Change ROMs path**.*
 
