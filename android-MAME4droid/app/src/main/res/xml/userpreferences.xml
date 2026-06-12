@@ -384,7 +384,7 @@
 
 				<PreferenceCategory android:title="CRT / Vector HDR Calibration">
 					<SeekBarPreference
-						android:key="PREF_BLOOM_BASE_NITS"
+						android:key="PREF_VECTOR_EFFECT_BASE_NITS"
 						android:dependency="PREF_HDR"
 						android:title="CRT Base Luminance (Nits)"
 						android:summary="The physical baseline light of a standard vector (Default: 250 nits)."
@@ -392,12 +392,12 @@
 						android:defaultValue="15" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_MAX_NITS"
+						android:key="PREF_VECTOR_EFFECT_MAX_NITS"
 						android:dependency="PREF_HDR"
 						android:title="CRT Max Luminance (Nits)"
-						android:summary="The absolute physical limit of the emulated arcade monitor (Default: 600 nits)."
+						android:summary="The absolute physical limit of the emulated arcade monitor (Default: 700 nits)."
 						android:max="100"
-						android:defaultValue="50" />
+						android:defaultValue="60" />
 				</PreferenceCategory>
 
 				<CheckBoxPreference
@@ -469,6 +469,15 @@
 					android:summary="Converts the raw electrical voltage into physical light energy using the CRT's natural Gamma curve (~2.5). Essential for accurate color mixing, though some games may appear less vivid as a result. Highly recommended when True HDR Display is enabled."
 					android:defaultValue="true" />
 
+				<PreferenceCategory android:title="CRT Drive">
+					<SeekBarPreference
+						android:key="PREF_VECTOR_EFFECT_GLOBAL_DRIVE"
+						android:title="CRT Global Drive (Voltage)"
+						android:summary="Master brightness knob (Voltage overdrive)."
+						android:max="100"
+						android:defaultValue="40" />
+				</PreferenceCategory>
+
 				<PreferenceCategory android:title="Optical Bloom (Halo Scattering)">
 					<CheckBoxPreference
 						android:key="PREF_VECTOR_EFFECT_BLOOM"
@@ -477,36 +486,59 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_LINE_WIDTH"
+						android:key="PREF_BLOOM_KAWASE_PASSES"
 						android:dependency="PREF_VECTOR_EFFECT_BLOOM"
-						android:title="Line Bloom Spread"
-						android:summary="Physical thickness of the glowing halo around lines."
-						android:max="100"
-						android:defaultValue="55" />
+						android:title="Optical Halo Size (Passes)"
+						android:summary="How massive the halo spreads."
+						android:max="6"
+						android:defaultValue="3" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_LINE_ALPHA"
+						android:key="PREF_BLOOM_KAWASE_RADIUS"
 						android:dependency="PREF_VECTOR_EFFECT_BLOOM"
-						android:title="Line Bloom Intensity"
-						android:summary="Base opacity of the glowing halo around lines."
+						android:title="Optical Halo Spread (Radius)"
+						android:summary="Expands the blur radius of the tent filter."
+						android:max="100"
+						android:defaultValue="50" />
+
+					<SeekBarPreference
+						android:key="PREF_BLOOM_KAWASE_THRESHOLD"
+						android:dependency="PREF_VECTOR_EFFECT_BLOOM"
+						android:title="Extraction Threshold"
+						android:summary="Minimum energy required for a vector to emit a glowing halo."
 						android:max="100"
 						android:defaultValue="35" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_POINT_WIDTH"
+						android:key="PREF_BLOOM_KAWASE_INTENSITY"
 						android:dependency="PREF_VECTOR_EFFECT_BLOOM"
-						android:title="Point/Star Bloom Spread"
-						android:summary="Physical thickness of the glowing halo around isolated vertices."
+						android:title="Optical Halo Intensity"
+						android:summary="Final opacity multiplier of the light halo."
 						android:max="100"
-						android:defaultValue="35" />
+						android:defaultValue="44" />
+				</PreferenceCategory>
+
+				<PreferenceCategory android:title="Vector Core Geometry">
+					<SeekBarPreference
+						android:key="PREF_VECTOR_EFFECT_CORE_LINE_WIDTH"
+						android:title="Line Thickness"
+						android:summary="Physical thickness of the central laser core for drawing lines."
+						android:max="100"
+						android:defaultValue="50" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_POINT_ALPHA"
-						android:dependency="PREF_VECTOR_EFFECT_BLOOM"
-						android:title="Point/Star Bloom Intensity"
-						android:summary="Base opacity of the glowing halo around isolated vertices."
+						android:key="PREF_VECTOR_EFFECT_CORE_POINT_WIDTH"
+						android:title="Point/Star Thickness"
+						android:summary="Physical thickness of the central laser core for isolated dots."
 						android:max="100"
 						android:defaultValue="30" />
+
+					<SeekBarPreference
+						android:key="PREF_VECTOR_EFFECT_POINT_ENERGY_BOOST"
+						android:title="Point Energy Boost"
+						android:summary="Multiplies the light energy specifically for dots/stars to make them pop."
+						android:max="100"
+						android:defaultValue="15" />
 				</PreferenceCategory>
 
 				<PreferenceCategory android:title="Excess Energy (HDR Overbright)">
@@ -517,7 +549,7 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_OVERBRIGHT_MAX"
+						android:key="PREF_VECTOR_EFFECT_OVERBRIGHT_MAX"
 						android:dependency="PREF_VECTOR_EFFECT_OVERBRIGHT"
 						android:title="Max HDR Saturation"
 						android:summary="Absolute limit for extra HDR energy a vector can accumulate."
@@ -525,28 +557,28 @@
 						android:defaultValue="50" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_OVERBRIGHT_LINE_MULT"
+						android:key="PREF_VECTOR_EFFECT_OVERBRIGHT_LINE_MULT"
 						android:dependency="PREF_VECTOR_EFFECT_OVERBRIGHT"
 						android:title="Line Physical Expansion"
 						android:summary="How much lines widen when saturated with excess energy."
 						android:max="100"
-						android:defaultValue="42" />
+						android:defaultValue="40" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_OVERBRIGHT_POINT_MULT"
+						android:key="PREF_VECTOR_EFFECT_OVERBRIGHT_POINT_MULT"
 						android:dependency="PREF_VECTOR_EFFECT_OVERBRIGHT"
 						android:title="Point Physical Expansion"
 						android:summary="How much points widen when saturated with excess energy."
 						android:max="100"
-						android:defaultValue="47" />
+						android:defaultValue="55" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_OVERBRIGHT_CROSSTALK"
+						android:key="PREF_VECTOR_EFFECT_OVERBRIGHT_CROSSTALK"
 						android:dependency="PREF_VECTOR_EFFECT_OVERBRIGHT"
 						android:title="Color Crosstalk (White Core)"
 						android:summary="How much excess energy bleeds into other channels to create white highlights."
 						android:max="100"
-						android:defaultValue="50" />
+						android:defaultValue="25" />
 				</PreferenceCategory>
 
 				<PreferenceCategory android:title="Electron Beam Physics">
@@ -557,15 +589,15 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_SHORT_LINE_INTENSITY"
+						android:key="PREF_VECTOR_EFFECT_SHORT_LINE_INTENSITY"
 						android:dependency="PREF_VECTOR_EFFECT_BEAM_DYNAMICS"
 						android:title="Short Line Energy Boost"
 						android:summary="Extra light energy given to tiny strokes."
 						android:max="100"
-						android:defaultValue="25" />
+						android:defaultValue="30" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_SHORT_LINE_WIDTH"
+						android:key="PREF_VECTOR_EFFECT_SHORT_LINE_WIDTH"
 						android:dependency="PREF_VECTOR_EFFECT_BEAM_DYNAMICS"
 						android:title="Short Line Thermal Expansion"
 						android:summary="How much the core physically widens when burning the phosphor harder."
@@ -576,10 +608,10 @@
 						android:key="PREF_VECTOR_EFFECT_CORNER_BURN"
 						android:title="Enable Corner Burn (Dwell)"
 						android:summary="Simulates the beam slowing down at sharp corners, causing bright weld points."
-						android:defaultValue="true" />
+						android:defaultValue="false" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_CORNER_DOT_THRESHOLD"
+						android:key="PREF_VECTOR_EFFECT_CORNER_DOT_THRESHOLD"
 						android:dependency="PREF_VECTOR_EFFECT_CORNER_BURN"
 						android:title="Corner Sharpness Threshold"
 						android:summary="How sharp an angle must be to trigger deceleration and burning."
@@ -587,20 +619,20 @@
 						android:defaultValue="50" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_CORNER_BURN_BOOST"
+						android:key="PREF_VECTOR_EFFECT_CORNER_BURN_BOOST"
 						android:dependency="PREF_VECTOR_EFFECT_CORNER_BURN"
 						android:title="Corner Intensity Boost"
 						android:summary="Extra energy dumped into the corner weld."
 						android:max="100"
-						android:defaultValue="25" />
+						android:defaultValue="10" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_CORNER_BURN_WIDTH_MULT"
+						android:key="PREF_VECTOR_EFFECT_CORNER_BURN_WIDTH_MULT"
 						android:dependency="PREF_VECTOR_EFFECT_CORNER_BURN"
 						android:title="Corner Size Confinement"
 						android:summary="Restricts the corner burn to keep it sharp and avoid spherical blobs."
 						android:max="100"
-						android:defaultValue="20" />
+						android:defaultValue="50" />
 				</PreferenceCategory>
 
 				<PreferenceCategory android:title="Phosphor Chemistry">
@@ -611,7 +643,7 @@
 						android:defaultValue="false" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_PHOSPHOR_BASE_RESPONSE"
+						android:key="PREF_VECTOR_EFFECT_PHOSPHOR_BASE_RESPONSE"
 						android:dependency="PREF_VECTOR_EFFECT_PHOSPHOR_RESPONSE"
 						android:title="Base Phosphor Floor"
 						android:summary="Minimum energy retained by inefficient colors like pure blue."
@@ -619,7 +651,7 @@
 						android:defaultValue="40" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_PHOSPHOR_LUMA_BOOST"
+						android:key="PREF_VECTOR_EFFECT_PHOSPHOR_LUMA_BOOST"
 						android:dependency="PREF_VECTOR_EFFECT_PHOSPHOR_RESPONSE"
 						android:title="Luminance Multiplier"
 						android:summary="How much the specific color boosts the physical energy output."
@@ -633,7 +665,7 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_PHOSPHOR_DECAY"
+						android:key="PREF_VECTOR_EFFECT_PHOSPHOR_DECAY"
 						android:dependency="PREF_VECTOR_EFFECT_PERSISTENCE"
 						android:title="Trail Decay Speed"
 						android:summary="Lower = Long Radar smear. Higher = Fast Arcade fade."
@@ -649,7 +681,7 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_BEAM_JITTER_AMOUNT"
+						android:key="PREF_VECTOR_EFFECT_BEAM_JITTER_AMOUNT"
 						android:dependency="PREF_VECTOR_EFFECT_JITTER"
 						android:title="Jitter Severity"
 						android:summary="Maximum physical deviation of the electron beam."
@@ -657,7 +689,7 @@
 						android:defaultValue="10" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_BEAM_FLICKER_AMOUNT"
+						android:key="PREF_VECTOR_EFFECT_BEAM_FLICKER_AMOUNT"
 						android:dependency="PREF_VECTOR_EFFECT_JITTER"
 						android:title="Voltage Flicker"
 						android:summary="Maximum intensity drop caused by random voltage fluctuation."
@@ -665,13 +697,7 @@
 						android:defaultValue="20" />
 				</PreferenceCategory>
 
-				<PreferenceCategory android:title="Global Exposure &amp; CRT Drive">
-					<SeekBarPreference
-						android:key="PREF_BLOOM_GLOBAL_DRIVE"
-						android:title="CRT Global Drive (Voltage)"
-						android:summary="Master brightness knob (Voltage overdrive)."
-						android:max="100"
-						android:defaultValue="35" />
+				<PreferenceCategory android:title="Global Exposure">
 
 					<CheckBoxPreference
 						android:key="PREF_VECTOR_EFFECT_AUTO_EXPOSURE"
@@ -680,14 +706,14 @@
 						android:defaultValue="true" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_FIXED_EXPOSURE"
+						android:key="PREF_VECTOR_EFFECT_FIXED_EXPOSURE"
 						android:title="Fixed Manual Exposure"
 						android:summary="Used only if Auto-Exposure is OFF. Adjusts the baseline brightness."
 						android:max="100"
 						android:defaultValue="35" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_AUTO_EXPOSURE_MULT"
+						android:key="PREF_VECTOR_EFFECT_AUTO_EXPOSURE_MULT"
 						android:dependency="PREF_VECTOR_EFFECT_AUTO_EXPOSURE"
 						android:title="Auto-Exposure Multiplier"
 						android:summary="Boosts or dims the overall dynamic range of the adaptation."
@@ -695,7 +721,7 @@
 						android:defaultValue="40" />
 
 					<SeekBarPreference
-						android:key="PREF_BLOOM_AUTO_EXPOSURE_THRESHOLD"
+						android:key="PREF_VECTOR_EFFECT_AUTO_EXPOSURE_THRESHOLD"
 						android:dependency="PREF_VECTOR_EFFECT_AUTO_EXPOSURE"
 						android:title="Auto-Exposure Threshold"
 						android:summary="Screen area % that triggers maximum dimming (radar/explosions)."

@@ -137,7 +137,7 @@ private:
 	
 	void upload_pending_textures(std::vector<local_primitive>& draw_prims);
 	
-	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time);
+	void process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time, bool is_injected_corner = false);
 	void process_quad_primitive(const local_primitive& prim, bool is_screen, int needed_blend);
 
 	void apply_phosphor_persistence(float fbo_w, float fbo_h);
@@ -165,7 +165,6 @@ private:
 	GLint m_loc_quad_device_peak = -1;
 	
 	GLuint m_white_texture = 0;
-	GLuint m_glow_texture = 0;
 	
 	// Auto-Exposure temporal memory
     float m_current_exposure = 1.5f;
@@ -182,6 +181,18 @@ private:
 	int m_current_hdr_fbo = 0;
 	bool m_history_valid = false;
 	bool m_multi_monitor_detected = false;
+	
+	// --- KAWASE OPTICAL BLOOM FBO CHAIN ---
+    static constexpr int MAX_BLOOM_PASSES = 6;
+    GLuint m_bloom_fbo[MAX_BLOOM_PASSES] = {0};
+    GLuint m_bloom_tex[MAX_BLOOM_PASSES] = {0};
+    GLuint m_kawase_down_program = 0;
+    GLuint m_kawase_up_program = 0;
+    
+    // Kawase Uniform Locations
+    GLint m_loc_kd_ortho, m_loc_kd_texel, m_loc_kd_threshold;
+    GLint m_loc_ku_ortho, m_loc_ku_texel, m_loc_ku_radius;
+    GLint m_uniform_bloom_hdr, m_uniform_bloom_intensity_hdr;	
 	
 	GLuint m_fbo_sdr = 0;
 	GLuint m_fbo_texture_sdr = 0;

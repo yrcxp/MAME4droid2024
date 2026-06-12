@@ -8,9 +8,13 @@
 
 ***************************************************************************/
 
-//=================================================
-// Quad primitive program (TRUE HDR READY)
-// ================================================
+/* ========================================================================================
+ * BASE QUAD VERTEX SHADER
+ * ========================================================================================
+ * Standard orthographic projection shader for 2D primitives.
+ * Decodes packed vertex data (positions, UVs, color) based on the corner index.
+ * Maps normalized device coordinates via the u_ortho projection matrix.
+ * ======================================================================================== */
 
 static const char* quad_vertex_shader_src = 
     "precision highp float;\n"
@@ -37,6 +41,21 @@ static const char* quad_vertex_shader_src =
     "}\n";
 
 
+/* ========================================================================================
+ * PRIMITIVE FRAGMENT SHADER (TRUE HDR / AUTO-HDR)
+ * ========================================================================================
+ * Acts as the primary surface shader before post-processing. It branches based on 
+ * the source material (vector lines vs. standard 8-bit raster graphics).
+ * * Key paths:
+ * - Vector Path: Passes mathematically linear, uncapped energy straight to the FBO.
+ * - SDR / Raster Path: Converts standard sRGB textures to linear space.
+ * - Fake HDR (Auto-HDR): Analyzes 8-bit games and applies Inverse Tone Mapping to 
+ * expand bright pixels (explosions, skies) into the HDR luminance range, while 
+ * keeping UI and standard elements strictly at the SDR 'Paper White' level.
+ * - Hardware Mapping: Maps expanded luminance to the physical peak nits of the 
+ * current device display using piecewise Reinhard compression to prevent clipping.
+ * ======================================================================================== */
+
 static const char* quad_frag_shader_src = 
     "precision highp float;\n" 
     "in vec2 v_texuv;\n"
@@ -47,7 +66,7 @@ static const char* quad_frag_shader_src =
     "uniform int u_raster_fake_hdr;\n"
     "uniform float u_raster_hdr_mult;\n"
     "uniform float u_paper_white;\n"
-    "uniform float u_device_peak_multiplier;\n"
+    "uniform float u_device_peak_nits;\n"
     "out vec4 fragColor;\n"
     "void main() {\n"
     "    vec4 texColor = texture(s_texture, v_texuv);\n"
@@ -79,7 +98,7 @@ static const char* quad_frag_shader_src =
     "\n"
     "                // --- HARDWARE DYNAMIC TONE MAPPING (Piecewise Reinhard) ---\n"
     "                // Convert Android's dynamic display capabilities to scRGB limits.\n"
-    "                float hardware_peak_scRGB = (u_device_peak_multiplier * 100.0) / 80.0;\n"
+    "                float hardware_peak_scRGB = u_device_peak_nits / 80.0;\n"
     "                float max_nits_mult = max(hardware_peak_scRGB, paper_white_mult + 1.0);\n"
     "                vec3 raw_hdr_nits = fake_hdr * paper_white_mult;\n"
     "                float raw_hdr_luma = dot(raw_hdr_nits, vec3(0.2126, 0.7152, 0.0722));\n"
@@ -107,36 +126,171 @@ static const char* quad_frag_shader_src =
     "        fragColor = texColor * v_color;\n"
     "    }\n"
     "}\n";
+	
+/* ========================================================================================
+ * OPTICAL BLOOM: DOWNSAMPLE & CRT PHOSPHOR EXTRACTION (JIMENEZ 13-TAP) (DUAL KAWASE)
+ * ========================================================================================
+ * The first half of the Dual-Filter spatial convolution chain. Replaces standard Kawase 
+ * with a 13-tap filter to eliminate temporal aliasing and macro-blocking on downsamples.
+ * * CRT Phosphor Emulation Features:
+ * - Dominant Color Extraction: Bypasses standard perceptual luma to ensure pure, highly 
+ * saturated vector colors (e.g., pure P31 green in Star Wars or pure blue in Tempest) 
+ * are not crushed by the extraction threshold.
+ * - Anti-Popping Knee: Uses a raised knee threshold to ensure moving lines fade smoothly 
+ * into the bloom rather than flickering on/off.
+ * - Phosphor Saturation Curve: Applies a hybrid quadratic falloff (0.5x + 0.5x^2) to 
+ * model how CRT glass diffuses light, retaining blinding core energy while gracefully 
+ * rolling off mid-tones.
+ * ======================================================================================== */
+ 
+static const char* kawase_down_frag_shader_src = 
+    "precision highp float;\n"
+    "in vec2 v_texuv;\n"
+    "in vec4 v_color;\n"
+    "uniform sampler2D s_texture;\n"
+    "uniform vec2 u_texel_size;\n"
+    "uniform float u_threshold;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec2 uv = v_texuv;\n"
+    "    vec2 texel = u_texel_size;\n"
+    "\n"
+    "    // 13-Tap Downsample Spatial Dispersion Filter\n"
+    "    vec3 A = texture(s_texture, uv - texel).rgb;\n"
+    "    vec3 B = texture(s_texture, uv + vec2(0.0, -texel.y)).rgb;\n"
+    "    vec3 C = texture(s_texture, uv + vec2(texel.x, -texel.y)).rgb;\n"
+    "    vec3 D = texture(s_texture, uv + vec2(-texel.x, 0.0)).rgb;\n"
+    "    vec3 E = texture(s_texture, uv).rgb; // Center pixel\n"
+    "    vec3 F = texture(s_texture, uv + vec2(texel.x, 0.0)).rgb;\n"
+    "    vec3 G = texture(s_texture, uv + vec2(-texel.x, texel.y)).rgb;\n"
+    "    vec3 H = texture(s_texture, uv + vec2(0.0, texel.y)).rgb;\n"
+    "    vec3 I = texture(s_texture, uv + texel).rgb;\n"
+    "\n"
+    "    vec3 J = texture(s_texture, uv + vec2(-texel.x * 0.5, -texel.y * 0.5)).rgb;\n"
+    "    vec3 K = texture(s_texture, uv + vec2( texel.x * 0.5, -texel.y * 0.5)).rgb;\n"
+    "    vec3 L = texture(s_texture, uv + vec2(-texel.x * 0.5,  texel.y * 0.5)).rgb;\n"
+    "    vec3 M = texture(s_texture, uv + vec2( texel.x * 0.5,  texel.y * 0.5)).rgb;\n"
+    "\n"
+    "    // CRT Core Weights (Sum = 0.94 for natural energy decay)\n"
+    "    vec3 color = E * 0.16;\n"
+    "    color += (A + C + G + I) * 0.04;\n"
+    "    color += (B + D + F + H) * 0.07;\n"
+    "    color += (J + K + L + M) * 0.085;\n"
+    "\n"
+    "    if (u_threshold > 0.0) {\n"
+    "        // High-Persistence Phosphor Weights (Green-biased for Atari Vectors)\n"
+    "        float perceptual_luma = dot(color, vec3(0.25, 0.70, 0.05));\n"
+    "        float max_channel = max(color.r, max(color.g, color.b));\n"
+    "        \n"
+    "        // True Dominant Color Extraction\n"
+    "        float avg_color = (color.r + color.g + color.b) / 3.0;\n"
+    "        float dominant = max_channel - avg_color;\n"
+    "        \n"
+    "        // Gradual Extraction Ceiling (Fixed scaling)\n"
+    "        // A pure color yields a dominant value of ~0.667. \n"
+    "        // 0.667 * 0.55 = ~0.36, perfectly hitting the 0.35 ceiling without crushing mid-tones.\n"
+    "        float factor = clamp(dominant * 0.55, 0.0, 0.35);\n"
+    "        float luma = mix(perceptual_luma, max_channel, factor);\n"
+    "        \n"
+    "        // Anti-Popping Knee\n"
+    "        float knee = max(0.04, u_threshold * 0.15);\n"
+    "        \n"
+    "        // Linear mapping -> Hybrid S-Curve for phosphor saturation\n"
+    "        float linear_weight = clamp((luma - (u_threshold - knee)) / (2.0 * knee), 0.0, 1.0);\n"
+    "        color *= linear_weight * (0.5 + 0.5 * linear_weight);\n"
+    "    }\n"
+    "    fragColor = vec4(color, 1.0);\n"
+    "}\n";
+	
+/* ========================================================================================
+ * OPTICAL BLOOM: UPSAMPLE & CRT ASTIGMATISM (9-TAP TENT)
+ * ========================================================================================
+ * The second half of the Dual-Filter chain. Uses a 9-tap tent filter to smoothly 
+ * expand the downsampled light buffers back up without introducing grid artifacts.
+ * * Includes an anisotropic scaling factor (e.g., stretching the X-axis) to emulate 
+ * the imperfect magnetic deflection yoke of vintage CRT monitors, creating a classic 
+ * horizontal optical flare.
+ * ======================================================================================== */	
+	
+static const char* kawase_up_frag_shader_src = 
+    "precision highp float;\n"
+    "in vec2 v_texuv;\n"
+    "in vec4 v_color;\n"
+    "uniform sampler2D s_texture;\n"
+    "uniform vec2 u_texel_size;\n"
+    "uniform float u_radius;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec2 uv = v_texuv;\n"
+    "    \n"
+    "    // Anisotropy (CRT Astigmatism emulation).\n"
+    "    // A real CRT yoke deflects electrons imperfectly, widening the beam horizontally.\n"
+    "    // Multiplying x by 1.2 and y by 0.9 gives it that classic optical 'Star Wars' anamorphic flare.\n"
+    "    vec2 texel = u_texel_size * vec2(u_radius * 1.2, u_radius * 0.9);\n"
+    "\n"
+    "    // 9-Tap Tent Upsample - Perfect mathematical smoothing without grid/block artifacts\n"
+    "    vec3 color = texture(s_texture, uv).rgb * 4.0;\n"
+    "    color += texture(s_texture, uv + vec2(-texel.x, 0.0)).rgb * 2.0;\n"
+    "    color += texture(s_texture, uv + vec2( texel.x, 0.0)).rgb * 2.0;\n"
+    "    color += texture(s_texture, uv + vec2(0.0,  texel.y)).rgb * 2.0;\n"
+    "    color += texture(s_texture, uv + vec2(0.0, -texel.y)).rgb * 2.0;\n"
+    "\n"
+    "    color += texture(s_texture, uv + vec2(-texel.x, -texel.y)).rgb * 1.0;\n"
+    "    color += texture(s_texture, uv + vec2( texel.x, -texel.y)).rgb * 1.0;\n"
+    "    color += texture(s_texture, uv + vec2(-texel.x,  texel.y)).rgb * 1.0;\n"
+    "    color += texture(s_texture, uv + vec2( texel.x,  texel.y)).rgb * 1.0;\n"
+    "\n"
+    "    // Divide by the sum of weights (4 + 8 + 4 = 16)\n"
+    "    fragColor = vec4(color / 16.0, 1.0);\n"
+    "}\n";
+	
+/* ========================================================================================
+ * FINAL COMPOSITION & TONE MAPPING (HDR / SDR)
+ * ========================================================================================
+ * The final pass that merges the razor-sharp core vector layer with the accumulated 
+ * optical bloom buffer.
+ * * - HDR Display Path: Maps the raw injected energy directly to physical nits (scRGB space)
+ * so the device's actual OLED/LCD backlight handles the light emission. Uses a "shoulder" 
+ * (Piecewise Reinhard) to gently compress extreme highlights that exceed the display's 
+ * maximum physical capabilities.
+ * - SDR Display Path: Falls back to a standard photographic exposure formula (1.0 - exp(-E)) 
+ * and 2.2 gamma correction for legacy 8-bit screens.
+ * - Anti-Fattening Mask: Outputs an alpha mask to prevent the OS compositor from 
+ * unnecessarily blending black pixels, saving GPU bandwidth.
+ * ======================================================================================== */	
 
 static const char* hdr_frag_shader_src = 
     "precision highp float;\n"
     "in vec2 v_texuv;\n"
     "in vec4 v_color;\n"
     "uniform sampler2D s_texture;\n"
+    "uniform sampler2D s_bloom;\n"
+    "uniform float u_bloom_intensity;\n"
     "uniform float u_exposure;\n"
     "uniform int u_use_hdr_display;\n"
     "\n"
     "// --- DYNAMIC PARAMETERS (In Physical Nits) ---\n"
     "uniform float u_base_nits;         // Target nits for standard 1.0 intensity (e.g., 300.0)\n"
     "uniform float u_max_nits;          // Physical limit of the CRT phosphor (e.g., 400.0)\n"
-    "uniform float u_device_peak_nits;  // Monitor max physical capability (Passed as Nits/100, e.g., 10.0 for 1000 nits)\n"
+    "uniform float u_device_peak_nits;  // Monitor max physical capability\n"
     "\n"
     "out vec4 fragColor;\n"
     "\n"
 	"void main() {\n"
-    "    // 1. BEAM ENERGY FETCH (Linear Accumulation Buffer)\n"
-    "    vec3 beam = texture(s_texture, v_texuv).rgb * v_color.rgb;\n"
+    "    // 1. BEAM ENERGY FETCH (Core + Optical Bloom)\n"
+    "    vec3 core_beam = texture(s_texture, v_texuv).rgb * v_color.rgb;\n"
+    "    vec3 bloom_halo = texture(s_bloom, v_texuv).rgb * u_bloom_intensity;\n"
+    "    vec3 beam = core_beam + bloom_halo;\n"
     "\n"
     "    vec3 mapped;\n"
     "    float out_mask = 0.0;\n"
     "\n"
     "    if (u_use_hdr_display == 1) {\n"
     "        // --- HDR PATH (scRGB Linear Space) ---\n"
-    "        float hardware_peak_scRGB = (u_device_peak_nits * 100.0) / 80.0;\n"
+    "        float hardware_peak_scRGB = u_device_peak_nits / 80.0;\n"
     "        float max_nits_mult = min(u_max_nits / 80.0, hardware_peak_scRGB);\n"
     "        float base_mult = u_base_nits / 80.0;\n"
     "\n"
-    "        // Ensure we always have headroom for the compression curve to work gracefully\n"
     "        max_nits_mult = max(max_nits_mult, base_mult + 1.0);\n"
     "\n"
     "        // 2. LINEAR SCALING\n"
