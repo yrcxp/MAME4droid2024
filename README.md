@@ -47,6 +47,8 @@ For the best experience and to save internal storage, it is recommended to store
 * **🎮 Controls**: Plug-and-play support for Bluetooth/USB gamepads, touch lightgun, and mouse support.
 * **📱 Interface**: Autorotation, customizable button layouts (1-6 buttons), and tilt sensor support.
 * **🎨 Visuals & Shaders**:
+    * **HDR Rendering**: Dedicated FP16 HDR rendering path for vector games, alongside SDR-to-HDR highlight expansion for raster games.
+    * **Physical CRT Vector Simulation**: A fully custom vector rendering engine that accurately replicates the physical and optical properties of classic arcade vector CRT monitors.
     * **Shader Support**: This version includes advanced shader support for a more authentic retro look.
     * **How to Enable**: Shaders must be manually activated. Go to **Options > Settings > Shaders** to select and enable your preferred effects.
     * **Filters**: Includes overlay filters like scanlines and CRT effects.
