@@ -1663,59 +1663,85 @@ void gles3_renderer::apply_phosphor_persistence(float fbo_w, float fbo_h)
 }
 
 
-// Eliminates the massive CPU bottleneck caused by using std::sin() thousands of times per frame.
+//Ultra-fast integer hash for pseudo-random CPU noise.
 inline float fast_noise(float x, float y, float t) {
     int n = (int)(x * 10000.0f) + (int)(y * 30000.0f) + (int)(t * 10000.0f);
     n = (n << 13) ^ n;
     return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
 }
 
+//Ultra-fast continuous triangle wave.
+// A continuous wave allows the human eye to track the high-frequency physical 
+// beam jitter, restoring the analog CRT feel without the CPU cost of std::sin().
+inline float fast_wave(float t) {
+    float fract = t - std::floor(t);
+    return (std::abs(fract - 0.5f) * 4.0f) - 1.0f;
+}
+
 void gles3_renderer::apply_magnetic_jitter(float& px0, float& py0, float& px1, float& py1, bool is_vector, bool enable_advanced_effects, float current_time)
 {
-    // Early exit if the effect is disabled globally or not applicable
     if (!VECTOR_EFFECT_BEAM_JITTER_ENABLED || !is_vector || !enable_advanced_effects || VECTOR_EFFECT_BEAM_JITTER_AMOUNT <= 0.0f) {
         return;
     }
 
+    // --- ALU OPTIMIZATION: Pre-calculated inverses to avoid expensive runtime divisions ---
+    float inv_width = 1.0f / (float)std::max(m_width, 1);
+    float inv_height = 1.0f / (float)std::max(m_height, 1);
+
+    // --- 1. GLOBAL LOW-FREQUENCY DRIFT ---
     float center_x = (px0 + px1) * 0.5f;
     float center_y = (py0 + py1) * 0.5f;
+    float nx = center_x * inv_width;
+    float ny = center_y * inv_height;
 
-    // 1. RESOLUTION INDEPENDENCE (Normalize to 0.0 - 1.0)
-    float nx = center_x / (float)std::max(m_width, 1);
-    float ny = center_y / (float)std::max(m_height, 1);
-
-    // 2. LOW-FREQUENCY DRIFT (Thermal and magnetic drift)
     float drift_x = std::sin(current_time * 2.1f + ny * 3.14f);
     float drift_y = std::cos(current_time * 1.8f + nx * 3.14f);
-
-    // 3. AC MAINS HUM (Coil electromagnetic interference)
     float ac_x = std::sin(current_time * 45.0f + ny * 15.0f);
     float ac_y = std::cos(current_time * 55.0f + nx * 15.0f);
 
-    // 4. THERMAL HASH (Approximate blue noise)
-    // OPTIMIZATION Replaced the slow std::sin/cos with the Fast Noise hash
-    float noise_x = fast_noise(nx, ny, current_time);
-    float noise_y = fast_noise(ny, nx, current_time);
+    float global_x = (drift_x * 0.50f) + (ac_x * 0.50f);
+    float global_y = (drift_y * 0.50f) + (ac_y * 0.50f);
 
-    // FINAL MIX: 40% Slow Drift | 40% AC Hum | 20% Thermal Noise
-    float final_jx = (drift_x * 0.40f) + (ac_x * 0.40f) + (noise_x * 0.20f);
-    float final_jy = (drift_y * 0.40f) + (ac_y * 0.40f) + (noise_y * 0.20f);
+    // --- 2. PER-VERTEX BEAM WOBBLE (High-Frequency Thermal Hash) ---
+    float n0_x = px0 * inv_width;
+    float n0_y = py0 * inv_height;
+    float n1_x = px1 * inv_width;
+    float n1_y = py1 * inv_height;
 
-    // --- RESOLUTION SCALING (Strictly Linear) ---
-    // To keep the visual amplitude identical across any screen density,
-    // we scale the jitter directly relative to a 480p baseline.
-    float scale_factor = (float)std::max(m_height, 1) / 480.0f;
+	// TEMPORAL TUNING: Adjusted frequencies (32/38).
+    // Fast enough to feel like electric voltage, but slow enough to track visually.
+    float wave0_x = fast_wave(n0_x * 13.0f + current_time * 32.0f);
+    float wave0_y = fast_wave(n0_y * 17.0f + current_time * 38.0f);
+    float noise0_x = fast_noise(n0_x, n0_y, current_time);
+    float noise0_y = fast_noise(n0_y, n0_x, current_time);
+    float thermal0_x = (wave0_x * 0.60f) + (noise0_x * 0.40f);
+    float thermal0_y = (wave0_y * 0.60f) + (noise0_y * 0.40f);
 
-    float jx = final_jx * VECTOR_EFFECT_BEAM_JITTER_AMOUNT * scale_factor;
-    float jy = final_jy * VECTOR_EFFECT_BEAM_JITTER_AMOUNT * scale_factor;
+    float wave1_x = fast_wave(n1_x * 13.0f + current_time * 32.0f);
+    float wave1_y = fast_wave(n1_y * 17.0f + current_time * 38.0f);
+    float noise1_x = fast_noise(n1_x, n1_y, current_time);
+    float noise1_y = fast_noise(n1_y, n1_x, current_time);
+    float thermal1_x = (wave1_x * 0.60f) + (noise1_x * 0.40f);
+    float thermal1_y = (wave1_y * 0.60f) + (noise1_y * 0.40f);
 
-    // Apply the offset to the vertices
-    px0 += jx;
-    py0 += jy;
-    px1 += jx;
-    py1 += jy;
+    // --- 3. CONTINUOUS PERCEPTUAL COMPENSATION & NORMALIZATION ---
+    float internal_scale = (float)std::max(m_height, 1) / 480.0f;
+
+    // AA SURVIVAL CURVE: 
+    // A 1px line at Full-Res gets heavily blurred by the GPU's bilinear filter when it moves.
+    // We use a continuous positive curve so that as the resolution scales up to 1.0, 
+    // the amplitude gets up to a ~35% boost to pierce through the anti-aliasing blur.
+    float aa_survival = 1.0f + (s_active_fbo_scale * 0.55f);
+    
+    float total_amp = VECTOR_EFFECT_BEAM_JITTER_AMOUNT * internal_scale * aa_survival;
+
+    // MIXED APPLICATION: 50% Global Drift | 50% Thermal Wobble (More aggressive buzz)
+    px0 += (global_x * 0.50f + thermal0_x * 0.50f) * total_amp;
+    py0 += (global_y * 0.50f + thermal0_y * 0.50f) * total_amp;
+
+    px1 += (global_x * 0.50f + thermal1_x * 0.50f) * total_amp;
+    py1 += (global_y * 0.50f + thermal1_y * 0.50f) * total_amp;
 }
-
 
 void gles3_renderer::process_line_primitive(const local_primitive& prim, bool is_vector, bool enable_advanced_effects, float current_time, bool is_injected_corner)
 {

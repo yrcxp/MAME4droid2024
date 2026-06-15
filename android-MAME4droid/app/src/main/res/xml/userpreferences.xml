@@ -702,7 +702,7 @@
 						android:title="Jitter Severity"
 						android:summary="Maximum physical deviation of the electron beam."
 						android:max="100"
-						android:defaultValue="10" />
+						android:defaultValue="15" />
 
 					<SeekBarPreference
 						android:key="PREF_VECTOR_EFFECT_BEAM_FLICKER_AMOUNT"
