@@ -42,9 +42,20 @@ int myosd_droid_setTouchData(int i, int touchAction,float x, float y);
 
 int myosd_droid_main  (int argc, char **argv);
 
-
 #if defined(__cplusplus)
 }
 #endif
+
+// Netplay specific helpers (C++ linkage)
+int myosd_droid_netplay_get_inMenu();
+void myosd_droid_netplay_set_exitPause(int val);
+int myosd_droid_netplay_get_ext_status();
+
+unsigned long myosd_netplay_joystick_read(int i);
+float myosd_netplay_joystick_read_analog(int i, char axis);
+
+unsigned long myosd_netplay_mouse_read(int i);
+float myosd_netplay_mouse_read_analog(int i, char axis);
+float myosd_netplay_lightgun_read_analog(int i, char axis);
 
 #endif

@@ -22,6 +22,7 @@
 
 // MAMEOS headers
 #include "myosd.h"
+#include "netplay.h"
 
 static input_item_id key_map(myosd_keycode key);
 
@@ -390,11 +391,76 @@ void input_profile_init(running_machine &machine)
     osd_printf_debug("Num KEYBOARD %d\n",g_input.num_keyboard);
 }
 
+static float netplay_anchor_mouse_x[2] = {0, 0};
+static float netplay_anchor_mouse_y[2] = {0, 0}; 
+static float netplay_pending_mouse_x[2] = {0, 0};
+static float netplay_pending_mouse_y[2] = {0, 0};
+
+static void apply_netplay_input_state(bool is_new_mame_frame, int local_player, const netplay_state_t& local_state, int peer_player, const netplay_state_t& peer_state) {
+    g_input.joy_status[local_player] = local_state.digital;
+    g_input.joy_status[peer_player]  = peer_state.digital;
+
+    g_input.joy_analog[local_player][MYOSD_AXIS_LX] = local_state.analog_x;
+    g_input.joy_analog[local_player][MYOSD_AXIS_LY] = local_state.analog_y;
+    g_input.joy_analog[local_player][MYOSD_AXIS_RX] = local_state.analog_rx;
+    g_input.joy_analog[local_player][MYOSD_AXIS_RY] = local_state.analog_ry;
+    g_input.joy_analog[local_player][MYOSD_AXIS_LZ] = local_state.analog_lz;
+    g_input.joy_analog[local_player][MYOSD_AXIS_RZ] = local_state.analog_rz;
+
+    g_input.joy_analog[peer_player][MYOSD_AXIS_LX] = peer_state.analog_x;
+    g_input.joy_analog[peer_player][MYOSD_AXIS_LY] = peer_state.analog_y;
+    g_input.joy_analog[peer_player][MYOSD_AXIS_RX] = peer_state.analog_rx;
+    g_input.joy_analog[peer_player][MYOSD_AXIS_RY] = peer_state.analog_ry;
+    g_input.joy_analog[peer_player][MYOSD_AXIS_LZ] = peer_state.analog_lz;
+    g_input.joy_analog[peer_player][MYOSD_AXIS_RZ] = peer_state.analog_rz;
+
+    g_input.mouse_status[local_player] = local_state.mouse_status;
+    g_input.mouse_status[peer_player]  = peer_state.mouse_status;
+    
+    if (is_new_mame_frame) {
+        netplay_pending_mouse_x[local_player] = 0;
+        netplay_pending_mouse_y[local_player] = 0;
+        netplay_pending_mouse_x[peer_player] = 0;
+        netplay_pending_mouse_y[peer_player] = 0;
+    }
+    
+    float local_dx = local_state.mouse_x - netplay_anchor_mouse_x[local_player];
+    float local_dy = local_state.mouse_y - netplay_anchor_mouse_y[local_player];
+    netplay_anchor_mouse_x[local_player] = local_state.mouse_x;
+    netplay_anchor_mouse_y[local_player] = local_state.mouse_y;
+    
+    netplay_pending_mouse_x[local_player] += local_dx;
+    netplay_pending_mouse_y[local_player] += local_dy;
+    
+    g_input.mouse_x[local_player] = netplay_pending_mouse_x[local_player];
+    g_input.mouse_y[local_player] = netplay_pending_mouse_y[local_player];
+
+    float peer_dx = peer_state.mouse_x - netplay_anchor_mouse_x[peer_player];
+    float peer_dy = peer_state.mouse_y - netplay_anchor_mouse_y[peer_player];
+    netplay_anchor_mouse_x[peer_player] = peer_state.mouse_x;
+    netplay_anchor_mouse_y[peer_player] = peer_state.mouse_y;
+    
+    netplay_pending_mouse_x[peer_player] += peer_dx;
+    netplay_pending_mouse_y[peer_player] += peer_dy;
+    
+    g_input.mouse_x[peer_player] = netplay_pending_mouse_x[peer_player];
+    g_input.mouse_y[peer_player] = netplay_pending_mouse_y[peer_player];
+
+    g_input.lightgun_x[local_player] = local_state.lightgun_x;
+    g_input.lightgun_y[local_player] = local_state.lightgun_y;
+    g_input.lightgun_x[peer_player]  = peer_state.lightgun_x;
+    g_input.lightgun_y[peer_player]  = peer_state.lightgun_y;
+}
+
 //============================================================
 //  update
 //============================================================
 void my_osd_interface::input_update(bool relative_reset)
 {
+    static bool last_relative_reset = false;
+    bool is_new_mame_frame = (relative_reset == true && last_relative_reset == false);
+    last_relative_reset = relative_reset;
+
     osd_printf_verbose("my_osd_interface::input_update\n");
 
     // fill in the input profile the first time
@@ -409,6 +475,11 @@ void my_osd_interface::input_update(bool relative_reset)
             m_callbacks.input_init(&g_input, sizeof(g_input));
     }
 
+    bool is_java_paused = myosd_is_paused();
+    bool is_empty_game = (strcmp(machine().system().name, "___empty") == 0);
+    bool netplay_in_game = (machine().phase() == machine_phase::RUNNING) && !is_empty_game;
+
+    //bool in_menu = (machine().phase() != machine_phase::RUNNING) || machine().ui().is_menu_active() || is_empty_game  || machine().ui().is_general_active(); 
     bool in_menu = machine().phase() == machine_phase::RUNNING && machine().ui().is_menu_active();
 
     // determine if we should disable the rest of the UI
@@ -421,10 +492,57 @@ void my_osd_interface::input_update(bool relative_reset)
     // set the current input mode
     g_input.input_mode = in_menu ? MYOSD_INPUT_MODE_MENU : (ui_disabled ? MYOSD_INPUT_MODE_KEYBOARD : MYOSD_INPUT_MODE_NORMAL);
 
+    netplay_t *handle = netplay_get_handle();
+
     // and call host
     if (m_callbacks.input_poll != nullptr)
         m_callbacks.input_poll(relative_reset,&g_input, sizeof(g_input));
-	
+
+    if (netplay_in_game) {
+        static bool was_connected = false;
+        if (handle) {
+            if (handle->has_connection) {
+                was_connected = true;
+            } else if (was_connected) {
+                was_connected = false;
+            }
+        }
+        
+        if (handle && handle->has_connection && !handle->has_begun_game && !is_java_paused) {
+            handle->has_begun_game = 1;
+            netplay_anchor_mouse_x[0] = 0;
+            netplay_anchor_mouse_y[0] = 0;
+            netplay_anchor_mouse_x[1] = 0;
+            netplay_anchor_mouse_y[1] = 0;
+            __sync_synchronize();
+        }
+        
+        bool is_locally_paused = (handle && handle->has_connection && handle->has_begun_game && myosd_is_paused());
+
+        if (is_locally_paused) {
+            // MAME's game CPU will skip this frame.
+            // Do NOT advance netplay frame counter. Send immediate heartbeat to peer.
+            netplay_send_data(handle);
+        } else {
+            // MAME will execute the game CPU for this frame!
+            // 1. Block and wait for peer's inputs for this frame.
+            netplay_pre_frame_net(handle);
+            
+            // 2. Read local hardware joystick into buffer, advance netplay frame counter, and send to peer.
+            netplay_post_frame_net(handle);
+        }
+        
+        if (handle && handle->has_connection && handle->has_begun_game && !is_locally_paused) {
+            if (handle->player1) {
+                // Host: Local input is P1, Peer input is P2
+                apply_netplay_input_state(is_new_mame_frame, 0, handle->state, 1, handle->peer_state);
+            } else {
+                // Client: Peer input (Host) is P1, Local input is P2
+                apply_netplay_input_state(is_new_mame_frame, 1, handle->state, 0, handle->peer_state);
+            }
+        }
+    }
+
     // see if host requested an exit or reset
     if (g_input.keyboard[MYOSD_KEY_EXIT] != 0 && !machine().exit_pending())
         machine().schedule_exit();

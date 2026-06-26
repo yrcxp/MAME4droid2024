@@ -17,6 +17,12 @@
 #include <android/log.h>
 #include <android/keycodes.h>
 
+//#include "emu.h"
+//#include "emuopts.h"
+
+#include "netplay.h"
+#include "skt_netplay.h"
+
 #include <pthread.h>
 
 #include <sys/stat.h>
@@ -79,6 +85,8 @@ static float lightgun_y[MYOSD_NUM_GUN];
 
 static float mouse_x[MYOSD_NUM_MICE];
 static float mouse_y[MYOSD_NUM_MICE];
+static float last_mouse_x[MYOSD_NUM_MICE];
+static float last_mouse_y[MYOSD_NUM_MICE];
 static int mouse_status[MYOSD_NUM_MICE];
 static float cur_x_mouse = 0;
 static float cur_y_mouse = 0;
@@ -147,6 +155,10 @@ static int sound_engine = 1;
 static int myosd_droid_sound_value = 48000;
 static int myosd_droid_sound_frames = 1024;
 static OPENSL_SND *opensl_snd_ptr  = nullptr;
+
+//netplay
+int myosd_droid_netplay_restarting = 0;
+std::string myosd_netplay_selected_game = "";
 
 //Android callbacks
 static void (*dumpVideo_callback)(void) = nullptr;
@@ -433,6 +445,12 @@ void myosd_droid_setMyValue(int key, int i, int value) {
         case com_seleuco_mame4droid_Emulator_HISCORE:
             myosd_plugin_hiscore = value;
             break;
+        case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION:
+            netplay_ui_set_connection(netplay_get_handle(), value);
+            break;
+        case com_seleuco_mame4droid_Emulator_NETPLAY_DELAY:
+            netplay_ui_set_delay(netplay_get_handle(), value);
+            break;
     }
 }
 
@@ -455,6 +473,10 @@ int myosd_droid_getMyValue(int key, int i) {
                 return myosd_droid_mouse;
             case com_seleuco_mame4droid_Emulator_PAUSE:
                 return myosd_is_paused() ? 1 : 0;
+            case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION:
+                return netplay_get_handle() ? netplay_get_handle()->has_connection : 0;
+            case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_JOINED:
+                return netplay_get_handle() ? netplay_get_handle()->has_joined : 0;
             default :
                 return -1;
         }
@@ -485,6 +507,9 @@ void myosd_droid_setMyValueStr(int key, int i, const char *value) {
             myosd_droid_cli_params = std::string(value);
             break;
         }
+        case com_seleuco_mame4droid_Emulator_GAME_SELECTED:
+            myosd_netplay_selected_game = value;
+            break;
         default:;
     }
 }
@@ -494,6 +519,8 @@ char *myosd_droid_getMyValueStr(int key, int i) {
     switch (key) {
         case com_seleuco_mame4droid_Emulator_ROM_NAME:
             return (char*)myosd_droid_rom_name.c_str();
+        case com_seleuco_mame4droid_Emulator_GAME_SELECTED:
+            return (char*)myosd_netplay_selected_game.c_str();
         case com_seleuco_mame4droid_Emulator_MAME_VERSION:
             return (char*)myosd_get(MYOSD_MAME_VERSION_STRING);
         default:
@@ -1096,6 +1123,25 @@ static void droid_video_change_cb(int width, int height,int vis_width, int vis_h
     droid_set_video_mode(width, height,vis_width,vis_height);
 }
 
+static void myosd_droid_netplay_force_disconnect(const char* context_msg) {
+    netplay_t *handle = netplay_get_handle();
+    if (handle && handle->has_connection) {
+        if (!handle->has_begun_game) {
+            __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay",
+                "%s - Game failed to start, forcing netplay disconnection", context_msg);
+            char msg[] = "TOAST:Netplay: Error loading ROM. Disconnected.";
+            if (handle->netplay_warn)
+                handle->netplay_warn(msg);
+        } else {
+            __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay",
+                "%s - forcing netplay disconnection", context_msg);
+        }
+        netplay_send_disconnect(handle);
+        handle->has_connection = 0;
+        handle->has_begun_game = 0;
+    }
+}
+
 static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int running) {
 
     myosd_set(MYOSD_BITMAP_FILTERING, myosd_droid_bitmap_filtering);
@@ -1108,6 +1154,17 @@ static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int r
             myosd_speed_hack();
         }
         myosd_droid_init_game = 0;
+    }
+
+    // When the game exits and we return to the frontend, cleanly disconnect netplay.
+    // Guard with has_begun_game so we don't disconnect during the initial driver
+    // transition from ___empty to the actual game (where in_game briefly is 0).
+    if (myosd_droid_inGame && !in_game) {
+        if (myosd_droid_netplay_restarting) {
+            myosd_droid_netplay_restarting = 0;
+        } else {
+            myosd_droid_netplay_force_disconnect("Game exited");
+        }
     }
 
     myosd_droid_inGame = in_game;
@@ -1123,7 +1180,15 @@ static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int r
 }
 
 static void droid_video_exit_cb() {
+    // Safety net: ensure netplay is disconnected when MAME fully exits a game driver.
+    // Only if the game was actually running (has_begun_game) to avoid disconnecting
+    // during the ___empty -> real game driver transition at startup.
+    if (myosd_droid_netplay_restarting) {
+        myosd_droid_netplay_restarting = 0;
+        return;
+    }
 
+    myosd_droid_netplay_force_disconnect("video_exit_cb");
 }
 
 static void droid_input_init_cb(myosd_input_state *input, size_t state_size) {
@@ -1183,6 +1248,9 @@ static void droid_input_poll_cb(bool relative_reset,
                 input->mouse_x[i] = mouse_x[i] * 512;
                 input->mouse_y[i] = mouse_y[i] * 512;
 
+                last_mouse_x[i] = input->mouse_x[i];
+                last_mouse_y[i] = input->mouse_y[i];
+
                 pthread_mutex_lock(&mouse_mutex);
 
                 mouse_x[i] = 0;
@@ -1199,14 +1267,16 @@ static void droid_input_poll_cb(bool relative_reset,
         }
     //}
 
-    if(myosd_droid_do_pause){
-        myosd_pause(true);
-        myosd_droid_do_pause = 0;
-    }
+    if (relative_reset) {
+        if(myosd_droid_do_pause){
+            myosd_pause(true);
+            myosd_droid_do_pause = 0;
+        }
 
-    if(myosd_droid_do_resume){
-        myosd_pause(false);
-        myosd_droid_do_resume = 0;
+        if(myosd_droid_do_resume){
+            myosd_pause(false);
+            myosd_droid_do_resume = 0;
+        }
     }
 }
 
@@ -1505,5 +1575,129 @@ int myosd_droid_main(int argc, char **argv) {
     return 0;
 }
 
+// Netplay BRIDGE
+#define NLOG(...) __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay", __VA_ARGS__)
+
+// Netplay helpers
+int myosd_droid_netplay_get_inMenu() { return myosd_droid_inMenu; }
+extern "C" void myosd_pause(bool pause);
+void myosd_droid_netplay_set_exitPause(int val) { if (val) myosd_pause(false); }
+void myosd_droid_netplay_force_pause() { myosd_pause(true); }
+int myosd_droid_netplay_get_ext_status() { return 0; }
+
+unsigned long myosd_netplay_joystick_read(int i) {
+    if (i >= 0 && i < MYOSD_NUM_JOY) return joy_status[i];
+    return 0;
+}
+
+float myosd_netplay_joystick_read_analog(int i, char axis) {
+    if (i >= 0 && i < MYOSD_NUM_JOY) {
+        if (axis == 'x') return joy_analog_x[i];
+        if (axis == 'y') return joy_analog_y[i];
+        if (axis == 'X') return joy_analog_x_r[i];
+        if (axis == 'Y') return joy_analog_y_r[i];
+        if (axis == 'l') return joy_analog_trigger_y[i]; // LZ
+        if (axis == 'r') return joy_analog_trigger_x[i]; // RZ
+    }
+    return 0.0f;
+}
+
+unsigned long myosd_netplay_mouse_read(int i) {
+    if (i >= 0 && i < MYOSD_NUM_MICE) return mouse_status[i];
+    return 0;
+}
+
+float myosd_netplay_mouse_read_analog(int i, char axis) {
+    if (i >= 0 && i < MYOSD_NUM_MICE) {
+        if (axis == 'x') return last_mouse_x[i];
+        if (axis == 'y') return last_mouse_y[i];
+    }
+    return 0.0f;
+}
+
+float myosd_netplay_lightgun_read_analog(int i, char axis) {
+    if (i >= 0 && i < MYOSD_NUM_GUN) {
+        if (axis == 'x') return lightgun_x[i];
+        if (axis == 'y') return lightgun_y[i];
+    }
+    return 0.0f;
+}
+
+static int s_already_scheduled = 0;
+
+void myosd_droid_clear_netplay_force_game(void) {
+    s_already_scheduled = 0;
+    netplay_t *handle = netplay_get_handle();
+    if (handle) {
+        handle->game_name[0] = '\0';
+        handle->has_connection = 0;
+        handle->has_joined = 0;
+    }
+}
+
+const char* myosd_droid_get_netplay_force_game(void) {
+    netplay_t *handle = netplay_get_handle();
+    if(handle && handle->has_connection && handle->has_joined) {
+        if (!s_already_scheduled) {
+            s_already_scheduled = 1;
+            myosd_droid_netplay_restarting = 1;
+            return handle->game_name;
+        }
+    } else {
+        s_already_scheduled = 0;
+    }
+    return NULL;
+}
+
+void myosd_droid_netplay_warn(const char* msg) {
+    netplay_t *handle = netplay_get_handle();
+    if (handle && handle->netplay_warn) {
+        handle->netplay_warn((char*)msg);
+    }
+}
+
+int myosd_droid_is_netplay_active(void) {
+    netplay_t *handle = netplay_get_handle();
+    return (handle && handle->has_connection) ? 1 : 0;
+}
+
+//JNI
+extern "C" int netplayInit(const char *server, int port, int join) {
+    netplay_t* handle = netplay_get_handle();
+
+    NLOG("netplayInit called: server=%s, port=%d, join=%d, has_connection=%d", server ? server : "NULL", port, join, handle->has_connection);
+
+    if (server == nullptr && join == 1) {
+        if (handle->has_connection) {
+            int ret = netplay_send_join(handle) ? 0 : -1;
+            NLOG("netplay_send_join returned %d", ret);
+            return ret;
+        }
+        NLOG("netplayInit ignored because has_connection=0");
+        return -1;
+    }
+
+    if (join == 1 || join == 0) {
+        handle->has_begun_game = 0;
+        if (join == 0) {
+            const char* selected_game = myosd_droid_rom_name.c_str();
+            if (!myosd_netplay_selected_game.empty()) {
+                selected_game = myosd_netplay_selected_game.c_str();
+            }
+            strncpy(handle->game_name, selected_game, sizeof(handle->game_name) - 1);
+            handle->game_name[sizeof(handle->game_name) - 1] = '\0';
+            NLOG("netplayInit host selected_game: '%s'", handle->game_name);
+        }
+        NLOG("skt_netplay_init about to be called");
+        int res = skt_netplay_init(handle, server, port, handle->netplay_warn);
+        NLOG("skt_netplay_init returned %d", res);
+        return res ? 0 : -1;
+    }
+    return -1;
+}
+
+extern "C" void setNetplayWarnCallback(void *func1) {
+    netplay_get_handle()->netplay_warn = (void (*)(char *))func1;
+}
 
 
