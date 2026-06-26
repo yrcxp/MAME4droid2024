@@ -139,12 +139,17 @@ public class Emulator {
 	final static public int BITMAP_FILTERING = 74;
 	final static public int VECTOR_IMPROVED = 75;
 
+	final static public int NETPLAY_HAS_CONNECTION = 53;
+	final static public int NETPLAY_HAS_JOINED = 54;
+	final static public int NETPLAY_DELAY = 55;
+
 	//set str
 	final static public int SAF_PATH = 1;
 	final static public int ROM_NAME = 2;
 	final static public int VERSION = 3;
 	final static public int OVERLAY_EFECT = 4;
 	final static public int CLI_PARAMS = 5;
+	final static public int GAME_SELECTED = 6;
 
 	//get str
 	final static public int MAME_VERSION = 1;
@@ -700,6 +705,15 @@ public class Emulator {
 						}
 
 						Emulator.setValueStr(Emulator.ROM_NAME, fileName);
+						
+						String gameSelected = fileName;
+						if (gameSelected.toLowerCase().endsWith(".zip")) {
+							gameSelected = gameSelected.substring(0, gameSelected.length() - 4);
+						} else if (gameSelected.toLowerCase().endsWith(".7z")) {
+							gameSelected = gameSelected.substring(0, gameSelected.length() - 3);
+						}
+						Emulator.setValueStr(Emulator.GAME_SELECTED, gameSelected);
+
 						Log.d("ACTION_VIEW","XX name: " + fileName);
 						Log.d("ACTION_VIEW","XX path: " + path);
 						extROM = true;
@@ -826,4 +840,19 @@ public class Emulator {
 	public static native int loadShaders(String path);
 
 	public static native void setRendererParameters(String[] keys, String[] values);
+
+	public static native int netplayInit(String server, int port, int join);
+
+	static void netplayWarn(final String msg) {
+		mm.runOnUiThread(new Runnable() {
+			public void run() {
+				if (msg != null && msg.startsWith("TOAST:")) {
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, msg.substring(6), 3, android.graphics.Color.YELLOW, false);
+				} else {
+					mm.getDialogHelper().setInfoMsg(msg);
+					mm.showDialog(DialogHelper.DIALOG_INFO);
+				}
+			}
+		});
+	}
 }

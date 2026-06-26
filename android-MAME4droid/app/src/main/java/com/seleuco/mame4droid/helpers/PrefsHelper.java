@@ -1,7 +1,7 @@
 /*
  * This file is part of MAME4droid.
  *
- * Copyright (C) 2024 David Valdeita (Seleuco)
+ * Copyright (C) 2026 David Valdeita (Seleuco)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -171,6 +171,9 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_LIGHTGUN_LONGPRESS = "PREF_LIGHTGUN_LONGPRESS";
 	final static public String PREF_BOTTOM_RELOAD = "PREF_BOTTOM_RELOAD";
 
+	final static public String PREF_NETPLAY_PORT = "PREF_NETPLAY_PORT";
+	final static public String PREF_NETPLAY_DELAY = "PREF_NETPLAY_DELAY";
+	final static public String PREF_NETPLAY_PEERADDR = "PREF_NETPLAY_PEERADR";
 
 	final static public int LOW = 1;
 	final static public int NORMAL = 2;
@@ -749,5 +752,12 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 		return getSharedPreferences().getBoolean(PREF_SCRAPE_RESIZE, true);
 	}
 
+	public String getNetplayPort() {
+		return getSharedPreferences().getString(PREF_NETPLAY_PORT, "2080");
+	}
+
+	public int getNetplayDelayValue() {
+		return Integer.valueOf(getSharedPreferences().getString(PREF_NETPLAY_DELAY, "0"));
+	}
 
 }

@@ -48,6 +48,8 @@ void (*setVideoCallbacks)(void *func1,void *func2) = NULL;
 void (*setInputCallbacks)(void *func1) = NULL;
 void (*setDigitalData)(int i, unsigned long digital_status) = NULL;
 void (*initMyOSD)(const char *path, int nativeWidth, int nativeHeight) = NULL;
+int (*netplayInit)(const char *server, int port, int join) = NULL;
+void (*setNetplayWarnCallback)(void *func1) = NULL;
 
 void  (*setMyValue)(int key,int i, int value)=NULL;
 int  (*getMyValue)(int key, int i)=NULL;
@@ -83,6 +85,7 @@ jmethodID android_safOpenFile;
 jmethodID android_safReadDir;
 jmethodID android_safGetNextDirEntry;
 jmethodID android_safCloseDir;
+jmethodID android_netplayWarn;
 
 static JavaVM *jVM = NULL;
 static void *libdl = NULL;
@@ -179,6 +182,12 @@ static void load_lib(const char *str)
 
     setRendererParameters = dlsym(libdl, "gles3_renderer_setParameters");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "gles3_renderer_setParameters %d\n", setRendererParameters != NULL);
+
+    netplayInit = dlsym(libdl, "netplayInit");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayInit %d\n", netplayInit != NULL);
+
+    setNetplayWarnCallback = dlsym(libdl, "setNetplayWarnCallback");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "setNetplayWarnCallback %d\n", setNetplayWarnCallback != NULL);
 }
 
 void myJNI_dumpVideo()
@@ -415,6 +424,26 @@ void myJNI_safCloseDir(int id)
     //(*env)->DeleteLocalRef(env, jstrBuf);
 }
 
+void netplay_warn_java(char *msg)
+{
+    JNIEnv *env;
+    (*jVM)->GetEnv(jVM, (void**) &env, JNI_VERSION_1_4);
+    int attached  = 0;
+
+    if(env==NULL)
+    {
+        attached  = 1;
+        (*jVM)->AttachCurrentThread(jVM,(void *) &env, NULL);
+    }
+
+    jstring jmsg = (*env)->NewStringUTF(env, msg);
+    (*env)->CallStaticVoidMethod(env, cEmulator, android_netplayWarn, jmsg);
+    (*env)->DeleteLocalRef(env, jmsg);
+
+    if(attached)
+        (*jVM)->DetachCurrentThread(jVM);
+}
+
 int JNI_OnLoad(JavaVM* vm, void* reserved)
 {
     JNIEnv *env;
@@ -521,6 +550,14 @@ int JNI_OnLoad(JavaVM* vm, void* reserved)
         return -1;
     }
 
+    android_netplayWarn = (*env)->GetStaticMethodID(env,cEmulator,"netplayWarn","(Ljava/lang/String;)V");
+
+    if(android_netplayWarn==NULL)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, "mame4droid-jni", "Failed to find method netplayWarn");
+        return -1;
+    }
+
     return JNI_VERSION_1_4;
 }
 
@@ -557,6 +594,9 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_init
     __android_log_print(ANDROID_LOG_INFO, "mame4droid-jni","calling setSAFCallbacks");
     if(setSAFCallbacks!=NULL)
         setSAFCallbacks(&myJNI_safOpenFile,&myJNI_safReadDir,&myJNI_safGetNextDirEntry,&myJNI_safCloseDir);
+
+    if(setNetplayWarnCallback!=NULL)
+        setNetplayWarnCallback(&netplay_warn_java);
 
     const char *str2 = (*env)->GetStringUTFChars(env, s2, 0);
 
@@ -844,4 +884,19 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameter
     free(values);
     free(jKeyStrs);
     free(jValStrs);
+}
+
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayInit
+  (JNIEnv *env, jclass c, jstring server, jint port, jint join)
+{
+    int ret = 0;
+    if(netplayInit!=NULL)
+    {
+        const char *server_str = server != NULL ? (*env)->GetStringUTFChars(env, server, 0) : NULL;
+        ret = netplayInit(server_str, port, join);
+        if (server != NULL && server_str != NULL) {
+            (*env)->ReleaseStringUTFChars(env, server, server_str);
+        }
+    }
+    return ret;
 }

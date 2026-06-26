@@ -1,7 +1,7 @@
 /*
  * This file is part of MAME4droid.
  *
- * Copyright (C) 2024 David Valdeita (Seleuco)
+ * Copyright (C) 2026 David Valdeita (Seleuco)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -227,8 +227,10 @@ public class DialogHelper {
 					.setCancelable(false)
 					.setPositiveButton("OK", new DialogInterface.OnClickListener() {
 						public void onClick(DialogInterface dialog, int id) {
-							DialogHelper.savedDialog = DIALOG_NONE;
-							Emulator.resume();
+							if (DialogHelper.savedDialog == DIALOG_INFO) {
+								DialogHelper.savedDialog = DIALOG_NONE;
+								Emulator.resume();
+							}
 							mm.removeDialog(DIALOG_INFO);
 						}
 					});
@@ -237,10 +239,10 @@ public class DialogHelper {
 				break;
 			case DIALOG_OPTIONS:
 			case DIALOG_FULLSCREEN:
-				CharSequence[] items1 = {"Load State", "Save State", "Help", "Settings", "Keyboard"};
-				CharSequence[] items2 = {"Help", "Settings", "Keyboard"};
-				CharSequence[] items3 = {"Exit", "Load State", "Save State", "Help", "Settings", "Keyboard"};
-				CharSequence[] items4 = {"Exit", "Help", "Settings", "Keyboard"};
+				CharSequence[] items1 = {"Load State", "Save State", "NetPlay", "Help", "Settings", "Keyboard"};
+				CharSequence[] items2 = {"NetPlay", "Help", "Settings", "Keyboard"};
+				CharSequence[] items3 = {"Exit", "Load State", "Save State", "NetPlay", "Help", "Settings", "Keyboard"};
+				CharSequence[] items4 = {"Exit", "NetPlay", "Help", "Settings", "Keyboard"};
 
 				boolean saveload = Emulator.isInGameButNotInMenu() && Emulator.getValue(Emulator.PAUSE)!=1;
 
@@ -265,35 +267,10 @@ public class DialogHelper {
 
 							mm.showDialog(DialogHelper.DIALOG_EXIT);
 
-							//if (Emulator.isInMenu()) {
-							    /*
-								Emulator.setValue(Emulator.EXIT_GAME, 1);
-								Emulator.resume();
-								try {
-									Thread.sleep(PRESS_WAIT);
-								} catch (InterruptedException e) {
-								}
-								Emulator.setValue(Emulator.EXIT_GAME, 0);
-								*/
-
-							/*
-							} else if (!Emulator.isInGame())
-								mm.showDialog(DialogHelper.DIALOG_EXIT);
-							else {
-								Emulator.setValue(Emulator.EXIT_GAME, 1);
-								Emulator.resume();
-								try {
-									Thread.sleep(PRESS_WAIT);
-								} catch (InterruptedException e) {
-								}
-								Emulator.setValue(Emulator.EXIT_GAME, 0);
-							}
-							 */
 						} else if (item == 1 - a && b == 0) {
 							Emulator.resume();
 							Emulator.setValue(Emulator.LOADSTATE, 1);
 							Emulator.setSaveorload(true);
-							//Emulator.resume();
 							try {
 								Thread.sleep(PRESS_WAIT);
 							} catch (InterruptedException e) {
@@ -303,17 +280,18 @@ public class DialogHelper {
 							Emulator.resume();
 							Emulator.setValue(Emulator.SAVESTATE, 1);
 							Emulator.setSaveorload(true);
-							//Emulator.resume();
 							try {
 								Thread.sleep(PRESS_WAIT);
 							} catch (InterruptedException e) {
 							}
 							Emulator.setValue(Emulator.SAVESTATE, 0);
 						} else if (item == 3 - a - b) {
-							mm.getMainHelper().showHelp();
+							mm.getNetPlay().createDialog();
 						} else if (item == 4 - a - b) {
-							mm.getMainHelper().showSettings();
+							mm.getMainHelper().showHelp();
 						} else if (item == 5 - a - b) {
+							mm.getMainHelper().showSettings();
+						} else if (item == 6 - a - b) {
 							((IEmuView) mm.getEmuView()).showSoftKeyboard();
 							Emulator.resume();
 						}
@@ -382,7 +360,9 @@ public class DialogHelper {
 		} else if (id == DIALOG_INFO) {
 			((AlertDialog) dialog).setMessage(infoMsg);
 			Emulator.pause();
-			DialogHelper.savedDialog = DIALOG_INFO;
+			if (DialogHelper.savedDialog == DIALOG_NONE) {
+				DialogHelper.savedDialog = DIALOG_INFO;
+			}
 		} else if (id == DIALOG_EXIT) {
 			Emulator.pause();
 			DialogHelper.savedDialog = DIALOG_EXIT;

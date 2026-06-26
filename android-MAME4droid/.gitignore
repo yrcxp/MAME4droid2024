@@ -87,3 +87,7 @@ lint/tmp/
 # Android Profiling
 *.hprof
 /app/src/main/jni/MAME-src/
+
+# NDK builds
+app/src/main/obj/
+app/src/main/libs/

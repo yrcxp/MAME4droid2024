@@ -103,6 +103,9 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 
 	protected ListPreference mPrefNumProcessors;
 
+	protected EditTextPreference mPrefNetplayPort;
+	protected ListPreference mPrefNetplayDelay;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 
@@ -145,8 +148,10 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 		mPrefShader = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_SHADER_EFFECT);
 
 		mPrefNumProcessors = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_EMU_NUM_PROCESSORS);
-	}
 
+		mPrefNetplayPort = (EditTextPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_NETPLAY_PORT);
+		mPrefNetplayDelay = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_NETPLAY_DELAY);
+	}
 
 	  @Override
 	    protected void onResume() {
@@ -179,6 +184,9 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 	        mPrefNavbar.setSummary("Current value is '" + mPrefNavbar.getEntry()+"'");
 			mPrefInstPath.setSummary("Current value is '" + mPrefInstPath.getText()+"'");
 		    mPrefNumProcessors.setSummary("Current value is '" + mPrefNumProcessors.getEntry()+"'");
+
+			mPrefNetplayPort.setSummary("Current value is '" + mPrefNetplayPort.getText()+"'");
+			mPrefNetplayDelay.setSummary("Current value is '" + mPrefNetplayDelay.getEntry()+"'");
 
 		    //mPrefShaderScreen.setSummary("Select it to configure advanced postprocessing effects");
 		    //mPrefShaderScreen.setEnabled(true);
@@ -285,6 +293,14 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 		    {
 	            mPrefSoundEngine.setSummary("Current value is '" + mPrefSoundEngine.getEntry()+"'");
 		    }
+			else if(key.equals(PrefsHelper.PREF_NETPLAY_PORT))
+			{
+				mPrefNetplayPort.setSummary("Current value is '" + mPrefNetplayPort.getText()+"'");
+			}
+			else if(key.equals(PrefsHelper.PREF_NETPLAY_DELAY))
+			{
+				mPrefNetplayDelay.setSummary("Current value is '" + mPrefNetplayDelay.getEntry()+"'");
+			}
 		    else if(key.equals(PrefsHelper.PREF_GLOBAL_NAVBAR_MODE))
 		    {
 		    	mPrefNavbar.setSummary("Current value is '" + mPrefNavbar.getEntry()+"'");

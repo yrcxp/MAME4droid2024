@@ -95,6 +95,14 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_BITMAP_FILTERING 74L
 #undef com_seleuco_mame4droid_Emulator_VECTOR_IMPROVED
 #define com_seleuco_mame4droid_Emulator_VECTOR_IMPROVED 75L
+
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION
+#define com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION 53L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_HAS_JOINED
+#define com_seleuco_mame4droid_Emulator_NETPLAY_HAS_JOINED 54L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_DELAY
+#define com_seleuco_mame4droid_Emulator_NETPLAY_DELAY 55L
+
 #undef com_seleuco_mame4droid_Emulator_SAF_PATH
 #define com_seleuco_mame4droid_Emulator_SAF_PATH 1L
 #undef com_seleuco_mame4droid_Emulator_ROM_NAME
@@ -105,6 +113,8 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_OVERLAY_EFECT 4L
 #undef com_seleuco_mame4droid_Emulator_CLI_PARAMS
 #define com_seleuco_mame4droid_Emulator_CLI_PARAMS 5L
+#undef com_seleuco_mame4droid_Emulator_GAME_SELECTED
+#define com_seleuco_mame4droid_Emulator_GAME_SELECTED 6L
 #undef com_seleuco_mame4droid_Emulator_MAME_VERSION
 #define com_seleuco_mame4droid_Emulator_MAME_VERSION 1L
 #undef com_seleuco_mame4droid_Emulator_KEY_DOWN
@@ -261,6 +271,14 @@ JNIEXPORT jboolean JNICALL Java_com_seleuco_mame4droid_Emulator_setShader
  */
 JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameters
         (JNIEnv *, jclass, jobjectArray, jobjectArray);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    netplayInit
+ * Signature: (Ljava/lang/String;II)I
+ */
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayInit
+        (JNIEnv *, jclass, jstring, jint, jint);
 
 #ifdef __cplusplus
 }

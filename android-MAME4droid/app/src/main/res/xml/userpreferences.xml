@@ -850,6 +850,12 @@
 
 	</PreferenceScreen>
 
+    <PreferenceScreen android:key="netplay" android:title="@string/netplay"
+        android:summary="Select it to open netplay options" android:persistent="false">
+		<EditTextPreference android:title="Netplay port" android:key="PREF_NETPLAY_PORT" android:defaultValue="2080" />
+		<ListPreference android:entries="@array/pref_netplay_delay_options" android:title="Netplay delay" android:key="PREF_NETPLAY_DELAY" android:entryValues="@array/pref_netplay_delay_values" android:defaultValue="0" />
+    </PreferenceScreen>
+
     <PreferenceScreen android:key="advanced" android:title="Advanced"
         android:summary="Select it to open advanced options" android:persistent="false">
 
@@ -934,6 +940,8 @@
 			android:defaultValue="true" />
 
 	</PreferenceCategory>
+
+
 
 
 </PreferenceScreen>

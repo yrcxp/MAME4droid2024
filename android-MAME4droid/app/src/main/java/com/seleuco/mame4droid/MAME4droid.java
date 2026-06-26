@@ -64,6 +64,7 @@ import android.widget.FrameLayout;
 
 import com.seleuco.mame4droid.helpers.DialogHelper;
 import com.seleuco.mame4droid.helpers.MainHelper;
+import com.seleuco.mame4droid.helpers.NetPlayHelper;
 import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.helpers.SAFHelper;
 import com.seleuco.mame4droid.helpers.ScraperHelper;
@@ -86,6 +87,7 @@ public class MAME4droid extends Activity {
 	protected DialogHelper dialogHelper = null;
 	protected SAFHelper safHelper = null;
 	protected ScraperHelper scraperHelper = null;
+	protected NetPlayHelper NetPlayHelper = null;
 
 	protected InputHandler inputHandler = null;
 
@@ -107,6 +109,10 @@ public class MAME4droid extends Activity {
 
 	public ScraperHelper getScraperHelper() {
 		return scraperHelper;
+	}
+
+	public NetPlayHelper getNetPlay() {
+		return NetPlayHelper;
 	}
 
 	public View getEmuView() {
@@ -146,6 +152,7 @@ public class MAME4droid extends Activity {
 		safHelper = new SAFHelper(this);
 
 		scraperHelper = new ScraperHelper(this);
+		NetPlayHelper = new NetPlayHelper(this);
 
 		inputHandler = new InputHandler(this);
 

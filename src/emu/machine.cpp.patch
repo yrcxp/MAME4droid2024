@@ -1,0 +1,30 @@
+diff --git a/machine.cpp b/machine.cpp
+index d8d6c0f33..397ebcecd 100644
+--- a/machine.cpp
++++ b/machine.cpp
+@@ -8,6 +8,9 @@
+ 
+ ***************************************************************************/
+ 
++// DAV HACK
++#include "../osd/myosd/netplay.h"
++// END DAV HACK
+ 
+ #include "emu.h"
+ 
+@@ -164,6 +167,15 @@ void running_machine::start()
+ 	// initialize the base time (needed for doing record/playback)
+ 	::time(&m_base_time);
+ 
++// DAV HACK
++
++	netplay_t* handle = netplay_get_handle();
++	if (handle && handle->has_connection)
++	{
++		m_base_time = handle->basetime;
++	}
++
++// END DAV HACK
+ 
+ 	// initialize the input system and input ports for the game
+ 	// this must be done before memory_init in order to allow specifying

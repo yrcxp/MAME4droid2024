@@ -1,0 +1,84 @@
+diff --git a/ui.cpp b/ui.cpp
+index 5d3ec8c55..aabc9815f 100644
+--- a/ui.cpp
++++ b/ui.cpp
+@@ -43,6 +43,9 @@
+ #include "screen.h"
+ #include "speaker.h"
+ #include "uiinput.h"
++// DAV HACK
++#include "audit.h"
++// END DAV HACK
+ 
+ // FIXME: allow OSD module headers to be included in a less ugly way
+ #include "../osd/modules/lib/osdlib.h"
+@@ -923,9 +926,69 @@ void mame_ui_manager::set_startup_text(const char *text, bool force)
+ //  render it; called by video.c
+ //-------------------------------------------------
+ 
++// DAV HACK:
++struct netplay;
++const char* myosd_droid_get_netplay_force_game(void);
++void myosd_droid_clear_netplay_force_game(void);
++int netplay_send_disconnect(struct netplay *handle);
++struct netplay *netplay_get_handle(void);
++void myosd_droid_netplay_warn(const char* msg);
++#include <string>
++extern std::string myosd_netplay_selected_game;
++// END DAV HACK
+ 
+ bool mame_ui_manager::update_and_render(render_target &target)
+ {
++	// DAV HACK: skip gameinfo screen if auto-start is enabled
++	{
++		const char* netplay_game = myosd_droid_get_netplay_force_game();
++		if (netplay_game && netplay_game[0] != '\0') {
++			int idx = driver_list::find(netplay_game);
++			if (idx != -1) {
++				const game_driver &driver = driver_list::driver(idx);
++				auto &opts = mame_machine_manager::instance()->options();
++				opts.set_value(OPTION_NVRAM_DIRECTORY, "/dev/null", OPTION_PRIORITY_CMDLINE);
++				opts.set_value(OPTION_STATE_DIRECTORY, "/dev/null", OPTION_PRIORITY_CMDLINE);
++				opts.set_value(OPTION_NVRAM_SAVE, "0", OPTION_PRIORITY_CMDLINE);
++				opts.set_value(OPTION_FRAMESKIP, "0", OPTION_PRIORITY_CMDLINE);
++				opts.set_value(OPTION_THROTTLE, "1", OPTION_PRIORITY_CMDLINE);
++				opts.set_value(OPTION_SKIP_GAMEINFO, "1", OPTION_PRIORITY_CMDLINE);
++				
++				osd_printf_warning("NETPLAY AUTOSTART: Got game '%s', driver idx: %d\n", netplay_game, idx);
++
++				driver_enumerator enumerator(machine().options(), driver.name);
++				enumerator.next();
++				media_auditor auditor(enumerator);
++				media_auditor::summary summary = auditor.audit_media(AUDIT_VALIDATE_FAST);
++
++				if (summary == media_auditor::CORRECT || summary == media_auditor::BEST_AVAILABLE || summary == media_auditor::NONE_NEEDED)
++				{
++					myosd_netplay_selected_game = driver.name;
++					
++					mame_machine_manager::instance()->schedule_new_driver(driver);
++					machine().schedule_hard_reset();
++					ui::menu::stack_reset(*this);
++				}
++				else
++				{
++					netplay_send_disconnect(netplay_get_handle());
++					myosd_droid_clear_netplay_force_game();
++
++					std::string err = "Error loading ROM.\nSome files are missing or have a bad checksum.";
++					
++					// Draw the text box warning (simulates red window)
++					myosd_droid_netplay_warn(string_format("TOAST:%s", err.c_str()).c_str());
++					osd_printf_warning("NETPLAY AUTOSTART: FAILED audit for '%s'\n", netplay_game);
++				}
++			} else {
++				netplay_send_disconnect(netplay_get_handle());
++				myosd_droid_clear_netplay_force_game();
++				myosd_droid_netplay_warn(string_format("TOAST:Netplay: Unknown driver %s. Disconnected.", netplay_game).c_str());
++				osd_printf_warning("NETPLAY AUTOSTART: FAILED to find driver for '%s'\n", netplay_game);
++			}
++		}
++	}
++	// END DAV HACK
+ 
+ 	// always start clean
+ 	for (auto &target : machine().render().targets())
