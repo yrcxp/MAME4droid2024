@@ -1,0 +1,64 @@
+diff --git a/video.cpp b/video.cpp
+index a8900d3..e1e29b8 100644
+--- a/video.cpp
++++ b/video.cpp
+@@ -29,6 +29,9 @@
+ 
+ #include "rendersw.hxx"
+ 
++// DAV HACK
++bool myosd_netplay_is_rollback();
++// END DAV HACK
+ 
+ //**************************************************************************
+ //  DEBUGGING
+@@ -695,6 +698,28 @@
+ 
+ */
+ 
++// DAV HACK
++	// m_throttle_emutime is stored speed-scaled, so a bare m_speed change makes
++	// its baseline jump (spurious stall/audio-drain, or anomaly resync later in
++	// a session) -- the netplay rate controller steps m_speed continuously, so
++	// rescale the baseline + shift realtime on every change to keep the
++	// ahead/behind phase exact at zero cost.  Reset on new session (emutime==0).
++	static u32 m_throttle_last_speed = 0;
++	if (m_throttle_emutime.is_zero())
++		m_throttle_last_speed = 0;
++
++	if (m_throttle_last_speed != m_speed)
++	{
++		if (m_throttle_last_speed != 0 && m_speed != 0)
++		{
++			attotime const rescaled = (m_throttle_emutime * m_throttle_last_speed) / m_speed;
++			m_throttle_realtime += rescaled - m_throttle_emutime;
++			m_throttle_emutime = rescaled;
++		}
++		m_throttle_last_speed = m_speed;
++	}
++// END DAV HACK
++
+ 	// outer scope so we can break out in case of a resync
+ 	while (1)
+ 	{
+@@ -774,8 +799,20 @@
+ 		}
+ 
+ 		// if we're behind, it's time to just get out
++// DAV HACK
++//		if (real_is_ahead_attoseconds < 0)
++//			return;
+ 		if (real_is_ahead_attoseconds < 0)
++        {
++            if (myosd_netplay_is_rollback()) {
++                // Rollback netplay: never try to catch up to the OS clock. This prevents
++                // MAME's throttle from fighting the rollback stall / DRC pacing.  Lockstep
++                // paces itself via the per-frame peer wait, so it keeps stock behaviour.
++                break;
++            }
+ 			return;
++        }
++// END DAV HACK
+ 
+ 		// compute the target real time, in ticks, where we want to be
+ 		osd_ticks_t target_ticks = m_throttle_last_ticks + real_is_ahead_attoseconds / attoseconds_per_tick;

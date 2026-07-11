@@ -239,20 +239,35 @@ public class DialogHelper {
 				break;
 			case DIALOG_OPTIONS:
 			case DIALOG_FULLSCREEN:
-				CharSequence[] items1 = {"Load State", "Save State", "NetPlay", "Help", "Settings", "Keyboard"};
-				CharSequence[] items2 = {"NetPlay", "Help", "Settings", "Keyboard"};
-				CharSequence[] items3 = {"Exit", "Load State", "Save State", "NetPlay", "Help", "Settings", "Keyboard"};
-				CharSequence[] items4 = {"Exit", "NetPlay", "Help", "Settings", "Keyboard"};
+				CharSequence[] items1 = {"Help", "Load State", "Save State", "NetPlay", "Settings", "Keyboard"};
+				CharSequence[] items2 = {"Help", "NetPlay", "Settings", "Keyboard"};
+				CharSequence[] items3 = {"Exit", "Help", "Load State", "Save State", "NetPlay", "Settings", "Keyboard"};
+				CharSequence[] items4 = {"Exit", "Help", "NetPlay", "Settings", "Keyboard"};
 
 				boolean saveload = Emulator.isInGameButNotInMenu() && Emulator.getValue(Emulator.PAUSE)!=1;
+				/* Help only makes sense in the frontend (browsing ROMs, nothing
+				 * loaded yet); drop it from the menu once a game is running
+				 * (loaded, paused, or in MAME's own menu -- isInGame() covers
+				 * all three, unlike isEmulating() which is true the whole time
+				 * the app is alive). */
+				final boolean inGame = Emulator.isInGame();
 
 				final int a = id == DIALOG_FULLSCREEN ? 0 : 1;
 				final int b =  saveload ? 0 : 2;
+				final int c =  inGame ? 1 : 0;
 
 				if (a == 1)
 					builder.setTitle("Choose an option from the menu.");
 
 				CharSequence[] items = saveload ? (id == DIALOG_OPTIONS ? items1 : items3) : (id == DIALOG_OPTIONS ? items2 : items4);
+
+				if (inGame) {
+					CharSequence[] filtered = new CharSequence[items.length - 1];
+					int w = 0;
+					for (CharSequence it : items)
+						if (!"Help".equals(it)) filtered[w++] = it;
+					items = filtered;
+				}
 
 				boolean notKeyboard = !mm.getPrefsHelper().isVirtualKeyboardEnabled() || mm.getInputHandler().getKeyboard().isKeyboardConnected() || mm.getMainHelper().isAndroidTV();
 
@@ -267,7 +282,9 @@ public class DialogHelper {
 
 							mm.showDialog(DialogHelper.DIALOG_EXIT);
 
-						} else if (item == 1 - a && b == 0) {
+						} else if (item == 1 - a && c == 0) {
+							mm.getMainHelper().showHelp();
+						} else if (item == 2 - a - c && b == 0) {
 							Emulator.resume();
 							Emulator.setValue(Emulator.LOADSTATE, 1);
 							Emulator.setSaveorload(true);
@@ -276,7 +293,7 @@ public class DialogHelper {
 							} catch (InterruptedException e) {
 							}
 							Emulator.setValue(Emulator.LOADSTATE, 0);
-						} else if (item == 2 - a && b == 0) {
+						} else if (item == 3 - a - c && b == 0) {
 							Emulator.resume();
 							Emulator.setValue(Emulator.SAVESTATE, 1);
 							Emulator.setSaveorload(true);
@@ -285,13 +302,11 @@ public class DialogHelper {
 							} catch (InterruptedException e) {
 							}
 							Emulator.setValue(Emulator.SAVESTATE, 0);
-						} else if (item == 3 - a - b) {
+						} else if (item == 4 - a - b - c) {
 							mm.getNetPlay().createDialog();
-						} else if (item == 4 - a - b) {
-							mm.getMainHelper().showHelp();
-						} else if (item == 5 - a - b) {
+						} else if (item == 5 - a - b - c) {
 							mm.getMainHelper().showSettings();
-						} else if (item == 6 - a - b) {
+						} else if (item == 6 - a - b - c) {
 							((IEmuView) mm.getEmuView()).showSoftKeyboard();
 							Emulator.resume();
 						}

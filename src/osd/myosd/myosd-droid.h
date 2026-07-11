@@ -46,16 +46,20 @@ int myosd_droid_main  (int argc, char **argv);
 }
 #endif
 
-// Netplay specific helpers (C++ linkage)
-int myosd_droid_netplay_get_inMenu();
-void myosd_droid_netplay_set_exitPause(int val);
-int myosd_droid_netplay_get_ext_status();
+// Netplay specific helpers (C++ linkage; see myosd-droid.cpp's Netplay
+// BRIDGE section).  Callers outside this file currently redeclare these
+// locally rather than including this header.
+int myosd_droid_netplay_get_inMenu();              // whether the MAME menu is up
+void myosd_droid_netplay_set_exitPause(int val);   // unpause on netplay resume
+int myosd_droid_netplay_get_ext_status();          // reserved input-vector extension field
+int myosd_droid_netplay_restart_pending(void);     // 1 while a netplay-forced reload is pending/in flight
 
-unsigned long myosd_netplay_joystick_read(int i);
-float myosd_netplay_joystick_read_analog(int i, char axis);
+// Per-frame local input read-back, called from netplay.cpp
+unsigned long myosd_droid_netplay_joystick_read(int i);
+float myosd_droid_netplay_joystick_read_analog(int i, char axis);
 
-unsigned long myosd_netplay_mouse_read(int i);
-float myosd_netplay_mouse_read_analog(int i, char axis);
-float myosd_netplay_lightgun_read_analog(int i, char axis);
+unsigned long myosd_droid_netplay_mouse_read(int i);
+float myosd_droid_netplay_mouse_read_analog(int i, char axis);
+float myosd_droid_netplay_lightgun_read_analog(int i, char axis);
 
 #endif

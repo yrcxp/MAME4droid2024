@@ -6,10 +6,11 @@
     <string name="app_name">MAME4droid (Current)</string>
     <string name="don_t_bother">Don\'t ask again</string>
 	<string name="mame_version">0.288</string>
-    <string name="netplay">Netplay</string>
+    <string name="netplay">NetPlay</string>
     <string name="connection">Connection</string>
     <string name="start_game">Start Game</string>
 	<string name="join_peer_game">Join peer game</string>
 	<string name="disconnect">Disconnect</string>
+	<string name="resync">Resync game state</string>
 </resources>
 

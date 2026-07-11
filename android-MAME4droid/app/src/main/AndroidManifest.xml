@@ -3,6 +3,10 @@
     android:installLocation="preferExternal">
     <uses-permission android:name="android.permission.VIBRATE"/>
 	<uses-permission android:name="android.permission.INTERNET"/>
+	<!-- Netplay WifiLock (keeps the Wi-Fi radio out of power-save
+	     during a netplay session; WifiLock.acquire() requires WAKE_LOCK) -->
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+	<uses-permission android:name="android.permission.WAKE_LOCK"/>
     <supports-screens
           android:largeScreens="true"
           android:normalScreens="true"

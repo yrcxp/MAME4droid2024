@@ -1,8 +1,8 @@
 diff --git a/selmenu.cpp b/selmenu.cpp
-index 5eeef352b..e81446c20 100644
+index 31c3eee..e81446c 100644
 --- a/selmenu.cpp
 +++ b/selmenu.cpp
-@@ -48,6 +48,39 @@
+@@ -48,6 +48,40 @@
  
  namespace ui {
  
@@ -39,13 +39,16 @@ index 5eeef352b..e81446c20 100644
 +	}
 +};	
 +//END DAV HACK
- 	
++	
  namespace {
  
-@@ -1931,6 +1964,11 @@ bool menu_select_launch::handle_keys(u32 flags, int &iptkey)
+ std::pair<char const *, char const *> RIGHT_PANEL_NAMES[RP_LAST + 1] = {
+@@ -1930,8 +1964,11 @@
  		else if (is_special_main_menu())
  		{
  			// this is the root session menu, exit
+-			stack_pop();
+-			machine().schedule_exit();
 +//DAV HACK	
 +			//stack_pop();
 +			//machine().schedule_exit();		
@@ -54,24 +57,25 @@ index 5eeef352b..e81446c20 100644
  		}
  		return false;
  	}
-@@ -3075,6 +3113,22 @@ std::tuple<int, bool, bool> menu_select_launch::update_toolbar_track(bool change
+@@ -3076,9 +3113,22 @@
  			if (0 > m_clicked_line)
  			{
  				// backtrack button
+-				stack_pop();
 +//DAV HACK
 +				//stack_pop();
 +				//if (is_special_main_menu())
 +					//machine().schedule_exit();				
-+				if (is_special_main_menu())
+ 				if (is_special_main_menu())
 +				{
-+					// Mostrar confirmaciÃ³n si estamos en el menÃº principal
++					// Mostrar confirmación si estamos en el menú principal
 +					menu::stack_push<menu_confirm_exit_frontend>(ui(), target());
 +				}
 +				else
 +				{
-+					// Retroceder un menÃº si estamos en un submenÃº
++					// Retroceder un menú si estamos en un submenú
 +					stack_pop();
-+					machine().schedule_exit();
+ 					machine().schedule_exit();
 +				}				
 +//END DAV HACK				
  				return std::make_tuple(IPT_UI_BACK, false, true);

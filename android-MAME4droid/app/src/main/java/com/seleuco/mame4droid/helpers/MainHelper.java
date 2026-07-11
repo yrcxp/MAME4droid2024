@@ -543,22 +543,20 @@ public class MainHelper {
 		Emulator.setValue(Emulator.KEYBOARD,
 			mm.getPrefsHelper().isKeyboardEnabled() || mm.getPrefsHelper().isVirtualKeyboardEnabled() ? 1 : 0);
 
-        Emulator.setValue(Emulator.SOUND_ENGINE, mm.getPrefsHelper()
-                .getSoundEngine() > 2 ? 2 : 1);
+        Emulator.setValue(Emulator.SOUND_ENGINE, mm.getPrefsHelper().getSoundEngine());
 
         AudioManager am = (AudioManager) mm
                 .getSystemService(Context.AUDIO_SERVICE);
+        
         int sfr = 512;//10ms a 48000khz
 
-        if (mm.getPrefsHelper().getSoundEngine() == PrefsHelper.PREF_SNDENG_OPENSL_LOW) {
-            try {
-                sfr = Integer
+        try {
+            sfr = Integer
                         .valueOf(
                                 am.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER))
                         .intValue();
                 System.out.println("PROPERTY_OUTPUT_FRAMES_PER_BUFFER:" + sfr);
             } catch (Throwable e) {
-            }
         }
 
         Emulator.setValue(Emulator.SOUND_OPTIMAL_FRAMES, sfr);
@@ -578,16 +576,10 @@ public class MainHelper {
         if (!prefs.getBoolean("sound_rate", false)) {
             SharedPreferences.Editor edit = prefs.edit();
             edit.putBoolean("sound_rate", true);
-            if (sr == 48000)//sino defecto 44100
+            if (sr == 48000)//sino defecto 44100 de prefs del xml
                 edit.putString(PrefsHelper.PREF_EMU_SOUND, sr + "");
             edit.commit();
         }
-
-        if (mm.getPrefsHelper().getSoundEngine() == PrefsHelper.PREF_SNDENG_OPENSL)
-            sr = mm.getPrefsHelper().getSoundValue();
-		/*
-		else is PrefsHelper.PREF_SNDENG_OPENSL_LOW fixed at PROPERTY_OUTPUT_SAMPLE_RATE
-		 */
 
         Emulator.setValue(Emulator.SOUND_VALUE, prefsHelper.getSoundValue());
         Emulator.setValue(Emulator.SOUND_OPTIMAL_SAMPLERATE, sr);

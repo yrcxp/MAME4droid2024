@@ -102,6 +102,8 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_NETPLAY_HAS_JOINED 54L
 #undef com_seleuco_mame4droid_Emulator_NETPLAY_DELAY
 #define com_seleuco_mame4droid_Emulator_NETPLAY_DELAY 55L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_IN_ROLLBACK
+#define com_seleuco_mame4droid_Emulator_NETPLAY_IN_ROLLBACK 56L
 
 #undef com_seleuco_mame4droid_Emulator_SAF_PATH
 #define com_seleuco_mame4droid_Emulator_SAF_PATH 1L
@@ -279,6 +281,22 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameter
  */
 JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayInit
         (JNIEnv *, jclass, jstring, jint, jint);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    netplaySetMode
+ * Signature: (I)V
+ */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetMode
+        (JNIEnv *, jclass, jint);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    netplayResync
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayResync
+        (JNIEnv *, jclass);
 
 #ifdef __cplusplus
 }

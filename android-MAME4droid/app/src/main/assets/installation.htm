@@ -15,54 +15,77 @@
         <h1 class="title">Installation</h1>
     </div><!-- /header -->
     <div class="content">
-        <h3>First Time Installation</h3>
-        <p>When MAME4droid is first run, it will create a folder structure for you on the internal
-            memory of your Android device.</p>
-        <p>The default folder is: <em>/sdcard/MAME4droid/</em> (check out 2020 note)</p>
-        <p>This folder contains all the other folders MAME uses as well as some basic configuration
-            files.</p>
-        <p>Since MAME4droid does not come with game ROM files, you will need to copy them to the<em>
-            /sdcard/MAME4droid/roms</em> folder yourself. These should be properly named, ZIPped
-            MAME v1.39u1 ROMs files with the filenames in all lower case.</p>
-        <p>2023 Note: From Android 10 Google has added scoped storage. That means applications can
-            no longer read anywhere on the SD card, only in their own directories if I am not using
-            Android document APIs. So, I have implemented scoped storage support using android
-            storage access framework (SAF), that's way, now you can store/read ROM's files from a
-            custom folder in your external storage using Android 10+. SAF is more slow than native
-            file access support but I have implemented file caching so the performance is good
-            enough. Anyway, avoid to use ROM's folders with subdirectories and try to store in the
-            ROMs folder only the MAME4droid ROM's files. You can avoid using SAF selecting an
-            internal MAME4droid folder on install, normally
-             <em>/sdcard/Android/data/com.seleuco.mame4droid/files</em>.
-            This is fastest but you will lose your ROMs files when you uninstall MAME4droid.
-        </p>
-        <p>
-        <h3>Update/ Custom Installation</h3>
-        <p>MAME4droid (0.l39u1) version 1.7 (January 7th, 2015) made some changes to the default
-            locations and installation due to the enhanced SD Card security of KitKat and Lollipop
-            versions of the Android operating system. This can have an adverse effect on previous
-            installations of MAME4droid users while helping those with these versions of
-            Android.</p>
-        <p>Your ROMs are still safe and sound - right where you left them which is probably on your
-            external microSD card. The quick fix is to simply go into <em>Options-&gt;Settings-&gt;General-&gt;Change
-                ROMs Path</em>. Point this to your actual ROMs folder (not your MAME4droid folder).
-            If you have no custom filters or have 'favorites' turned on, you should now see all your
-            ROMs as you remember them.</p>
-        <p>Even changing your ROMs path, you may appear to lose configuration settings like
-            favorites and more. One fix? Copy all the files (not folders) from the root of your
-            MAME4droid folder (mame4droid.cfg, favorites.ini, etc) to /<em>/sdcard/MAME4droid</em>.
-            Overwrite any files already there. Restart MAME4droid.</p>
-        <p>If you are an advanced user, you may relocate the entire installation (not just the ROMs
-            folder) to another location (like the one you had before). You'll need the full path to
-            your installation. You may change this under <em>Options-&gt;Settings-&gt;Advanced-&gt;Installation
-                Path</em>. Be careful using this option; if you chose a valid but incorrect path, a
-            complete new installation of MAME4droid will be made there. Recommended for experienced
-            users only.</p>
-        <h3>Folder Configuration</h3>
-        <p>MAME4droid can make use of many advanced MAME features such as bezel and marquee artwork
-            and sound samples (for games that require them). Place appropriate assets into the
-            respective folders. Check out the <a class="link" href="external.htm" rel="external">Resources
-                and Assets</a> section for asset resources.</p>
+        <h3>First Run: Where to Store Your ROMs</h3>
+        <p>The very first time you start MAME4droid, it asks you where you want to keep your ROM
+            files (and the rest of MAME's data: artwork, samples, save states, etc). You get two
+            choices:</p>
+        <ul>
+            <li><strong>Internal:</strong> MAME4droid creates an empty folder inside its own private
+                app storage and uses that. You then copy your ROMs into it yourself, either from a PC
+                over USB/ADB, or with a file manager app that can browse the app's private folder.
+                This data is deleted automatically when you uninstall the app.
+            </li>
+            <li><strong>External Storage:</strong> you pick an existing folder anywhere on your
+                device (an SD card, a folder you already use for ROMs, a cloud-synced folder, etc.)
+                using Android's standard folder picker. MAME4droid asks Android for permission to
+                read/write that one folder and remembers it for next time. This data survives
+                uninstalling the app, and you can freely move files in and out of it with any regular
+                file manager, no PC needed.
+            </li>
+        </ul>
+        <p><strong>Important:</strong> with <em>External Storage</em>, the folder you pick <em>is</em>
+            your ROMs folder itself &mdash; MAME4droid does <em>not</em> create a <em>roms</em>
+            subfolder inside it. Put your ZIPped ROM files directly in the folder you picked. Inside
+            that same folder, you can additionally create these optional subfolders yourself:</p>
+        <p><em>artwork/</em> for your bezel/marquee artwork sets<br>
+            <em>samples/</em> for sound samples<br>
+            <em>software/</em> for software-list media (cassette/disk images used by
+            non-arcade systems with removable software, like 8-bit home computers)<br>
+            <em>sta/</em> for save states, only if you also enable <em>Save States in ROMs Path</em>
+            (see below)</p>
+        <p>Everything else (MAME configuration, hiscores, NVRAM, snapshots) always stays in
+            MAME4droid's own internal data, regardless of where your ROMs live.</p>
+        <p>With <em>Internal</em> storage instead, MAME4droid creates the full folder tree below
+            (including a <em>roms/</em> subfolder) inside its own private app storage.</p>
+
+        <h3>About the folder picker (Storage Access Framework)</h3>
+        <p>Since Android 10, apps are no longer allowed to freely read and write anywhere on shared
+            storage &mdash; they only get access to folders the user explicitly grants through
+            Android's own picker (this is called the Storage Access Framework, or SAF). That's the
+            picker that opens when you choose <em>External Storage</em> above, or when you change your
+            ROMs folder later. It's a bit slower than direct file access, but MAME4droid caches file
+            listings so it stays fast in day-to-day use once your ROMs are indexed.</p>
+        <p><strong>Tip:</strong> keep your ROMs folder flat (no ROMs buried in subfolders) and don't
+            mix in unrelated, unzipped files &mdash; the folder should really only contain your ZIPped
+            MAME ROM sets.</p>
+
+        <h3>Changing Your ROMs Location Later</h3>
+        <p>You don't have to get it right the first time. Go to <em>Options-&gt;Settings-&gt;General-&gt;Change
+            ROMs Path</em> to run that same Internal/External Storage choice again (the app restarts
+            afterwards). If you're switching to a new external folder, remember to actually move or
+            copy your ROM files there first.</p>
+        <p>If you want your save states to live alongside your ROMs on external storage (so
+            Android doesn't clean them up when you eventually uninstall), enable <em>Options-&gt;Settings-&gt;General-&gt;Save
+            States in ROMs Path</em>.</p>
+
+        <h3>Advanced: Relocating the Whole Installation</h3>
+        <p>Separately from your ROMs folder, experienced users can relocate MAME4droid's entire data
+            folder (not just ROMs, but every configuration/support folder listed below) to a specific
+            path under <em>Options-&gt;Settings-&gt;Advanced-&gt;Installation Path</em>. This one is
+            typed in manually rather than picked, and is intended for advanced use only: entering a
+            valid but unintended path will make MAME4droid treat it as a brand new, empty
+            installation. Leave this alone unless you specifically need it.</p>
+
+        <h3>Folder Layout</h3>
+        <p>This is MAME4droid's internal data folder tree (used as-is with <em>Internal</em> storage;
+            with <em>External Storage</em> only <em>roms/artwork/samples/software</em> below actually
+            live in your picked folder, as explained above, and the folder names there don't have the
+            trailing slash). It's the same layout desktop MAME uses, so you can reuse existing
+            artwork/samples collections. Check the <a class="link" href="external.htm" rel="external">Resources
+                and Assets</a> section for where to find these assets, and <a class="link"
+                                                                                href="games.htm"
+                                                                                rel="external">Supported
+                Games</a> for ROM naming rules.</p>
         <p>artwork/ -&gt; Artwork directory<br>
             cfg/ -&gt; MAME configuration files directory<br>
             hi/ -&gt; Hiscores directory<br>

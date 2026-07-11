@@ -348,36 +348,34 @@
                 correct overscan issues on some TV sets.
             </li>
         </ul>
+        <h3>Renderer &amp; Shaders</h3>
+        <p>Choose between the legacy Software renderer (default, most compatible) and the Native
+            Renderer (shaders, HDR, and much better-looking vector games). See the dedicated
+            <a class="link" href="renderer.htm" rel="external">Renderer &amp; Shaders</a> help page
+            for the full explanation of every option here (shaders, vector CRT simulation, HDR
+            calibration).
+        </p>
         <h3>Advanced</h3>
         <ul>
-            <li><strong>Video Engine</strong>
-                <ul>
-                    <li><strong> SW:</strong> Software rendering. More accurate. Higher device
-                        compatibility.
-                    </li>
-                    <li><strong>GL:</strong> Open GL ES 1.1 or above. This should be your choice if
-                        it works fine for you. Faster rendering even with image filtering.
-                    </li>
-                </ul>
+            <li><strong>Video Engine:</strong> The underlying Android graphics backend. Currently
+                always OpenGL ES.
             </li>
             <li><strong>Sound Engine:</strong> Set the audio Engine. AudioTrack for safety. OpenSL
                 for performance and low latency on capable devices.
             </li>
-            <li><strong>Threaded Video render:</strong> Enable it to use a dedicate thread to do the
-                video rendering (performance gain on dual core devices). Disable if you have
-                stuttering, artifacts or tearing.
-            </li>
-            <li><strong>Video thread priority:</strong> Set to default value unless you have
-                problems. Requires application restart.
-            </li>
-            <li><strong>Double buffer:</strong> Avoids flickering at the expenses of performance.
+            <li><strong>Number of threads:</strong> How many CPU threads MAME's core is allowed to
+                use. Leave on Auto unless you have a specific reason to pin it.
             </li>
             <li><strong>Main thread priority:</strong> Set to default value unless you have
                 problems. Requires application restart.
             </li>
-            <li><strong>Alternate OpenGL Path:</strong> Enable it to use the newer OpenGL render
-                path. Select it if you have performance problems with old render path. Could not
-                work in older devices (like overlay rendering)
+            <li><strong>Installation Path:</strong> Advanced/legacy option to relocate the entire
+                MAME4droid data folder to a manually typed path. See the
+                <a class="link" href="installation.htm" rel="external">Installation</a> help page.
+            </li>
+            <li><strong>Use mame.ini for paths:</strong> Use mame.ini instead of the values
+                MAME4droid sets automatically to define ROM/resource paths on external storage. Can
+                make your ROMs stop showing up if misconfigured &mdash; advanced users only.
             </li>
             <li><strong>Debug Mode:</strong> Enable debug mode. Only for developers.</li>
         </ul>

@@ -17,6 +17,10 @@ static void queue(unsigned char *p,unsigned size);
 static unsigned short dequeue(unsigned char *p,unsigned size);
 static inline int emptyQueue(void);
 
+/* Netplay-aware rebuffering (see dequeue).  Defined in myosd-droid.cpp
+ * (same ad-hoc declaration style luaengine.cpp uses for this bridge).   */
+int myosd_droid_is_netplay_active(void);
+
 //Size: (44100/30fps) * bytesize * stereo * (3 buffers)
 //#define TAM (1470 * 2 * 2 * 3)
 
@@ -45,7 +49,8 @@ inline int emptyQueue(){
 }
 
 void queue(unsigned char *p,unsigned size){
-        unsigned newhead;
+    unsigned newhead;
+
 		if(head + size < TAM)
 		{
 			memcpy(ptr_buf+head,p,size);
@@ -58,7 +63,7 @@ void queue(unsigned char *p,unsigned size){
 			newhead = (head + size) - TAM;
 		}
 
-                pthread_mutex_lock(&sound_mutex);
+    pthread_mutex_lock(&sound_mutex);
 
 		head = newhead;
 
@@ -69,9 +74,16 @@ unsigned short dequeue(unsigned char *p,unsigned size){
 
     	unsigned real;
     	unsigned datasize;
+        /* REBUFFERING STATE (Netplay only): Rollbacks and stalls drain the audio buffer.
+        * Since production only matches consumption, an empty buffer causes continuous popping.
+        * To prevent this, if the buffer runs dry, we output silence until >= 2 chunks accumulate.
+        * This built-up backlog safely absorbs any future short stalls without audio glitches.
+        * Local play bypasses this entirely to maintain the original minimal latency. */
+        static int rebuffering = 1; /* start empty -> prime a backlog first */
 
 		if(emptyQueue())
 		{
+            rebuffering = 1;
             memset(p,0,size);
 			return size;
 		}
@@ -82,7 +94,19 @@ unsigned short dequeue(unsigned char *p,unsigned size){
 
                 pthread_mutex_unlock(&sound_mutex);
 
-                real = datasize > size ? size : datasize;
+        if (myosd_droid_is_netplay_active()) {
+            if (rebuffering) {
+                if (datasize < size * 2) {
+                    memset(p, 0, size);   /* still priming: clean silence */
+                    return size;
+                }
+                rebuffering = 0;          /* backlog rebuilt: resume       */
+            }
+            if (datasize < size)
+                rebuffering = 1;          /* about to run dry: re-prime next */
+        }
+
+    real = datasize > size ? size : datasize;
 
 		if(tail + real < TAM)
 		{
@@ -96,78 +120,11 @@ unsigned short dequeue(unsigned char *p,unsigned size){
 			tail = (tail + real) - TAM;
 		}
 
-        return real;
-}
-
-/*
-#define TAM (1600 * 2 * 2 * 3)
-unsigned char ptr_buf[TAM];
-unsigned head = 0;
-unsigned tail = 0;
-
-inline int emptyQueue(){
-    return head == tail;
-}
-
-void queue(unsigned char *p,unsigned size) {
-
-    unsigned newhead;
-    if(head + size < TAM)
-    {
-        memcpy(ptr_buf+head,p,size);
-        newhead = head + size;
-    }
-    else
-    {
-        memcpy(ptr_buf+head,p, TAM -head);
-        memcpy(ptr_buf,p + (TAM-head), size - (TAM-head));
-        newhead = (head + size) - TAM;
-    }
-    pthread_mutex_lock(&sound_mutex);
-
-    head = newhead;
-
-    pthread_mutex_unlock(&sound_mutex);
-}
-
-unsigned short dequeue(unsigned char *p,unsigned size){
-
-    unsigned real;
-    unsigned datasize;
-
-    if(emptyQueue())
-    {
-        memset(p,0,size);
-        return 0;
-    }
-
-    pthread_mutex_lock(&sound_mutex);
-
-    datasize = head > tail ? head - tail : (TAM - tail) + head ;
-    real = datasize > size ? size : datasize;
-
-    if(tail + real < TAM)
-    {
-        memcpy(p,ptr_buf+tail,real);
-        tail+=real;
-    }
-    else
-    {
-        memcpy(p,ptr_buf + tail, TAM - tail);
-        memcpy(p+ (TAM-tail),ptr_buf , real - (TAM-tail));
-        tail = (tail + real) - TAM;
-    }
-
-    pthread_mutex_unlock(&sound_mutex);
-
     if (real < size)
-    {
-        memset(p+real, 0, size-real);
-    }
+        memset(p + real, 0, size - real);
 
     return real;
 }
-*/
 
 static SLresult opensl_createEngine(OPENSL_SND *p)
 {

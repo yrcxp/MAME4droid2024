@@ -21,6 +21,14 @@
       </h3>
 DEVELOPMENT:
 <ul>
+	<li><b>2026-07-08 Version 1.37 </b>
+		Added peer-to-peer NetPlay:<br/>
+		- <b>Two modes:</b> Lockstep (perfectly synchronized, higher input lag) and Rollback (low-latency, ideal for fast-reflex games).<br/>
+		- <b>Automatic fallback:</b> Rollback sessions that don't fit the savestate size/RAM budget, or detect a savestate layout mismatch between devices, automatically fall back to Lockstep.<br/>
+		- <b>Mid-game Resync:</b> force both devices back into perfect sync from the NetPlay dialog if a Rollback session ever visibly drifts.<br/>
+		- Only the Host picks the session mode; the Client just joins and adopts it automatically.<br/>
+		Refreshed and expanded the in-app Help: new NetPlay and Renderer &amp; Shaders pages, and an updated Installation guide covering the Storage Access Framework (SAF) folder picker used since Android 10.
+	</li>
 	<li><b>2026-24-4 Version 1.35 </b>
 		Added a new Native Video Renderer with significant improvements:<br/>
 		- <b>Vector Games:</b> Greatly improved rendering quality for a sharper and more authentic look.<br/>

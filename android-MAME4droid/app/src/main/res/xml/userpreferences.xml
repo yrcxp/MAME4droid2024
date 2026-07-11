@@ -851,9 +851,12 @@
 	</PreferenceScreen>
 
     <PreferenceScreen android:key="netplay" android:title="@string/netplay"
-        android:summary="Select it to open netplay options" android:persistent="false">
-		<EditTextPreference android:title="Netplay port" android:key="PREF_NETPLAY_PORT" android:defaultValue="2080" />
-		<ListPreference android:entries="@array/pref_netplay_delay_options" android:title="Netplay delay" android:key="PREF_NETPLAY_DELAY" android:entryValues="@array/pref_netplay_delay_values" android:defaultValue="0" />
+        android:summary="Select it to open NetPlay options" android:persistent="false">
+		<EditTextPreference android:title="NetPlay port" android:key="PREF_NETPLAY_PORT" android:defaultValue="2080" />
+		<ListPreference android:entries="@array/pref_netplay_delay_options" android:title="NetPlay delay" android:key="PREF_NETPLAY_DELAY" android:entryValues="@array/pref_netplay_delay_values" android:defaultValue="0" />
+		<CheckBoxPreference android:title="Show connection stats overlay" android:summary="Small ping/delay indicator at the bottom of the screen during a NetPlay session" android:key="PREF_NETPLAY_STATS_ENABLED" android:defaultValue="false" />
+		<CheckBoxPreference android:title="Desync detector" android:summary="Detect and warn about NetPlay desyncs (Rollback only); disable to save the extra CPU cost" android:key="PREF_NETPLAY_DESYNC_DETECTOR_ENABLED" android:defaultValue="true" />
+		<CheckBoxPreference android:title="UPnP port mapping (host)" android:summary="When hosting, automatically forward the netplay port on the router so internet peers can join directly. Removed on disconnect" android:key="PREF_NETPLAY_UPNP" android:defaultValue="true" />
     </PreferenceScreen>
 
     <PreferenceScreen android:key="advanced" android:title="Advanced"
@@ -867,7 +870,7 @@
 			android:defaultValue="1" />
 
 		<com.seleuco.mame4droid.prefs.ListPrefWithWarn android:entries="@array/pref_sound_engine_options"
-			android:title='Sound engine' android:key="PREF_SOUND_ENGINE"
+			android:title='Sound engine' android:key="PREF_SOUND_ENGINE_2"
 			android:entryValues="@array/pref_sound_engine_values"
 			android:defaultValue="1" />
 

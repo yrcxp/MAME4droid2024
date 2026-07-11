@@ -50,6 +50,14 @@ void (*setDigitalData)(int i, unsigned long digital_status) = NULL;
 void (*initMyOSD)(const char *path, int nativeWidth, int nativeHeight) = NULL;
 int (*netplayInit)(const char *server, int port, int join) = NULL;
 void (*setNetplayWarnCallback)(void *func1) = NULL;
+void (*netplaySetMode)(int mode) = NULL;
+void (*netplaySetDesyncDetectorEnabled)(int enabled) = NULL;
+int (*netplayResync)(void) = NULL;
+void (*netplaySetPunchAddr)(const char *addr, int port) = NULL;
+void (*netplaySetInternetMode)(int on) = NULL;
+void (*netplaySetLocalPort)(int port) = NULL;
+const char *(*netplayGetPublicAddr)(void) = NULL;
+const char *(*netplayGetDiagnostics)(void) = NULL;
 
 void  (*setMyValue)(int key,int i, int value)=NULL;
 int  (*getMyValue)(int key, int i)=NULL;
@@ -188,6 +196,30 @@ static void load_lib(const char *str)
 
     setNetplayWarnCallback = dlsym(libdl, "setNetplayWarnCallback");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "setNetplayWarnCallback %d\n", setNetplayWarnCallback != NULL);
+
+    netplaySetMode = dlsym(libdl, "netplaySetMode");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetMode %d\n", netplaySetMode != NULL);
+
+    netplaySetDesyncDetectorEnabled = dlsym(libdl, "netplaySetDesyncDetectorEnabled");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetDesyncDetectorEnabled %d\n", netplaySetDesyncDetectorEnabled != NULL);
+
+    netplayResync = dlsym(libdl, "netplayResync");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayResync %d\n", netplayResync != NULL);
+
+    netplaySetPunchAddr = dlsym(libdl, "netplaySetPunchAddr");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetPunchAddr %d\n", netplaySetPunchAddr != NULL);
+
+    netplaySetInternetMode = dlsym(libdl, "netplaySetInternetMode");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetInternetMode %d\n", netplaySetInternetMode != NULL);
+
+    netplaySetLocalPort = dlsym(libdl, "netplaySetLocalPort");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetLocalPort %d\n", netplaySetLocalPort != NULL);
+
+    netplayGetPublicAddr = dlsym(libdl, "netplayGetPublicAddr");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayGetPublicAddr %d\n", netplayGetPublicAddr != NULL);
+
+    netplayGetDiagnostics = dlsym(libdl, "netplayGetDiagnostics");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayGetDiagnostics %d\n", netplayGetDiagnostics != NULL);
 }
 
 void myJNI_dumpVideo()
@@ -899,4 +931,87 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayInit
         }
     }
     return ret;
+}
+
+/* Set the netplay mode (0=LOCKSTEP, 1=ROLLBACK) before calling netplayInit. */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetMode
+  (JNIEnv *env, jclass c, jint mode)
+{
+    if (netplaySetMode != NULL)
+        netplaySetMode((int)mode);
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetMode symbol not found!");
+}
+
+/* Runtime on/off for the CRC desync detector; call before netplayInit. */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetDesyncDetectorEnabled
+  (JNIEnv *env, jclass c, jint enabled)
+{
+    if (netplaySetDesyncDetectorEnabled != NULL)
+        netplaySetDesyncDetectorEnabled((int)enabled);
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetDesyncDetectorEnabled symbol not found!");
+}
+
+/* Latch a mid-game state resync (rollback sessions only).
+ * Returns 1 if latched, 0 if not applicable. */
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayResync
+  (JNIEnv *env, jclass c)
+{
+    if (netplayResync != NULL)
+        return (jint)netplayResync();
+    __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplayResync symbol not found!");
+    return 0;
+}
+
+/* Internet play: peer public tuple to hole-punch toward (host side).
+ * Callable before netplayInit and hot while waiting; null clears it. */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetPunchAddr
+  (JNIEnv *env, jclass c, jstring addr, jint port)
+{
+    if (netplaySetPunchAddr != NULL)
+    {
+        const char *addr_str = addr != NULL ? (*env)->GetStringUTFChars(env, addr, 0) : NULL;
+        netplaySetPunchAddr(addr_str, (int)port);
+        if (addr != NULL && addr_str != NULL)
+            (*env)->ReleaseStringUTFChars(env, addr, addr_str);
+    }
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetPunchAddr symbol not found!");
+}
+
+/* Internet play: run STUN during the next netplayInit (worker thread only). */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetInternetMode
+  (JNIEnv *env, jclass c, jint on)
+{
+    if (netplaySetInternetMode != NULL)
+        netplaySetInternetMode((int)on);
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetInternetMode symbol not found!");
+}
+
+/* Client's local bind port for the next netplayInit (its own settings port). */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetLocalPort
+  (JNIEnv *env, jclass c, jint port)
+{
+    if (netplaySetLocalPort != NULL)
+        netplaySetLocalPort((int)port);
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetLocalPort symbol not found!");
+}
+
+/* "ip:port|pp=0/1|sym=0/1" or "" -- valid after netplayInit returns. */
+JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetPublicAddr
+  (JNIEnv *env, jclass c)
+{
+    const char *r = (netplayGetPublicAddr != NULL) ? netplayGetPublicAddr() : NULL;
+    return (*env)->NewStringUTF(env, r != NULL ? r : "");
+}
+
+/* Multi-line connection diagnostics block; same validity as above. */
+JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetDiagnostics
+  (JNIEnv *env, jclass c)
+{
+    const char *r = (netplayGetDiagnostics != NULL) ? netplayGetDiagnostics() : NULL;
+    return (*env)->NewStringUTF(env, r != NULL ? r : "");
 }

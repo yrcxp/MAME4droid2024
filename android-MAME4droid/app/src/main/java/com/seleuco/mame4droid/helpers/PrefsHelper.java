@@ -149,7 +149,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_BUTTONS_SIZE = "PREF_BUTTONS_SIZE";
 	final static public String PREF_STICK_SIZE = "PREF_STICK_SIZE";
 	final static public String PREF_MAIN_THREAD_PRIORITY = "PREF_MAIN_THREAD_PRIORITY";
-	final static public String PREF_SOUND_ENGINE = "PREF_SOUND_ENGINE";
+	final static public String PREF_SOUND_ENGINE = "PREF_SOUND_ENGINE_2";
 
 	final static public String PREF_FORCE_ALTGLPATH = "PREF_FORCE_ALTGLPATH";
 	final static public String PREF_PXASP1 = "PREF_PXASP1";
@@ -174,6 +174,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_PORT = "PREF_NETPLAY_PORT";
 	final static public String PREF_NETPLAY_DELAY = "PREF_NETPLAY_DELAY";
 	final static public String PREF_NETPLAY_PEERADDR = "PREF_NETPLAY_PEERADR";
+	final static public String PREF_NETPLAY_STATS_ENABLED = "PREF_NETPLAY_STATS_ENABLED";
+	final static public String PREF_NETPLAY_DESYNC_DETECTOR_ENABLED = "PREF_NETPLAY_DESYNC_DETECTOR_ENABLED";
+	final static public String PREF_NETPLAY_PUNCHADDR = "PREF_NETPLAY_PUNCHADDR";
+	final static public String PREF_NETPLAY_UPNP = "PREF_NETPLAY_UPNP";
 
 	final static public int LOW = 1;
 	final static public int NORMAL = 2;
@@ -205,9 +209,8 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final public static int PREF_AUTOMAP_L1R1_AS_EXITMENU_L2R2_AS_L1R1 = 6;
 
 	final public static int PREF_SNDENG_AUDIOTRACK = 1;
-	final public static int PREF_SNDENG_AUDIOTRACK_HIGH = 2;
-	final public static int PREF_SNDENG_OPENSL = 3;
-	final public static int PREF_SNDENG_OPENSL_LOW = 4;
+	final public static int PREF_SNDENG_OPENSL = 2;
+
 
 	final public static int PREF_NAVBAR_VISIBLE = 0;
 	final public static int PREF_NAVBAR_DIMM_OR_HIDE = 1;
@@ -758,6 +761,18 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public int getNetplayDelayValue() {
 		return Integer.valueOf(getSharedPreferences().getString(PREF_NETPLAY_DELAY, "0"));
+	}
+
+	public boolean isNetplayStatsEnabled() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_STATS_ENABLED, false);
+	}
+
+	public boolean isNetplayDesyncDetectorEnabled() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_DESYNC_DETECTOR_ENABLED, true);
+	}
+
+	public boolean isNetplayUpnpEnabled() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_UPNP, true);
 	}
 
 }

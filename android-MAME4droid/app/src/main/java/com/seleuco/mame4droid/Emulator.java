@@ -1,7 +1,7 @@
 /*
  * This file is part of MAME4droid.
  *
- * Copyright (C) 2024 David Valdeita (Seleuco)
+ * Copyright (C) 2026 David Valdeita (Seleuco)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -142,6 +142,7 @@ public class Emulator {
 	final static public int NETPLAY_HAS_CONNECTION = 53;
 	final static public int NETPLAY_HAS_JOINED = 54;
 	final static public int NETPLAY_DELAY = 55;
+	final static public int NETPLAY_IN_ROLLBACK = 56;
 
 	//set str
 	final static public int SAF_PATH = 1;
@@ -461,6 +462,24 @@ public class Emulator {
 	protected static boolean sound_isLowLatency_adjust;
 	protected static int sound_frame_size;
 	protected static int sound_initial_buffer_size;
+	// Netplay-aware audio rebuffering (mirrors opensl_snd.cpp): rollback
+	// stalls starve the AudioTrack faster than it refills, so every underrun
+	// after the first pops again.
+	protected static boolean sound_netplay;
+	protected static int sound_np_underruns;
+	protected static int sound_bytes_per_frame;
+	protected static byte[] sound_np_silence;
+	protected static int sound_np_pad_cooldown; // min 1s between pads
+	// Adaptive cushion size (frames): starts at 3, grows +1 each time a pad
+	// is needed again (cap 8) so slower devices self-tune to their own
+	// rollback-starvation length.
+	protected static int sound_np_pad_frames;
+	// Starvation-episode detection: wall time of the previous writeAudio
+	// call, plus a pad-storm counter to escalate to a full track reset
+	// when pads keep firing (each pad is itself an audible cut).
+	protected static long sound_np_last_write_ms;
+	protected static long sound_np_last_pad_ms;
+	protected static int sound_np_pad_storm;
 
 	static public void initAudio(int freq, boolean stereo) {
 
@@ -473,6 +492,19 @@ public class Emulator {
 		int samplesPerFrame = freq / 60;
 		int bytesPerFrame = (stereo ? 2 : 1) * samplesPerFrame * 2;
 		sound_frame_size = samplesPerFrame;
+		sound_bytes_per_frame = bytesPerFrame;
+
+		// Netplay session detection (stable for the session: the game always
+		// starts after the connection is established).
+		sound_netplay = false;
+		try { sound_netplay = getValue(NETPLAY_HAS_CONNECTION) == 1; } catch (Throwable t) {}
+		sound_np_underruns = 0;
+		sound_np_silence = null;
+		sound_np_pad_cooldown = 0;
+		sound_np_pad_frames = 3;
+		sound_np_last_write_ms = 0;
+		sound_np_last_pad_ms = 0;
+		sound_np_pad_storm = 0;
 
 		int channelConfig = stereo ? AudioFormat.CHANNEL_OUT_STEREO : AudioFormat.CHANNEL_OUT_MONO;
 		int audioFormatType = AudioFormat.ENCODING_PCM_16BIT;
@@ -480,7 +512,20 @@ public class Emulator {
 		boolean hasLowLatencyFeature =
 			mm.getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUDIO_LOW_LATENCY);
 
-		sound_isLowLatency_adjust = AudioTrack.getNativeOutputSampleRate(AudioManager.STREAM_MUSIC) == sampleFreq && hasLowLatencyFeature;
+		boolean lowLatencyCapable =
+			AudioTrack.getNativeOutputSampleRate(AudioManager.STREAM_MUSIC) == sampleFreq && hasLowLatencyFeature;
+
+		// Netplay needs cushion, not minimum latency: skip the warmup SHRINK
+		// only, keep PERFORMANCE_MODE_LOW_LATENCY (disabling it pushed some
+		// devices to the HAL's chunky deep-buffer path instead).
+		sound_isLowLatency_adjust = lowLatencyCapable && !sound_netplay;
+
+		// Log the decisions behind the audio path (e.g. a native-rate mismatch
+		// forcing the deep-buffer path) in one logcat line for diagnosis.
+		Log.d("audio", "initAudio freq=" + sampleFreq
+			+ " nativeRate=" + AudioTrack.getNativeOutputSampleRate(AudioManager.STREAM_MUSIC)
+			+ " lowLatencyCapable=" + lowLatencyCapable
+			+ " netplay=" + sound_netplay);
 
 		int bufferSize;
 
@@ -489,6 +534,11 @@ public class Emulator {
 		// Round to next frame
 		bufferSize = (((bufferSize + (bytesPerFrame - 1)) / bytesPerFrame) * bytesPerFrame);
 		bufferSize += bytesPerFrame;//add a safety frame
+
+		// Extra buffer CAPACITY (not latency) for the adaptive cushion, so a
+		// small-buffer device doesn't silently truncate the padding writes.
+		if (sound_netplay)
+			bufferSize += 8 * bytesPerFrame;
 
 		Log.d("audio", "Effective buffer size:" + bufferSize);
 
@@ -511,12 +561,20 @@ public class Emulator {
 			.setTransferMode(AudioTrack.MODE_STREAM)
 			.setBufferSizeInBytes(bufferSize);
 
-		if (sound_isLowLatency_adjust)
+		if (lowLatencyCapable)
 			trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY);
 
 		audioTrack = trackBuilder.build();
 
 		audioTrack.play();
+
+		// Prime an initial 3-frame silence cushion so the session doesn't start
+		// at near-zero fill, where the first scheduler hiccup underruns before
+		// any pad has a chance to react.
+		if (sound_netplay) {
+			byte[] prime = new byte[sound_bytes_per_frame * 3];
+			audioTrack.write(prime, 0, prime.length, AudioTrack.WRITE_NON_BLOCKING);
+		}
 	}
 
 	public static void endAudio() {
@@ -527,9 +585,76 @@ public class Emulator {
 		audioTrack = null;
 	}
 
+	// Full AudioTrack reset for netplay starvation episodes: pause+flush+play
+	// un-wedges a deeply underrun track, then re-prime the cushion and
+	// rebaseline the underrun counter. Emu thread only, no locking needed.
+	private static void netplayAudioReset(String reason) {
+		try {
+			audioTrack.pause();
+			audioTrack.flush();
+			audioTrack.play();
+		} catch (Throwable ignored) {
+		}
+		byte[] prime = new byte[sound_bytes_per_frame * sound_np_pad_frames];
+		audioTrack.write(prime, 0, prime.length, AudioTrack.WRITE_NON_BLOCKING);
+		sound_np_underruns = audioTrack.getUnderrunCount();
+		sound_np_pad_cooldown = 60;
+		sound_np_pad_storm = 0;
+		sound_np_last_pad_ms = 0;
+		Log.d("audio", "netplay audio reset (" + reason + "), underruns=" + sound_np_underruns);
+	}
+
 	public static void writeAudio(byte[] b, int sz) {
 
 		if (audioTrack != null) {
+
+			// Netplay rebuffering, cooldown-gated (1/s): padding on every
+			// underrun count increase caused back-to-back silences ("gapped"
+			// audio) on bursty devices.
+			if (sound_netplay) {
+				long now_ms = android.os.SystemClock.uptimeMillis();
+				// A long producer gap (resync/initial-sync FF mutes audio, or a
+				// network stall) deep-underruns the track; on some HALs it then
+				// glitches forever no matter what follows -- reset it clean.
+				if (sound_np_last_write_ms != 0 && (now_ms - sound_np_last_write_ms) > 400)
+					netplayAudioReset("starvation gap " + (now_ms - sound_np_last_write_ms) + "ms");
+				sound_np_last_write_ms = now_ms;
+				if (sound_np_pad_cooldown > 0)
+					sound_np_pad_cooldown--;
+				int u = audioTrack.getUnderrunCount();
+				if (u > sound_np_underruns) {
+					sound_np_underruns = u;
+					if (sound_np_pad_cooldown == 0) {
+						sound_np_pad_cooldown = 60; /* ~1s of writeAudio calls */
+						// Pad storm: pads re-firing right after their cooldown mean
+						// the track itself is stuck glitching (each pad is another
+						// audible cut) -- escalate to a full reset.
+						if (sound_np_last_pad_ms != 0 && (now_ms - sound_np_last_pad_ms) < 3000)
+							sound_np_pad_storm++;
+						else
+							sound_np_pad_storm = 0;
+						sound_np_last_pad_ms = now_ms;
+						if (sound_np_pad_storm >= 2) {
+							netplayAudioReset("pad storm");
+						} else {
+							/* Adaptive cushion: another pad means the previous size
+							 * was too small for this device's starvation episodes;
+							 * grow it (cap 8).                                   */
+							if (sound_np_silence != null &&
+								sound_np_pad_frames < 8)
+								sound_np_pad_frames++;
+							sound_np_silence = new byte[sound_bytes_per_frame * sound_np_pad_frames];
+							int written = audioTrack.write(sound_np_silence, 0, sound_np_silence.length, AudioTrack.WRITE_NON_BLOCKING);
+							// Diagnostic: firing ~every second on an idle session means
+							// the cuts ARE the pads themselves (HAL accounting), not
+							// rollback starvation.
+							Log.d("audio", "netplay pad: underruns=" + u
+								+ " padFrames=" + sound_np_pad_frames
+								+ " written=" + written + "/" + sound_np_silence.length);
+						}
+					}
+				}
+			}
 
 			audioTrack.write(b, 0, sz, AudioTrack.WRITE_NON_BLOCKING);
 
@@ -843,15 +968,76 @@ public class Emulator {
 
 	public static native int netplayInit(String server, int port, int join);
 
+	/** Set the netplay mode: 0 = LOCKSTEP (default), 1 = ROLLBACK.
+	 *  Must be called before {@link #netplayInit}. */
+	public static native void netplaySetMode(int mode);
+
+	/** Enable/disable the CRC desync detector (saves its per-frame compute
+	 *  cost when off). Local to this device; must be called before
+	 *  {@link #netplayInit}. */
+	public static native void netplaySetDesyncDetectorEnabled(int enabled);
+
+	/** Internet play: peer public tuple the host hole-punches toward.
+	 *  Callable before {@link #netplayInit} and hot while waiting for the
+	 *  peer; null/empty clears it. */
+	public static native void netplaySetPunchAddr(String addr, int port);
+
+	/** Internet play: run STUN on the game socket during the next
+	 *  {@link #netplayInit} (adds up to ~3s: call init from a worker). */
+	public static native void netplaySetInternetMode(int on);
+
+	/** Local bind port for the next {@link #netplayInit}: always OUR settings
+	 *  port -- the join target's port must never leak into our own tuple. */
+	public static native void netplaySetLocalPort(int port);
+
+	/** "ip:port|pp=0/1|sym=0/1" or "" -- valid after {@link #netplayInit}
+	 *  returns, until the next init. */
+	public static native String netplayGetPublicAddr();
+
+	/** Multi-line connection diagnostics block; same validity as
+	 *  {@link #netplayGetPublicAddr}. */
+	public static native String netplayGetDiagnostics();
+
+	/** Latch a mid-game state resync (rollback sessions only).
+	 *  The host recaptures its live state and streams it to the client, which
+	 *  adopts it -- both machines freeze briefly and resume bit-identical.
+	 *  @return 1 if the resync was latched, 0 if not applicable. */
+	public static native int netplayResync();
+
 	static void netplayWarn(final String msg) {
 		mm.runOnUiThread(new Runnable() {
 			public void run() {
-				if (msg != null && msg.startsWith("TOAST:")) {
+				if (msg != null && msg.startsWith("TOASTERR:")) {
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, msg.substring(9), 4, android.graphics.Color.RED, false);
+				} else if (msg != null && msg.startsWith("TOASTOK:")) {
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, msg.substring(8), 3, android.graphics.Color.GREEN, false);
+				} else if (msg != null && msg.startsWith("TOAST:")) {
 					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, msg.substring(6), 3, android.graphics.Color.YELLOW, false);
+				} else if (msg != null && msg.startsWith("STATS:")) {
+					/* Re-check the connection live (not just at push time): a
+					 * STATS push and the disconnect notification can both be
+					 * in-flight around the same moment, so a stale push must
+					 * not resurrect the overlay after it's already hidden. */
+					if (mm.getPrefsHelper().isNetplayStatsEnabled() && getValue(NETPLAY_HAS_CONNECTION) == 1)
+						com.seleuco.mame4droid.widgets.StatsWidget.update(mm, msg.substring(6));
+					else
+						com.seleuco.mame4droid.widgets.StatsWidget.hide(mm);
 				} else {
 					mm.getDialogHelper().setInfoMsg(msg);
 					mm.showDialog(DialogHelper.DIALOG_INFO);
 				}
+				/* Native netplay notifications (hangup, peer timeout,
+				 * disconnect...) are the moment to re-check the session state
+				 * and drop the Wi-Fi radio lock if the connection is gone --
+				 * no string matching, just the authoritative flag.           */
+				try {
+					if (mm.getNetPlay() != null
+							&& getValue(NETPLAY_HAS_CONNECTION) == 0) {
+						mm.getNetPlay().releaseWifiLock();
+						mm.getNetPlay().onNetplaySessionGone();
+						com.seleuco.mame4droid.widgets.StatsWidget.hide(mm);
+					}
+				} catch (Throwable ignored) {}
 			}
 		});
 	}

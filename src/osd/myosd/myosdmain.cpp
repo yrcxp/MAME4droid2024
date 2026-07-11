@@ -1,4 +1,4 @@
-// license:BSD-3-Clause
+﻿// license:BSD-3-Clause
 //============================================================
 //
 //  myosdmain.cpp - main file for my OSD
@@ -33,9 +33,10 @@
 // OSD headers
 #include "video.h"
 #include "myosd.h"
-
+#include "myosd-netplay.h"
 
 #include <android/log.h>
+#include <cstring>
 
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #define MAX(a,b) ((a)<(b) ? (b) : (a))
@@ -807,6 +808,11 @@ void my_osd_interface::machine_exit()
     video_exit();
     input_exit();
     sound_exit();
+
+    /* Rollback cleanup: free all captured ram_states and reset flags.    */
+    myosd_netplay_state_cleanup();
+    myosd_netplay_set_ff_active(0);
+    myosd_netplay_set_audio_mute(0);
 }
 
 //============================================================
@@ -817,5 +823,4 @@ void osd_setup_osd_specific_emu_options(emu_options &opts)
 {
     opts.add_entries(s_option_entries);
 }
-
 
