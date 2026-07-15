@@ -223,6 +223,40 @@
       play. It is the manual equivalent of UPnP, for routers where UPnP is
       off or broken.</p>
 
+      <h3>IPv6 (Network protocol)</h3>
+      <p><em>Options-&gt;Settings-&gt;NetPlay-&gt;Network protocol</em>
+      selects how the devices connect: <strong>IPv4</strong> (default),
+      <strong>IPv6</strong> or <strong>Auto (IPv6 + IPv4)</strong>. IPv6 has
+      no NAT: each device gets its own public address, so internet play
+      usually connects directly &mdash; no port forwarding, no UPnP, and the
+      CGNAT limitation above disappears. In particular, <strong>two phones on
+      mobile data (4G/5G) with IPv6</strong> — which most carriers provide —
+      connect to each other directly with zero router setup: this is the
+      easiest and most reliable way to play over the internet.
+      The default is <strong>IPv4</strong> because it is the most field-tested
+      path, but <strong>Auto</strong> is worth trying: it works with every
+      peer and picks the best route by itself.</p>
+      <ul>
+        <li><strong>IPv4:</strong> the classic behavior described above.</li>
+        <li><strong>IPv6:</strong> both players connect over IPv6 only. The
+            shared invite carries a <em>[bracketed]</em> address; Share and
+            Paste work exactly the same.</li>
+        <li><strong>Auto:</strong> the Host accepts both families and shares
+            every address it has (IPv6, IPv4 and local network); the Client
+            automatically picks whichever works with its own connection.
+            Choose this if you're not sure what the other player has.</li>
+      </ul>
+      <p>Both players should use the same setting (Auto pairs fine with
+      either). Some routers ship an IPv6 firewall that blocks inbound
+      connections: the built-in hole punching normally opens it by itself,
+      and otherwise allowing the NetPlay port in that firewall is the IPv6
+      equivalent of port forwarding.</p>
+      <p>If your router has IPv6 enabled but your ISP hands out no public IPv6
+      prefix, your devices still get a same-network (ULA) address: internet
+      play isn't possible, but two devices on the same network can still play
+      over IPv6. The Host lists that address labelled <em>same network
+      only</em>.</p>
+
       <h3>During the game</h3>
       <ul>
         <li><strong>Resync:</strong> on a live Rollback session, the NetPlay

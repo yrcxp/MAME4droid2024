@@ -2,11 +2,12 @@ diff --git a/avgdvg.cpp b/avgdvg.cpp
 index 5d14c00..d18822a 100644
 --- a/avgdvg.cpp
 +++ b/avgdvg.cpp
-@@ -53,11 +53,26 @@
+@@ -53,11 +53,27 @@
   *
   *************************************/
  
 +//DAV HACK
++//Off-screen overbright excess (monitor glow) researched by okaz-code
 +extern float g_hack_offscreen_overdrive;
 +
  void avgdvg_device_base::vg_flush()

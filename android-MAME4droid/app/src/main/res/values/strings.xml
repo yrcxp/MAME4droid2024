@@ -62,8 +62,8 @@
     <string name="np_mode_rollback">Rollback  (low-latency, ideal for NeoGeo/CPS)</string>
     <string name="np_peer_ip_title">Peer public IP[:port]</string>
     <string name="np_enter_peer_ip">Enter peer IP address (ip or ip:port):</string>
-    <string name="np_join_hint">Or paste the shared invite (public/private).</string>
-    <string name="np_peer_ip_hint">Or paste the peer\'s shared message (their public IP).</string>
+    <string name="np_join_hint">Or paste the shared invite: the best address is picked automatically.</string>
+    <string name="np_peer_ip_hint">Optional: only needed if the connection doesn\'t establish by itself. Paste the peer\'s shared message (their public IP).</string>
     <string name="clear">Clear</string>
     <string name="paste">Paste</string>
     <string name="np_invalid_ip">Connection canceled: Invalid IP address.</string>
@@ -82,10 +82,19 @@
     <string name="np_lan_connect_body">Local network game: connecting directly on your Wi-Fi / network.\n\nMake sure both devices are on the same network and use the same port.</string>
     <string name="np_upnp_fallback_hint">Internet play: if the other player can\'t reach your public IP, tap Peer IP and enter THEIR public address, or forward UDP %1$d on your router.</string>
     <string name="np_upnp_mapped">Router port mapped (UPnP): peers can join your public IP directly.</string>
-    <string name="np_local_ip">Your local IP (for same-network play): %1$s</string>
+    <string name="np_local_ip">Your local IPv4 (same-network play): %1$s</string>
     <string name="np_mobile_only">Mobile data only: no local network (internet play only)</string>
     <string name="np_tap_share">Tap Share to send these addresses via any messenger.</string>
-    <string name="np_public_ip">Your public IP (for internet play): %1$s</string>
+    <string name="np_public_ip">Your public IPv4 (internet play): %1$s</string>
+    <string name="np_ipv6_addr">Your public IPv6 (internet or same network): %1$s</string>
+    <string name="np_ipv6_inet">Your public IPv6 (internet play): %1$s</string>
+    <string name="np_ipv6_mobile">Your public IPv6 (internet play, via MOBILE DATA): %1$s</string>
+    <string name="np_ipv6_lan">Your local IPv6 (same network only): %1$s</string>
+    <string name="np_ipv6_no_public">No public IPv6: internet play isn\'t possible, but same-network play works:</string>
+    <string name="np_ipv6_none">No usable IPv6 on this device. Set Network protocol to IPv4 or Auto to play.</string>
+    <string name="np_ip_family_mismatch">The address is %1$s but the Network protocol setting is %2$s. Paste a matching address or change the setting.</string>
+    <string name="np_try_ipv6">Tip: mobile networks usually have IPv6 — try setting Network protocol to IPv6 or Auto on BOTH devices.</string>
+    <string name="np_try_auto">Tip: try setting Network protocol to Auto on BOTH devices — if the networks have IPv6, it bypasses this NAT.</string>
     <string name="np_symmetric_nat">Symmetric NAT detected. Internet play may fail.</string>
     <string name="np_public_unavailable">Your public IP: unavailable (internet play may need port forwarding)</string>
     <string name="np_same_public_ip">Same public IP as the host: you seem to be on their network -- join their LOCAL IP instead.</string>
@@ -487,6 +496,11 @@
     <string name="pref_netplay_desync_summary">Detect and warn about NetPlay desyncs (Rollback only); disable to save the extra CPU cost</string>
     <string name="pref_netplay_upnp_title">UPnP port mapping (host)</string>
     <string name="pref_netplay_upnp_summary">When hosting, automatically forward the netplay port on the router so internet peers can join directly. Removed on disconnect</string>
+    <string name="pref_netplay_ipproto_title">Network protocol</string>
+    <string name="pref_netplay_ipproto_summary">IPv4, IPv6 or automatic. IPv6 has no NAT: internet play usually connects directly, with no port forwarding and fewer connection problems. Auto prefers IPv6 and falls back to IPv4</string>
+    <string name="np_ipproto_v4">IPv4</string>
+    <string name="np_ipproto_v6">IPv6</string>
+    <string name="np_ipproto_auto">Auto (IPv6 + IPv4)</string>
 
     <string name="prefscr_advanced_title">Advanced</string>
     <string name="prefscr_advanced_summary">Select it to open advanced options</string>

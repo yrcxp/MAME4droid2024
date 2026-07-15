@@ -55,8 +55,8 @@
     <string name="np_mode_rollback">回滚  （低延迟，适合 NeoGeo/CPS）</string>
     <string name="np_peer_ip_title">对方公网 IP[:端口]</string>
     <string name="np_enter_peer_ip">输入对方 IP 地址（ip 或 ip:端口）：</string>
-    <string name="np_join_hint">或直接粘贴分享的邀请（公网/内网）。</string>
-    <string name="np_peer_ip_hint">或粘贴对方分享的消息（其公网 IP）。</string>
+    <string name="np_join_hint">或直接粘贴分享的邀请：将自动选择最佳地址。</string>
+    <string name="np_peer_ip_hint">可选：仅在连接无法自行建立时才需要。粘贴对方分享的消息（其公网 IP）。</string>
     <string name="clear">清除</string>
     <string name="paste">粘贴</string>
     <string name="np_invalid_ip">连接已取消：IP 地址无效。</string>
@@ -75,10 +75,19 @@
     <string name="np_lan_connect_body">局域网游戏：正在通过您的 Wi-Fi / 网络直接连接。\n\n请确保两台设备处于同一网络并使用相同的端口。</string>
     <string name="np_upnp_fallback_hint">互联网对战：如果对方无法访问您的公网 IP，请点击"对方 IP"并输入对方的公网地址，或在路由器上转发 UDP 端口 %1$d。</string>
     <string name="np_upnp_mapped">路由器端口已映射（UPnP）：对方可直接加入您的公网 IP。</string>
-    <string name="np_local_ip">您的本地 IP（用于同一网络对战）：%1$s</string>
+    <string name="np_local_ip">您的本地 IPv4（同一网络对战）：%1$s</string>
     <string name="np_mobile_only">仅移动数据：无本地网络（仅互联网对战）</string>
     <string name="np_tap_share">点击"分享"通过任意即时通讯软件发送这些地址。</string>
-    <string name="np_public_ip">您的公网 IP（用于互联网对战）：%1$s</string>
+    <string name="np_public_ip">您的公网 IPv4（互联网对战）：%1$s</string>
+    <string name="np_ipv6_addr">您的公网 IPv6（互联网或同一网络）：%1$s</string>
+    <string name="np_ipv6_inet">您的公网 IPv6（互联网对战）：%1$s</string>
+    <string name="np_ipv6_mobile">您的公网 IPv6（互联网对战，经由移动数据）：%1$s</string>
+    <string name="np_ipv6_lan">您的本地 IPv6（仅同一网络）：%1$s</string>
+    <string name="np_ipv6_no_public">无公网 IPv6：无法通过互联网联机，但可在同一网络内联机：</string>
+    <string name="np_ipv6_none">此设备没有可用的 IPv6。请将网络协议设为 IPv4 或自动后再联机。</string>
+    <string name="np_ip_family_mismatch">该地址是 %1$s，但网络协议设置为 %2$s。请粘贴匹配的地址或更改设置。</string>
+    <string name="np_try_ipv6">提示：移动网络通常支持 IPv6 —— 请两台设备都将网络协议设为 IPv6 或自动。</string>
+    <string name="np_try_auto">提示：请两台设备都将网络协议设为自动 —— 如果网络支持 IPv6，即可绕过此 NAT。</string>
     <string name="np_symmetric_nat">检测到对称型 NAT。互联网对战可能失败。</string>
     <string name="np_public_unavailable">您的公网 IP：不可用（互联网对战可能需要端口转发）</string>
     <string name="np_same_public_ip">与主机的公网 IP 相同：您似乎与其处于同一网络，请改为加入其本地 IP。</string>
@@ -469,6 +478,9 @@
     <string name="pref_netplay_desync_summary">检测并警告联机对战不同步（仅回滚模式）；禁用以节省额外的 CPU 开销</string>
     <string name="pref_netplay_upnp_title">UPnP 端口映射（主机）</string>
     <string name="pref_netplay_upnp_summary">作为主机时，自动在路由器上转发联机对战端口，以便互联网对方可直接加入。断开时移除</string>
+    <string name="pref_netplay_ipproto_title">网络协议</string>
+    <string name="pref_netplay_ipproto_summary">IPv4、IPv6 或自动。IPv6 没有 NAT：互联网对战通常可直接连接，无需端口转发，连接问题更少。自动模式优先使用 IPv6，并在需要时回退到 IPv4</string>
+    <string name="np_ipproto_auto">自动（IPv6 + IPv4）</string>
 
     <string name="prefscr_advanced_title">高级</string>
     <string name="prefscr_advanced_summary">选择以打开高级选项</string>

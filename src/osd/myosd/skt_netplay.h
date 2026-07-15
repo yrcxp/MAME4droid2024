@@ -17,11 +17,20 @@
 
 #include <netdb.h>
 
+    /* IP protocol mode for the next session (Java pref "Network protocol"):
+     * V4/V6 force that exact family; AUTO = dual-stack v6 socket that still
+     * accepts v4 peers (mapped) and follows the family of the join target. */
+    #define SKT_IPPROTO_V4   0
+    #define SKT_IPPROTO_V6   1
+    #define SKT_IPPROTO_AUTO 2
+
     /* Per-session UDP transport state, hung off netplay_t::impl_data. */
     typedef struct skt_netplay
     {
         struct addrinfo *addr;             /* client: peer to connect to; host: our own bind info (freed after bind) */
         int fd;                            /* UDP socket, -1 when closed */
+        int sock_family;                   /* AF_INET or AF_INET6 (the socket's family, set at creation) */
+        int ip_mode;                       /* SKT_IPPROTO_* consumed by this session (latched at init) */
         struct sockaddr_storage client_addr; /* peer address, latched from its packets (see skt_read_pkt_data) */
         socklen_t client_addr_len;
         int has_client_addr;               /* whether client_addr is valid yet */
@@ -38,6 +47,7 @@
     int skt_netplay_init(netplay_t *handle,const char *server, uint16_t port,void (*warn_cb)(char *)); /* create the UDP socket + network thread for this session */
     void skt_netplay_set_punch_addr(const char *host, uint16_t port);  /* peer public tuple to punch; NULL/empty clears; hot-settable */
     void skt_netplay_set_internet_mode(int on);                        /* pre-init: run STUN on the game socket during next init */
+    void skt_netplay_set_ip_family(int mode);                          /* pre-init: SKT_IPPROTO_V4 (default) / _V6 / _AUTO for next init */
     void skt_netplay_set_local_port(uint16_t port);                    /* pre-init: client's local bind port (its OWN settings port) */
     const char *skt_netplay_get_public_addr(void);                     /* "ip:port|pp=0/1|sym=0/1" or "" -- valid only after init returns */
     const char *skt_netplay_get_diagnostics(void);                     /* multi-line connection diagnostics block, same validity */

@@ -1009,12 +1009,17 @@ public class Emulator {
 	 *  {@link #netplayInit} (adds up to ~3s: call init from a worker). */
 	public static native void netplaySetInternetMode(int on);
 
+	/** IP protocol for the next {@link #netplayInit}: 0=IPv4 (default),
+	 *  1=IPv6 strict, 2=Auto (dual-stack, accepts/reaches both families). */
+	public static native void netplaySetIpFamily(int mode);
+
 	/** Local bind port for the next {@link #netplayInit}: always OUR settings
 	 *  port -- the join target's port must never leak into our own tuple. */
 	public static native void netplaySetLocalPort(int port);
 
-	/** "ip:port|pp=0/1|sym=0/1" or "" -- valid after {@link #netplayInit}
-	 *  returns, until the next init. */
+	/** "ip:port|pp=0/1|sym=0/1[|alt=ip4:port]" or "" -- valid after
+	 *  {@link #netplayInit} returns, until the next init.  The host part is
+	 *  "[v6]:port" on IPv6; "alt=" carries the extra v4 public in Auto. */
 	public static native String netplayGetPublicAddr();
 
 	/** Multi-line connection diagnostics block; same validity as

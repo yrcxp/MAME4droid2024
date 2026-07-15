@@ -185,6 +185,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_DESYNC_DETECTOR_ENABLED = "PREF_NETPLAY_DESYNC_DETECTOR_ENABLED";
 	final static public String PREF_NETPLAY_PUNCHADDR = "PREF_NETPLAY_PUNCHADDR";
 	final static public String PREF_NETPLAY_UPNP = "PREF_NETPLAY_UPNP";
+	final static public String PREF_NETPLAY_IP_PROTOCOL = "PREF_NETPLAY_IP_PROTOCOL";
 
 	final static public int LOW = 1;
 	final static public int NORMAL = 2;
@@ -809,6 +810,15 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public boolean isNetplayUpnpEnabled() {
 		return getSharedPreferences().getBoolean(PREF_NETPLAY_UPNP, true);
+	}
+
+	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */
+	public int getNetplayIpProtocol() {
+		try {
+			return Integer.parseInt(getSharedPreferences().getString(PREF_NETPLAY_IP_PROTOCOL, "0"));
+		} catch (Exception e) {
+			return 0;
+		}
 	}
 
 }

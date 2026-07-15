@@ -105,6 +105,7 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 
 	protected EditTextPreference mPrefNetplayPort;
 	protected ListPreference mPrefNetplayDelay;
+	protected ListPreference mPrefNetplayIpProto;
 
 	protected ListPreference mPrefLanguage;
 
@@ -164,6 +165,7 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 
 		mPrefNetplayPort = (EditTextPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_NETPLAY_PORT);
 		mPrefNetplayDelay = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_NETPLAY_DELAY);
+		mPrefNetplayIpProto = (ListPreference)getPreferenceScreen().findPreference(PrefsHelper.PREF_NETPLAY_IP_PROTOCOL);
 
 		mPrefLanguage = (ListPreference)getPreferenceScreen().findPreference(com.seleuco.mame4droid.helpers.LocaleHelper.PREF_LANGUAGE);
 	}
@@ -202,6 +204,9 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 
 			mPrefNetplayPort.setSummary(curVal(mPrefNetplayPort.getText()));
 			mPrefNetplayDelay.setSummary(curVal(mPrefNetplayDelay.getEntry()));
+			/* Keeps the IPv6-advantages blurb and appends the current value. */
+			mPrefNetplayIpProto.setSummary(getString(R.string.pref_netplay_ipproto_summary)
+					+ "\n" + curVal(mPrefNetplayIpProto.getEntry()));
 
 		    //mPrefShaderScreen.setSummary("Select it to configure advanced postprocessing effects");
 		    //mPrefShaderScreen.setEnabled(true);
@@ -317,6 +322,11 @@ public class UserPreferences extends PreferenceActivity implements OnSharedPrefe
 			else if(key.equals(PrefsHelper.PREF_NETPLAY_DELAY))
 			{
 				mPrefNetplayDelay.setSummary(curVal(mPrefNetplayDelay.getEntry()));
+			}
+			else if(key.equals(PrefsHelper.PREF_NETPLAY_IP_PROTOCOL))
+			{
+				mPrefNetplayIpProto.setSummary(getString(R.string.pref_netplay_ipproto_summary)
+						+ "\n" + curVal(mPrefNetplayIpProto.getEntry()));
 			}
 			else if(key.equals(com.seleuco.mame4droid.helpers.LocaleHelper.PREF_LANGUAGE))
 			{

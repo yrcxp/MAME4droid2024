@@ -137,6 +137,11 @@ public class NetPlayHelper {
         }
     }
 
+    /* Per-address IPv6 enumeration logging (javac strips the dead branches
+     * when false); the chosen join target still shows in the native log.
+     * KEEP false FOR RELEASE. */
+    private static final boolean V6_DEBUG = false;
+
     private volatile boolean canceled = false;
 
     /* Host waiting-dialog text is composed by two racing workers (netplayInit
@@ -149,6 +154,10 @@ public class NetPlayHelper {
     /* Local address for the Share sheet; null when joining (the client only
      * ever shares its public tuple) or on mobile-only hosts. */
     private volatile String shareLocalAddr = null;
+
+    /* Whether the Share sheet is the host's invite (true) or the client's
+     * public-tuple reply (false): only the host adds local-address lines. */
+    private volatile boolean sharingAsHost = false;
 
     /* Body of the connecting dialog on a LAN join: nothing to share or
      * exchange there, so it explains the situation instead. */
@@ -338,8 +347,22 @@ public class NetPlayHelper {
             for (String loc : getAllLocalIPv4())
                 sb.append(mm.getString(R.string.np_share_same_network, loc + ":" + port)).append('\n');
         String info = Emulator.netplayGetPublicAddr();
-        if (info != null && info.length() > 0)
-            sb.append(mm.getString(R.string.np_share_internet, info.split("\\|")[0]));
+        if (info != null && info.length() > 0) {
+            String[] parts = info.split("\\|");
+            sb.append(mm.getString(R.string.np_share_internet, parts[0])).append('\n');
+            /* Auto host carries a second (v4) public as "alt=": share both
+             * so one invite serves v6, v4 and LAN peers alike. */
+            for (String p : parts)
+                if (p.startsWith("alt="))
+                    sb.append(mm.getString(R.string.np_share_internet, p.substring(4))).append('\n');
+        } else if (sharingAsHost && mm.getPrefsHelper().getNetplayIpProtocol() != 0) {
+            /* STUN failed: a global v6 needs no NAT so it IS the public invite;
+             * a ULA is same-network only.  Label each so the peer knows. */
+            for (String v6a : getAllLocalIPv6())
+                sb.append(mm.getString(isPrivateIPv6(v6a)
+                                ? R.string.np_share_same_network : R.string.np_share_internet,
+                        "[" + v6a + "]:" + port)).append('\n');
+        }
         Intent i = new Intent(Intent.ACTION_SEND);
         i.setType("text/plain");
         i.putExtra(Intent.EXTRA_TEXT, sb.toString().trim());
@@ -387,16 +410,29 @@ public class NetPlayHelper {
                 .equals(priv.substring(0, priv.lastIndexOf('.') + 1));
     }
 
-    /* Pulls a usable ip[:port] out of pasted text: private on our /24 wins
-     * (same-network), then public, else raw.  Synchronous heuristic, also the
-     * fallback when the public-IP probe can't run (see resolveAndJoin). */
+    /* Pulls a usable ip[:port] out of pasted text.  IPv6 pref forces the v6
+     * candidate; Auto prefers a GLOBAL v6 only when using it is free --
+     * mobile-only (no cheaper path exists) or the Wi-Fi itself has v6; with
+     * v6 only via cellular BEHIND Wi-Fi, v4 keeps the session off the meter.
+     * A ULA falls through to the battle-tested v4 order (consumer APs often
+     * drop ULA NDP -- field-tested) as last resort. */
     protected String extractAddress(String s) {
         if (s == null) return "";
         String[] c = addressCandidates(s);
         String priv = c[0], pub = c[1];
+        String v6 = findIPv6Candidate(s);
+        int proto = mm.getPrefsHelper().getNetplayIpProtocol();
+        if (proto == 1 && v6 != null) return v6;
+        if (proto == 2 && v6 != null) {
+            if (priv != null && sameSubnet24(priv)) return priv;
+            if (!isPrivateIPv6(splitHostPort(v6)[0]) && hasIPv6Route()
+                    && (getMainLocalIPv4() == null || hasNonCarrierGlobalV6()))
+                return v6;
+        }
         if (priv != null && sameSubnet24(priv)) return priv;
         if (pub != null) return pub;
         if (priv != null) return priv;
+        if (v6 != null) return v6;
         return s.trim();
     }
 
@@ -404,6 +440,13 @@ public class NetPlayHelper {
      * IPs, a STUN probe compares publics: equal = same site -> LAN, else
      * internet; probe empty (offline / blocked) -> /24 heuristic. */
     private void resolveAndJoin(final String pasted) {
+        /* A v6 target works the same on LAN and internet (no NAT), so the
+         * v4 same-site probe below would add nothing: join it as-is. */
+        String chosen = extractAddress(pasted);
+        if (isIPv6Address(splitHostPort(chosen)[0])) {
+            joinGame(chosen);
+            return;
+        }
         String[] c = addressCandidates(pasted);
         final String priv = c[0], pub = c[1];
         if (priv != null && pub != null) {
@@ -528,15 +571,29 @@ public class NetPlayHelper {
             public void onClick(DialogInterface dialog, int whichButton) {
                 /* Tolerates a pasted Share message (labels included). */
                 String s = extractAddress(input.getText().toString());
-                mm.getPrefsHelper().getSharedPreferences().edit()
-                        .putString(PrefsHelper.PREF_NETPLAY_PUNCHADDR, s).commit();
                 String host = null;
                 int p = gamePort;
                 if (s.length() > 0) {
                     String[] hp = splitHostPort(s);
                     host = hp[0];
                     if (hp[1] != null) { try { p = Integer.parseInt(hp[1]); } catch (Exception e) {} }
+                    /* Punch target must be a literal IP (the network thread's
+                     * hot resolve is numeric-only) of a family this socket can
+                     * send to; reject bad input instead of punching nowhere. */
+                    boolean v4 = isIPv4Address(host), v6 = isIPv6Address(host);
+                    int proto = mm.getPrefsHelper().getNetplayIpProtocol();
+                    if (!v4 && !v6) {
+                        showNetplayError(mm.getString(R.string.np_invalid_ip));
+                        return;
+                    }
+                    if ((proto == 1 && v4) || (proto == 0 && v6)) {
+                        showNetplayError(mm.getString(R.string.np_ip_family_mismatch,
+                                v4 ? "IPv4" : "IPv6", proto == 1 ? "IPv6" : "IPv4"));
+                        return;
+                    }
                 }
+                mm.getPrefsHelper().getSharedPreferences().edit()
+                        .putString(PrefsHelper.PREF_NETPLAY_PUNCHADDR, s).commit();
                 Emulator.netplaySetPunchAddr(host, p);
             }
         });
@@ -544,9 +601,17 @@ public class NetPlayHelper {
         alert.show();
     }
 
-    /* "host[:port]" -> {host, portStr|null}; strings with more than one ':'
-     * fall back to the whole input as host. */
+    /* "host[:port]" -> {host, portStr|null}.  "[v6]:port" unwraps its
+     * brackets; a bare IPv6 (several ':') is taken whole as host. */
     protected static String[] splitHostPort(String s) {
+        if (s.startsWith("[")) {
+            int e = s.indexOf(']');
+            if (e > 1) {
+                String port = (e + 2 < s.length() && s.charAt(e + 1) == ':')
+                        ? s.substring(e + 2) : null;
+                return new String[]{s.substring(1, e), port};
+            }
+        }
         int i = s.lastIndexOf(':');
         if (i > 0 && i < s.length() - 1 && s.indexOf(':') == i)
             return new String[]{s.substring(0, i), s.substring(i + 1)};
@@ -568,6 +633,181 @@ public class NetPlayHelper {
         } catch (Exception e) {
         }
         return false;
+    }
+
+    /* Plausible DNS hostname (dyndns etc.): letters/digits/dots/hyphens
+     * with at least one letter, so garbage and malformed IPs don't reach
+     * the socket as a bogus resolve. */
+    protected static boolean looksLikeHostname(String h) {
+        return h != null && h.matches("[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?")
+                && h.matches(".*[A-Za-z].*");
+    }
+
+    /* Numeric IPv6 literal (no brackets, no scope id). */
+    protected static boolean isIPv6Address(String ip) {
+        if (ip == null || ip.indexOf(':') < 0) return false;
+        try {
+            return android.net.InetAddresses.isNumericAddress(ip);
+        } catch (Throwable t) {
+            return ip.indexOf(':') != ip.lastIndexOf(':');
+        }
+    }
+
+    /* Loopback/link-local/ULA: only reachable inside the site, so they
+     * never flip the join flow into internet mode (isPrivateIPv4's twin). */
+    protected static boolean isPrivateIPv6(String ip) {
+        String t = ip.toLowerCase(Locale.US);
+        return t.equals("::1") || t.startsWith("fe8") || t.startsWith("fe9")
+                || t.startsWith("fea") || t.startsWith("feb")
+                || t.startsWith("fc") || t.startsWith("fd");
+    }
+
+    /* First IPv6 in pasted text, in join form: "[v6]:port" when bracketed
+     * with a port, bare "v6" otherwise.  Null when the text has none. */
+    protected static String findIPv6Candidate(String s) {
+        if (s == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\\[([0-9A-Fa-f:.]+)\\](:\\d{1,5})?").matcher(s);
+        while (m.find())
+            if (isIPv6Address(m.group(1))) return m.group();
+        for (String tok : s.split("[^0-9A-Fa-f:.]+")) {
+            int c = tok.indexOf(':');
+            if (c >= 0 && tok.indexOf(':', c + 1) >= 0 && isIPv6Address(tok))
+                return tok;
+        }
+        return null;
+    }
+
+    /* Usable IPv6 addresses, globals first then ULA, scope stripped.  A global
+     * (2000::/3) reaches the internet with no NAT; a ULA (fc/fd) reaches only
+     * same-LAN peers -- still valid when the ISP gives no v6 prefix.  Only
+     * LAN-like interfaces count (allowlist below); link-local/loopback are
+     * dropped.  NetworkInterface needs no ACCESS_NETWORK_STATE permission. */
+    private java.util.List<String> getAllLocalIPv6() {
+        java.util.List<String> globals = new java.util.ArrayList<String>();
+        java.util.List<String> ulas = new java.util.ArrayList<String>();
+        try {
+            if (V6_DEBUG) Log.d("MAME4droid_Netplay", "v6enum: scanning interfaces...");
+            for (NetworkInterface intf : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                String name = intf.getName().toLowerCase();
+                /* ALLOWLIST (fails closed): only interfaces a peer could really
+                 * reach us on -- Wi-Fi/ethernet, hotspot/tether, VPN (Tailscale).
+                 * Everything unknown (rmnet/ccmni/seth cellular, ipsec VoWiFi,
+                 * clat, p2p, dummy, vendor exotics) never makes an invite. */
+                boolean lanLike = name.startsWith("wlan") || name.startsWith("eth")
+                        || name.startsWith("ap") || name.startsWith("softap")
+                        || name.startsWith("swlan") || name.startsWith("usb")
+                        || name.startsWith("rndis") || name.startsWith("ncm")
+                        || name.startsWith("bt-pan") || name.startsWith("tun")
+                        || name.startsWith("utun") || name.startsWith("tap")
+                        || name.startsWith("wg");
+                boolean carrier = !lanLike;
+                for (InetAddress addr : Collections.list(intf.getInetAddresses())) {
+                    if (!(addr instanceof java.net.Inet6Address)) continue;
+                    String s = addr.getHostAddress();
+                    int pc = s.indexOf('%');
+                    if (pc > 0) s = s.substring(0, pc);
+                    byte[] b = addr.getAddress();
+                    boolean global = (b[0] & 0xE0) == 0x20;   /* 2000::/3 */
+                    boolean ula    = (b[0] & 0xFE) == 0xFC;   /* fc00::/7 */
+                    if (V6_DEBUG) {
+                        String kind = addr.isLoopbackAddress() ? "loopback"
+                                : addr.isLinkLocalAddress() ? "link-local"
+                                : global ? "global" : ula ? "ULA" : "other";
+                        Log.d("MAME4droid_Netplay", "v6enum: " + name + (carrier ? " (excluded)" : "")
+                                + " " + s + " [" + kind + "]");
+                    }
+                    if (carrier || addr.isLoopbackAddress() || addr.isLinkLocalAddress()
+                            || (!global && !ula)) continue;
+                    java.util.List<String> tgt = global ? globals : ulas;
+                    if (!tgt.contains(s)) tgt.add(s);
+                }
+            }
+            if (V6_DEBUG) Log.d("MAME4droid_Netplay", "v6enum: result globals=" + globals.size() + " ulas=" + ulas.size());
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        /* One address per kind is enough for an invite (SLAAC gives several);
+         * globals (internet-capable) first, then the LAN-only ULA. */
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        if (!globals.isEmpty()) out.add(pickStableV6(globals));
+        if (!ulas.isEmpty()) out.add(pickStableV6(ulas));
+        return out;
+    }
+
+    /* Prefer the stable EUI-64 address ("ff:fe" infix) over rotating
+     * privacy ones: it survives longer, so the invite stays valid. */
+    private static String pickStableV6(java.util.List<String> l) {
+        for (String a : l)
+            if (a.contains("ff:fe")) return a;
+        return l.get(0);
+    }
+
+    /* A global v6 on a NON-carrier interface (Wi-Fi/ethernet): v6 there is
+     * as free as v4.  False when the only v6 is cellular -- usable, but it
+     * bills mobile data even while Wi-Fi is connected (Pixel-style OSes
+     * keep the cell v6 route alive behind Wi-Fi). */
+    private boolean hasNonCarrierGlobalV6() {
+        for (String a : getAllLocalIPv6())
+            if (!isPrivateIPv6(a)) return true;
+        return false;
+    }
+
+    /* Can the ACTIVE network reach global v6?  Java twin of the native
+     * skt_have_ipv6_route(): a UDP connect() sends nothing but asks the
+     * kernel routing table, so it is interface-agnostic (rmnet included).
+     * Run off-thread (StrictMode counts connect() as network I/O). */
+    private boolean hasIPv6Route() {
+        final boolean[] ok = {false};
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                java.net.DatagramSocket ds = null;
+                try {
+                    ds = new java.net.DatagramSocket();
+                    ds.connect(new java.net.InetSocketAddress(
+                            InetAddress.getByName("2001:4860:4860::8888"), 53));
+                    ok[0] = true;
+                } catch (Exception e) {
+                } finally {
+                    if (ds != null) ds.close();
+                }
+            }
+        });
+        t.start();
+        try { t.join(500); } catch (InterruptedException e) {}
+        return ok[0];
+    }
+
+    /* Any global/ULA v6 on ANY interface, mobile (rmnet) INCLUDED -- decides
+     * whether strict-v6 play is possible at all.  Unlike getAllLocalIPv6, which
+     * skips carrier interfaces (their v6 makes dead LAN invites), STUN can still
+     * publish an rmnet global, so the guard must not refuse it.  The ipsec
+     * (VoWiFi/IMS) tunnel is app-unusable: never counts. */
+    private boolean hasUsableIPv6() {
+        try {
+            for (NetworkInterface intf : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (intf.getName().toLowerCase().contains("ipsec")) continue;
+                for (InetAddress addr : Collections.list(intf.getInetAddresses())) {
+                    if (!(addr instanceof java.net.Inet6Address)
+                            || addr.isLoopbackAddress() || addr.isLinkLocalAddress()) continue;
+                    byte[] b = addr.getAddress();
+                    if ((b[0] & 0xE0) == 0x20 || (b[0] & 0xFE) == 0xFC) return true;
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return false;
+    }
+
+    /* An error the user MUST see while the NetPlay menu is open: a WarnWidget
+     * draws on the activity frame, BEHIND dialogs, so it would be hidden.  An
+     * AlertDialog has its own window and sits on top.  UI thread only. */
+    private void showNetplayError(String msg) {
+        new AlertDialog.Builder(mm)
+                .setMessage(msg)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     /* UPnP SOAP calls are network I/O: never on the UI thread. */
@@ -615,9 +855,36 @@ public class NetPlayHelper {
             String info = Emulator.netplayGetPublicAddr();
             if (info != null && info.length() > 0) {
                 String[] parts = info.split("\\|");
-                sb.append('\n').append(mm.getString(R.string.np_public_ip, parts[0]));
-                if (info.contains("sym=1"))
+                /* A v6 tuple gets its own label: "public IP" would clash with
+                 * the v4 private/public wording.  Mobile-only -> "internet";
+                 * Wi-Fi with own v6 -> "same network or internet"; Wi-Fi but
+                 * v6 via cellular -> flag the mobile-data cost explicitly. */
+                sb.append('\n').append(mm.getString(!parts[0].startsWith("[")
+                        ? R.string.np_public_ip
+                        : getMainLocalIPv4() == null ? R.string.np_ipv6_inet
+                        : hasNonCarrierGlobalV6() ? R.string.np_ipv6_addr
+                        : R.string.np_ipv6_mobile, parts[0]));
+                for (String p : parts)
+                    if (p.startsWith("alt="))
+                        sb.append('\n').append(mm.getString(R.string.np_public_ip, p.substring(4)));
+                /* sym=1 comes from the v4 STUN leg: only warn when v4 IS the
+                 * primary path.  With a v6 primary (Auto) the main route has
+                 * no NAT, so the warning would just be misleading noise. */
+                boolean v4primary = !parts[0].startsWith("[");
+                boolean mobileOnly = getMainLocalIPv4() == null;
+                int ipp = mm.getPrefsHelper().getNetplayIpProtocol();
+                if (info.contains("sym=1") && v4primary) {
                     sb.append('\n').append(mm.getString(R.string.np_symmetric_nat));
+                    /* On Wi-Fi v6 is uncertain -> suggest Auto (safe fallback). */
+                    if (ipp == 0 && !mobileOnly)
+                        sb.append('\n').append(mm.getString(R.string.np_try_auto));
+                }
+                /* Mobile CGNAT kills v4 punching far more often than the
+                 * 2-server sym test can prove (covert per-destination mapping,
+                 * field-tested) and carriers nearly always have v6: on
+                 * mobile-only IPv4 the tip is warranted unconditionally. */
+                if (ipp == 0 && v4primary && mobileOnly)
+                    sb.append('\n').append(mm.getString(R.string.np_try_ipv6));
             } else if (warnUnavailable) {
                 sb.append('\n').append(mm.getString(R.string.np_public_unavailable));
             }
@@ -678,7 +945,7 @@ public class NetPlayHelper {
                     final String ip = extractAddress(raw);
 
                     if (ip.length() == 0) {
-                        new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_invalid_ip), 3, Color.RED, false);
+                        showNetplayError(mm.getString(R.string.np_invalid_ip));
                         return;
                     }
 
@@ -729,7 +996,7 @@ public class NetPlayHelper {
                 netplayDlg.dismiss();
                 Emulator.resume();
             } else {
-                new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_resync_unavailable), 3, Color.YELLOW, false);
+                showNetplayError(mm.getString(R.string.np_resync_unavailable));
                 prepareButtons();
             }
         }
@@ -744,10 +1011,19 @@ public class NetPlayHelper {
         } catch (Exception e) {
         }
         if (!(port >= 1024 && port <= 32768 * 2)) {
-            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_invalid_port), 3, Color.RED, false);
+            showNetplayError(mm.getString(R.string.np_invalid_port));
             return;
         }
         final int gamePort = port;
+        final int ipProto = mm.getPrefsHelper().getNetplayIpProtocol();
+
+        /* Strict IPv6 but no usable v6 anywhere (incl. mobile): nothing to
+         * share and no peer could reach us.  Refuse before opening any dialog
+         * (AlertDialog sits above the NetPlay menu), pointing at IPv4/Auto. */
+        if (ipProto == 1 && !hasUsableIPv6()) {
+            showNetplayError(mm.getString(R.string.np_ipv6_none));
+            return;
+        }
 
         Emulator.netplaySetDesyncDetectorEnabled(mm.getPrefsHelper().isNetplayDesyncDetectorEnabled() ? 1 : 0);
 
@@ -800,33 +1076,43 @@ public class NetPlayHelper {
                 }
             });
         }
-        upnpFallbackHint = "\n" + mm.getString(R.string.np_upnp_fallback_hint, gamePort);
+        upnpFallbackHint = ""; /* set in the worker once the network shape is known */
 
         Thread t = new Thread(new Runnable() {
             public void run() {
                 hostBaseMsg = null;
                 upnpLine = null;
-                if (mm.getPrefsHelper().isNetplayUpnpEnabled()) {
-                    /* Runs in parallel with init/STUN: asks the router to
-                     * forward the game port (automates the port-forward
-                     * fallback, rescues symmetric-NAT/CGNAT peers). */
-                    new Thread(new Runnable() {
-                        public void run() {
-                            if (UpnpHelper.addPortMapping(gamePort)) {
-                                if (canceled) {
-                                    UpnpHelper.deletePortMapping();
-                                    return;
-                                }
-                                upnpLine = "\n" + mm.getString(R.string.np_upnp_mapped);
-                                postHostMessage();
-                            }
-                        }
-                    }).start();
-                }
 
                 final String ip = getMainLocalIPv4();
-                shareLocalAddr = ip;
-                if (ip == null && !hasAnyIPv4()) {
+                /* Strict v6 socket never receives v4: sharing/showing v4
+                 * LAN addresses there would hand out dead invites. */
+                shareLocalAddr = (ipProto == 1) ? null : ip;
+                sharingAsHost = true;
+
+                /* UPnP and the port-forward hint only apply where a home
+                 * router exists (LAN v4 present) and the socket receives v4
+                 * (not strict v6): mobile data has no router to map. */
+                if (ip != null && ipProto != 1) {
+                    upnpFallbackHint = "\n" + mm.getString(R.string.np_upnp_fallback_hint, gamePort);
+                    if (mm.getPrefsHelper().isNetplayUpnpEnabled()) {
+                        /* Runs in parallel with init/STUN: asks the router to
+                         * forward the game port (automates the port-forward
+                         * fallback, rescues symmetric-NAT/CGNAT peers). */
+                        new Thread(new Runnable() {
+                            public void run() {
+                                if (UpnpHelper.addPortMapping(gamePort)) {
+                                    if (canceled) {
+                                        UpnpHelper.deletePortMapping();
+                                        return;
+                                    }
+                                    upnpLine = "\n" + mm.getString(R.string.np_upnp_mapped);
+                                    postHostMessage();
+                                }
+                            }
+                        }).start();
+                    }
+                }
+                if (ip == null && !hasAnyIPv4() && !hasUsableIPv6()) {
                     try {
                         Thread.sleep(2000);
                     } catch (InterruptedException e) {
@@ -835,7 +1121,7 @@ public class NetPlayHelper {
                     canceled = true;
                     mm.runOnUiThread(new Runnable() {
                         public void run() {
-                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_no_network), 4, Color.RED, false);
+                            showNetplayError(mm.getString(R.string.np_no_network));
                         }
                     });
                 }
@@ -849,12 +1135,13 @@ public class NetPlayHelper {
                     Emulator.netplaySetPunchAddr(null, 0);
                     Emulator.netplaySetLocalPort(gamePort);
                     Emulator.netplaySetInternetMode(1);
+                    Emulator.netplaySetIpFamily(ipProto);
 
                     if (Emulator.netplayInit(null, gamePort, 0) == -1) {
                         canceled = true;
                         mm.runOnUiThread(new Runnable() {
                             public void run() {
-                                new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_error_init), 3, Color.RED, false);
+                                showNetplayError(mm.getString(R.string.np_error_init));
                             }
                         });
                     } else {
@@ -863,9 +1150,38 @@ public class NetPlayHelper {
                 }
 
                 if (!canceled) {
-                    if (Emulator.netplayGetPublicAddr().length() == 0) {
-                        /* No public IP -> internet play isn't on the table:
-                         * the Peer IP button and its hint would only mislead. */
+                    /* STUN can fail while local v6 addresses still exist: a
+                     * global is public (no NAT, plays over the internet); a ULA
+                     * plays on the same LAN only.  Show each with the right
+                     * label instead of a bare "unavailable". */
+                    boolean pubEmpty = Emulator.netplayGetPublicAddr().length() == 0;
+                    java.util.List<String> v6glob = new java.util.ArrayList<String>();
+                    java.util.List<String> v6lan = new java.util.ArrayList<String>();
+                    if (pubEmpty && ipProto != 0)
+                        for (String a : getAllLocalIPv6())
+                            (isPrivateIPv6(a) ? v6lan : v6glob).add(a);
+                    boolean noV6shown = v6glob.isEmpty() && v6lan.isEmpty();
+                    /* Strict v6 that yielded nothing usable -- STUN got no public
+                     * v6 AND there is no shareable local v6 (e.g. Wi-Fi with only
+                     * link-local while the sole global sits on mobile and STUN
+                     * routed out via Wi-Fi): refuse with the switch-to-IPv4/Auto
+                     * message instead of a dead "waiting" dialog.  The STUN
+                     * result is the real signal (the pre-init guard only knows
+                     * an address exists, not whether it is reachable). */
+                    if (ipProto == 1 && pubEmpty && noV6shown) {
+                        canceled = true;
+                        mm.runOnUiThread(new Runnable() {
+                            public void run() {
+                                showNetplayError(mm.getString(R.string.np_ipv6_none));
+                            }
+                        });
+                    }
+
+                    if (!canceled) {
+                    boolean noInternet = pubEmpty && v6glob.isEmpty();
+                    if (noInternet) {
+                        /* No internet-reachable address: the Peer IP button and
+                         * its UPnP hint would only mislead (LAN play still ok). */
                         upnpFallbackHint = "";
                         mm.runOnUiThread(new Runnable() {
                             public void run() {
@@ -874,10 +1190,26 @@ public class NetPlayHelper {
                         });
                     }
 
-                    hostBaseMsg = (ip != null
-                                    ? mm.getString(R.string.np_local_ip, ip)
-                                    : mm.getString(R.string.np_mobile_only))
-                            + publicInfoLines(true, ip == null)
+                    /* Strict v6 skips the v4 local/mobile-only line: the
+                     * session lives on its own v6 addresses alone. */
+                    String head = (ipProto == 1) ? ""
+                            : (ip != null ? mm.getString(R.string.np_local_ip, ip)
+                                          : mm.getString(R.string.np_mobile_only));
+                    String pubLines = publicInfoLines(true,
+                            (ip == null || ipProto == 1) && noV6shown);
+                    for (String a : v6glob)
+                        pubLines += "\n" + mm.getString(ip == null
+                                ? R.string.np_ipv6_inet : R.string.np_ipv6_addr,
+                                "[" + a + "]:" + gamePort);
+                    if (!v6lan.isEmpty()) {
+                        /* Spell out that internet play is off but LAN works. */
+                        pubLines += "\n" + mm.getString(R.string.np_ipv6_no_public);
+                        for (String a : v6lan)
+                            pubLines += "\n" + mm.getString(R.string.np_ipv6_lan, "[" + a + "]:" + gamePort);
+                    }
+                    if (head.length() == 0 && pubLines.startsWith("\n"))
+                        pubLines = pubLines.substring(1);
+                    hostBaseMsg = head + pubLines
                             + "\n" + mm.getString(R.string.np_tap_share);
                     postHostMessage();
 
@@ -891,6 +1223,7 @@ public class NetPlayHelper {
                             if (peerBtn != null) peerBtn.setEnabled(true);
                         }
                     });
+                    }
                 }
 
                 while (Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0 && !canceled) {
@@ -936,7 +1269,15 @@ public class NetPlayHelper {
         } catch (Exception e) {
         }
         if (!(port >= 1024 && port <= 32768 * 2)) {
-            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_invalid_port), 3, Color.RED, false);
+            showNetplayError(mm.getString(R.string.np_invalid_port));
+            return;
+        }
+
+        /* Strict IPv6 but no usable v6 anywhere (incl. mobile): the join could
+         * only time out on sendto.  Refuse up front (mirrors the host guard)
+         * and point at the IPv4/Auto setting instead of a dead dialog. */
+        if (mm.getPrefsHelper().getNetplayIpProtocol() == 1 && !hasUsableIPv6()) {
+            showNetplayError(mm.getString(R.string.np_ipv6_none));
             return;
         }
 
@@ -948,7 +1289,24 @@ public class NetPlayHelper {
         int dp = port;
         if (hp[1] != null) { try { dp = Integer.parseInt(hp[1]); } catch (Exception e) {} }
         final int destPort = dp;
-        final boolean inetMode = !isPrivateIPv4(destHost);
+        final boolean destV4 = isIPv4Address(destHost);
+        final boolean destV6 = isIPv6Address(destHost);
+        final int ipProto = mm.getPrefsHelper().getNetplayIpProtocol();
+
+        /* Validate BEFORE any socket: garbage or a family the strict socket
+         * can't reach would only surface as a cryptic init error.  Hostnames
+         * pass (resolved on the worker); Auto accepts both families. */
+        if (destHost.length() == 0 || (!destV4 && !destV6 && !looksLikeHostname(destHost))) {
+            showNetplayError(mm.getString(R.string.np_invalid_ip));
+            return;
+        }
+        if ((ipProto == 1 && destV4) || (ipProto == 0 && destV6)) {
+            showNetplayError(mm.getString(R.string.np_ip_family_mismatch,
+                    destV4 ? "IPv4" : "IPv6", ipProto == 1 ? "IPv6" : "IPv4"));
+            return;
+        }
+
+        final boolean inetMode = destV6 ? !isPrivateIPv6(destHost) : !isPrivateIPv4(destHost);
         final String addrShown = addr;
 
         Emulator.netplaySetDesyncDetectorEnabled(mm.getPrefsHelper().isNetplayDesyncDetectorEnabled() ? 1 : 0);
@@ -960,6 +1318,7 @@ public class NetPlayHelper {
 
         canceled = false;
         shareLocalAddr = null; /* the client only shares its public tuple */
+        sharingAsHost = false;
         AlertDialog.Builder joinBld = new AlertDialog.Builder(mm);
         joinBld.setTitle(mm.getString(R.string.np_press_back_cancel));
         joinBld.setView(buildProgressView(mm.getString(R.string.np_connecting_to, addr),
@@ -992,12 +1351,13 @@ public class NetPlayHelper {
                 Emulator.netplaySetPunchAddr(null, 0);
                 Emulator.netplaySetLocalPort(localPort);
                 Emulator.netplaySetInternetMode(inetMode ? 1 : 0);
+                Emulator.netplaySetIpFamily(ipProto);
 
                 if (Emulator.netplayInit(destHost, destPort, 0) == -1) {
                     canceled = true;
                     mm.runOnUiThread(new Runnable() {
                         public void run() {
-                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_error_init), 3, Color.RED, false);
+                            showNetplayError(mm.getString(R.string.np_error_init));
                         }
                     });
                 } else {
@@ -1011,9 +1371,14 @@ public class NetPlayHelper {
                     String info = Emulator.netplayGetPublicAddr();
                     if (info != null && info.length() > 0) {
                         String myPubIp = info.split("\\|")[0];
-                        int c = myPubIp.indexOf(':');
-                        if (c > 0) myPubIp = myPubIp.substring(0, c);
-                        if (myPubIp.equals(destHost))
+                        if (myPubIp.startsWith("[")) { /* "[v6]:port" form */
+                            int e = myPubIp.indexOf(']');
+                            myPubIp = e > 1 ? myPubIp.substring(1, e) : myPubIp;
+                        } else {
+                            int c = myPubIp.indexOf(':');
+                            if (c > 0) myPubIp = myPubIp.substring(0, c);
+                        }
+                        if (myPubIp.equalsIgnoreCase(destHost))
                             sameNet = "\n" + mm.getString(R.string.np_same_public_ip);
                     }
                     final String msg = inetMode

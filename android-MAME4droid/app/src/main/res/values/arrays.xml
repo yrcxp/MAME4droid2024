@@ -456,6 +456,19 @@
 		<item>6</item>
 	</string-array>
 
+	<!-- Single definition on purpose: IPv4/IPv6 are universal, only the
+	     Auto entry localizes (via its @string reference). -->
+	<string-array name="pref_netplay_ip_protocol_options">
+		<item>@string/np_ipproto_v4</item>
+		<item>@string/np_ipproto_v6</item>
+		<item>@string/np_ipproto_auto</item>
+	</string-array>
+	<string-array name="pref_netplay_ip_protocol_values">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+	</string-array>
+
 	<!-- Language names are endonyms on purpose: every user must be able to
 	     find their own language; only the "system default" entry localizes. -->
 	<string-array name="pref_language_options">

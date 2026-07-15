@@ -64,8 +64,9 @@ static char     s_punch_host[128] = "";
 static uint16_t s_punch_port = 0;
 static int      s_punch_dirty = 0;
 static int      s_internet_mode = 0;
+static int      s_ip_mode = SKT_IPPROTO_V4; /* protocol family for the next init */
 static uint16_t s_local_bind_port = 0;    /* client bind; 0 = destination port */
-static char     s_public_addr[96] = "";   /* "ip:port|pp=X|sym=Y", "" = none */
+static char     s_public_addr[160] = "";  /* "ip:port|pp=X|sym=Y[|alt=ip4:port]" ("[ip]:port" on v6) */
 static char     s_public_ip[64]   = "";
 static uint16_t s_public_port = 0;
 static int      s_stun_ok = 0, s_stun_pp = 0, s_stun_sym = 0;
@@ -84,6 +85,7 @@ static size_t netplay_msg_wire_size(uint32_t msg_type);
 static void skt_run_stun(skt_netplay_t *impl, uint16_t local_port);
 static void skt_resolve_punch(skt_netplay_t *impl, const char *host, uint16_t port, int numeric_only);
 static void skt_format_diagnostics(uint16_t local_port, int inet_mode, const char *punch_host, uint16_t punch_port);
+static void skt_addr_to_str(const struct sockaddr *sa, char *buf, size_t len);
 
 /* ============================================================
  * SECTION 1 -- Session entry point (the trunk)
@@ -104,6 +106,10 @@ int skt_netplay_init(netplay_t *handle,const char *server, uint16_t port, void (
         usleep(1000 * 1000);//Thread?
         close(impl->fd );//anyway
     }
+    /* Client sessions keep impl->addr alive for sendto: release the previous
+     * one here (old thread is gone by now) before memset loses the pointer. */
+    if (impl->addr)
+        freeaddrinfo(impl->addr);
 
     skt_init_handle_impl(impl);
 
@@ -139,9 +145,11 @@ int skt_netplay_init(netplay_t *handle,const char *server, uint16_t port, void (
 
         uint16_t local_port = port;
         {
-            struct sockaddr_in sn; socklen_t sl = sizeof(sn);
+            struct sockaddr_storage sn; socklen_t sl = sizeof(sn);
             if (getsockname(impl->fd, (struct sockaddr*)&sn, &sl) == 0)
-                local_port = ntohs(sn.sin_port);
+                local_port = ntohs(sn.ss_family == AF_INET6
+                        ? ((struct sockaddr_in6 *)&sn)->sin6_port
+                        : ((struct sockaddr_in *)&sn)->sin_port);
         }
 
         if (inet_mode)
@@ -399,9 +407,9 @@ static int skt_read_pkt_data(netplay_t *handle,netplay_msg_t *msg)
            impl->client_addr_len = addrlen;
            impl->has_client_addr = 1;
            {
-               struct sockaddr_in *sin = (struct sockaddr_in *)&impl->client_addr;
-               NLOG("peer latched from %s:%d (msg_type=%u)",
-                    inet_ntoa(sin->sin_addr), ntohs(sin->sin_port), mt);
+               char as[INET6_ADDRSTRLEN + 16];
+               skt_addr_to_str((struct sockaddr *)&impl->client_addr, as, sizeof(as));
+               NLOG("peer latched from %s (msg_type=%u)", as, mt);
            }
        }
     }
@@ -435,10 +443,11 @@ static int skt_send_pkt_data(netplay_t *handle,netplay_msg_t *msg)
     {
         socklen_t addr_len = impl->addr ? impl->addr->ai_addrlen : impl->client_addr_len;
 
-        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
-        char *ip = inet_ntoa(sin->sin_addr);
-        int dest_port = ntohs(sin->sin_port);
-        NLOG_VERBOSE("sendto about to send to IP: %s, Port: %d", ip, dest_port);
+        if (0) { /* dead like NLOG_VERBOSE: no per-packet formatting cost */
+            char as[INET6_ADDRSTRLEN + 16];
+            skt_addr_to_str(addr, as, sizeof(as));
+            NLOG_VERBOSE("sendto about to send to %s", as);
+        }
 
         size_t wire_size = netplay_msg_wire_size(ntohl(msg->msg_type));
         int l = sendto(impl->fd, msg, wire_size, 0, addr, addr_len);
@@ -492,24 +501,47 @@ static int skt_init_udp_socket(netplay_t *handle, const char *server, uint16_t p
 
     skt_netplay_t *impl = (skt_netplay_t *)handle->impl_data;
 
-    hints.ai_family = AF_INET;
+    int ipm;
+    pthread_mutex_lock(&s_inet_mutex);
+    ipm = s_ip_mode;
+    pthread_mutex_unlock(&s_inet_mutex);
+    impl->ip_mode = ipm;
+
+    /* V4/V6 force the family; an AUTO client resolves AF_UNSPEC and just
+     * follows the destination's family (dual-stack only matters for the
+     * host).  Never AI_V4MAPPED: bionic rejects it (EAI_BADFLAGS). */
+    if (ipm == SKT_IPPROTO_V4)      hints.ai_family = AF_INET;
+    else if (ipm == SKT_IPPROTO_V6) hints.ai_family = AF_INET6;
+    else                            hints.ai_family = server ? AF_UNSPEC : AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
     if (!server)
         hints.ai_flags = AI_PASSIVE;
 
     char port_buf[16];
     snprintf(port_buf, sizeof(port_buf), "%hu", (unsigned short)port);
-    if (getaddrinfo(server, port_buf, &hints, &impl->addr) < 0)
+    int gr = getaddrinfo(server, port_buf, &hints, &impl->addr);
+    if (gr != 0 || !impl->addr) {
+        NLOG("getaddrinfo(%s) failed: %s", server ? server : "(passive)",
+             gr ? gai_strerror(gr) : "no results");
         return 0;
-
-    if (!impl->addr)
-        return 0;
+    }
 
     impl->fd = socket(impl->addr->ai_family, impl->addr->ai_socktype, impl->addr->ai_protocol);
     if (impl->fd < 0)
     {
         NLOG("socket() failed: %s", strerror(errno));
+        freeaddrinfo(impl->addr);
+        impl->addr = NULL;
         return 0;
+    }
+    impl->sock_family = impl->addr->ai_family;
+
+    if (impl->sock_family == AF_INET6)
+    {
+        /* AUTO = dual-stack (v4 peers reach us as mapped ::ffff:a.b.c.d,
+         * so LAN/UPnP v4 joins keep working); V6 = strict, v6-only.        */
+        int v6only = (ipm == SKT_IPPROTO_V6) ? 1 : 0;
+        setsockopt(impl->fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only));
     }
 
     /* Enlarge kernel socket buffers to absorb burst packet loss on
@@ -539,10 +571,9 @@ static int skt_init_udp_socket(netplay_t *handle, const char *server, uint16_t p
             close(impl->fd);
             impl->fd = -1;
         } else {
-            struct sockaddr_in *sin = (struct sockaddr_in *)impl->addr->ai_addr;
-            char *ip = inet_ntoa(sin->sin_addr);
-            int bound_port = ntohs(sin->sin_port);
-            NLOG("bind() succeeded on fd %d. Bound to IP: %s, Port: %d", impl->fd, ip, bound_port);
+            char as[INET6_ADDRSTRLEN + 16];
+            skt_addr_to_str(impl->addr->ai_addr, as, sizeof(as));
+            NLOG("bind() succeeded on fd %d. Bound to %s", impl->fd, as);
         }
 
         freeaddrinfo(impl->addr);
@@ -562,12 +593,23 @@ static int skt_init_udp_socket(netplay_t *handle, const char *server, uint16_t p
         pthread_mutex_unlock(&s_inet_mutex);
         int yes = 1;
         setsockopt(impl->fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-        struct sockaddr_in local;
+        struct sockaddr_storage local;
+        socklen_t local_len;
         memset(&local, 0, sizeof(local));
-        local.sin_family = AF_INET;
-        local.sin_addr.s_addr = htonl(INADDR_ANY);
-        local.sin_port = htons(lp);
-        if (bind(impl->fd, (struct sockaddr*)&local, sizeof(local)) < 0)
+        if (impl->sock_family == AF_INET6) {
+            struct sockaddr_in6 *l6 = (struct sockaddr_in6 *)&local;
+            l6->sin6_family = AF_INET6;
+            l6->sin6_addr = in6addr_any;
+            l6->sin6_port = htons(lp);
+            local_len = sizeof(struct sockaddr_in6);
+        } else {
+            struct sockaddr_in *l4 = (struct sockaddr_in *)&local;
+            l4->sin_family = AF_INET;
+            l4->sin_addr.s_addr = htonl(INADDR_ANY);
+            l4->sin_port = htons(lp);
+            local_len = sizeof(struct sockaddr_in);
+        }
+        if (bind(impl->fd, (struct sockaddr*)&local, local_len) < 0)
             NLOG("client bind(%u) failed (%s), keeping ephemeral port", (unsigned)lp, strerror(errno));
         else
             NLOG("client bound to local port %u", (unsigned)lp);
@@ -580,6 +622,11 @@ static int skt_init_udp_socket(netplay_t *handle, const char *server, uint16_t p
  * SECTION 5 -- Internet play: STUN, punch target, diagnostics
  * All of it runs on the GAME socket; no connect() is ever used on it (it
  * would filter out the peer's datagrams and break latch and punch).
+ *
+ * IP protocol (Java pref, skt_netplay_set_ip_family): V4 = classic AF_INET;
+ * V6 = strict v6-only socket; AUTO = dual-stack AF_INET6 that reaches v4
+ * peers as mapped ::ffff addrs -- an AUTO host STUNs BOTH families and
+ * ships the extra v4 public as "|alt=" so one invite serves everyone.
  * ============================================================ */
 
 static const struct { const char *host; const char *port; } s_stun_servers[] = {
@@ -589,19 +636,59 @@ static const struct { const char *host; const char *port; } s_stun_servers[] = {
 };
 #define STUN_SERVER_COUNT 3
 
+/* Rebuild a v4 sockaddr as its v4-mapped-v6 form (::ffff:a.b.c.d), the only
+ * shape a dual-stack v6 socket can sendto() a v4 destination with. */
+static void skt_map_v4_to_v6(const struct sockaddr_in *s4, struct sockaddr_in6 *s6)
+{
+    memset(s6, 0, sizeof(*s6));
+    s6->sin6_family = AF_INET6;
+    s6->sin6_port = s4->sin_port;
+    s6->sin6_addr.s6_addr[10] = 0xff;
+    s6->sin6_addr.s6_addr[11] = 0xff;
+    memcpy(&s6->sin6_addr.s6_addr[12], &s4->sin_addr, 4);
+}
+
+/* Cheap "do we have an IPv6 route" test: connect() on a UDP socket sends no
+ * packet, it only asks the kernel for a route.  Keeps AUTO from burning
+ * ~2s of STUN timeouts on v6-less devices. */
+static int skt_have_ipv6_route(void)
+{
+    int fd = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (fd < 0) return 0;
+    struct sockaddr_in6 d;
+    memset(&d, 0, sizeof(d));
+    d.sin6_family = AF_INET6;
+    d.sin6_port = htons(53);
+    inet_pton(AF_INET6, "2001:4860:4860::8888", &d.sin6_addr);
+    int ok = connect(fd, (struct sockaddr*)&d, sizeof(d)) == 0;
+    close(fd);
+    return ok;
+}
+
 /* One RFC 5389 Binding round-trip: 20-byte request, parse XOR-MAPPED-ADDRESS
- * (fallback MAPPED-ADDRESS) from the response.  Caller sets SO_RCVTIMEO. */
-static int skt_stun_query(int fd, const char *host, const char *port,
+ * (fallback MAPPED-ADDRESS) from the response.  Caller sets SO_RCVTIMEO.
+ * family picks which public tuple we learn (v4 or v6); sock_is_v6 routes a
+ * v4 query through the dual-stack socket as a mapped destination. */
+static int skt_stun_query(int fd, int family, int sock_is_v6, const char *host, const char *port,
                           char *out_ip, size_t ip_len, uint16_t *out_port)
 {
     struct addrinfo hints, *ai = NULL;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
+    hints.ai_family = family;
     hints.ai_socktype = SOCK_DGRAM;
     if (getaddrinfo(host, port, &hints, &ai) != 0 || !ai) {
         if (ai) freeaddrinfo(ai);
-        NLOG("STUN: resolve failed for %s", host);
+        NLOG("STUN: resolve failed for %s (family %d)", host, family);
         return 0;
+    }
+
+    const struct sockaddr *dst = ai->ai_addr;
+    socklen_t dst_len = ai->ai_addrlen;
+    struct sockaddr_in6 mapped;
+    if (family == AF_INET && sock_is_v6) {
+        skt_map_v4_to_v6((const struct sockaddr_in *)ai->ai_addr, &mapped);
+        dst = (const struct sockaddr *)&mapped;
+        dst_len = sizeof(mapped);
     }
 
     uint8_t req[20];
@@ -620,15 +707,43 @@ static int skt_stun_query(int fd, const char *host, const char *port,
     }
 
     int ok = 0;
-    if (sendto(fd, req, sizeof(req), 0, ai->ai_addr, ai->ai_addrlen) == (int)sizeof(req))
+    struct timespec t0; clock_gettime(CLOCK_MONOTONIC, &t0);
+    if (sendto(fd, req, sizeof(req), 0, dst, dst_len) != (int)sizeof(req))
     {
+        /* Instant fail (e.g. ENETUNREACH) = no route for this family. */
+        NLOG("STUN: sendto %s failed (%s)", host, strerror(errno));
+    }
+    else for (;;)
+    {
+        /* Wait for OUR reply within a fixed budget, draining strays: on the
+         * shared socket a late reply from a previous query (Auto runs a v6
+         * phase then a v4 one) or an early peer JOIN would otherwise eat
+         * this attempt and randomly lose a tuple (e.g. the v4 "alt=").      */
+        struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+        long left = 700 - ((now.tv_sec - t0.tv_sec) * 1000
+                           + (now.tv_nsec - t0.tv_nsec) / 1000000);
+        if (left <= 0) {
+            NLOG("STUN: no reply from %s (timeout)", host);
+            break;
+        }
+        struct timeval tv; tv.tv_sec = 0; tv.tv_usec = (int)left * 1000;
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
         uint8_t rsp[512];
         struct sockaddr_storage from; socklen_t fl = sizeof(from);
         int l = recvfrom(fd, rsp, sizeof(rsp), 0, (struct sockaddr*)&from, &fl);
-        /* Validate: Binding Success + our transaction id (an early peer
-         * JOIN landing here just fails the checks and costs one attempt).  */
-        if (l >= 20 && rsp[0] == 0x01 && rsp[1] == 0x01 &&
-            memcmp(rsp + 8, req + 8, 12) == 0)
+        if (l < 0) {
+            NLOG("STUN: no reply from %s (%s)", host, strerror(errno));
+            break;
+        }
+        /* Validate: Binding Success + our transaction id; anything else is
+         * a stray -- drop it and keep listening for the real reply.         */
+        if (!(l >= 20 && rsp[0] == 0x01 && rsp[1] == 0x01 &&
+              memcmp(rsp + 8, req + 8, 12) == 0))
+        {
+            NLOG("STUN: dropped stray datagram (%d bytes) while waiting for %s", l, host);
+            continue;
+        }
         {
             int mlen = (rsp[2] << 8) | rsp[3];
             if (mlen > l - 20) mlen = l - 20;
@@ -638,21 +753,36 @@ static int skt_stun_query(int fd, const char *host, const char *port,
                 int alen  = (rsp[off + 2] << 8) | rsp[off + 3];
                 const uint8_t *v = rsp + off + 4;
                 if (off + 4 + alen > 20 + mlen) break;
-                if ((atype == 0x0020 || atype == 0x0001) && alen >= 8 && v[1] == 0x01) {
+                if (atype == 0x0020 || atype == 0x0001) {
                     uint16_t p = (uint16_t)((v[2] << 8) | v[3]);
-                    uint8_t a[4] = { v[4], v[5], v[6], v[7] };
-                    if (atype == 0x0020) {                /* XOR-MAPPED       */
-                        p ^= 0x2112;
-                        a[0] ^= 0x21; a[1] ^= 0x12; a[2] ^= 0xA4; a[3] ^= 0x42;
+                    if (v[1] == 0x01 && alen >= 8) {          /* IPv4 form        */
+                        uint8_t a4[4] = { v[4], v[5], v[6], v[7] };
+                        if (atype == 0x0020) {                /* XOR-MAPPED       */
+                            p ^= 0x2112;
+                            a4[0] ^= 0x21; a4[1] ^= 0x12; a4[2] ^= 0xA4; a4[3] ^= 0x42;
+                        }
+                        snprintf(out_ip, ip_len, "%u.%u.%u.%u", a4[0], a4[1], a4[2], a4[3]);
+                        *out_port = p;
+                        ok = 1;
+                    } else if (v[1] == 0x02 && alen >= 20) {  /* IPv6 form        */
+                        uint8_t a6[16];
+                        memcpy(a6, v + 4, 16);
+                        if (atype == 0x0020) {                /* XOR: cookie+txid */
+                            static const uint8_t ck[4] = { 0x21, 0x12, 0xA4, 0x42 };
+                            p ^= 0x2112;
+                            for (int i = 0; i < 16; i++)
+                                a6[i] ^= (i < 4) ? ck[i] : req[8 + i - 4];
+                        }
+                        inet_ntop(AF_INET6, a6, out_ip, ip_len);
+                        *out_port = p;
+                        ok = 1;
                     }
-                    snprintf(out_ip, ip_len, "%u.%u.%u.%u", a[0], a[1], a[2], a[3]);
-                    *out_port = p;
-                    ok = 1;
-                    if (atype == 0x0020) break;           /* prefer XOR form  */
+                    if (ok && atype == 0x0020) break;         /* prefer XOR form  */
                 }
                 off += 4 + ((alen + 3) & ~3);
             }
         }
+        break; /* got a valid STUN response: done (parsed or not) */
     }
     freeaddrinfo(ai);
     return ok;
@@ -667,45 +797,86 @@ static void skt_run_stun(skt_netplay_t *impl, uint16_t local_port)
     struct timeval tmo; tmo.tv_sec = 0; tmo.tv_usec = 700 * 1000;
     setsockopt(impl->fd, SOL_SOCKET, SO_RCVTIMEO, &tmo, sizeof(tmo));
 
-    char ip1[64]; uint16_t p1 = 0; int got1 = 0; int used = 0;
-    for (int i = 0; i < STUN_SERVER_COUNT && !got1; i++) {
-        got1 = skt_stun_query(impl->fd, s_stun_servers[i].host, s_stun_servers[i].port,
-                              ip1, sizeof(ip1), &p1);
-        if (got1) used = i;
+    int sock_v6 = (impl->sock_family == AF_INET6);
+
+    /* Which public tuples to learn: V4/V6 their own family; AUTO host BOTH
+     * (one invite must serve v6, v4 and LAN peers alike), AUTO client only
+     * the join target's family (the host punches back over that flow). */
+    int want_v6 = 0, want_v4 = 0;
+    if (impl->ip_mode == SKT_IPPROTO_V6) {
+        /* ULA-only (router v6 on, ISP gives no global prefix) has no route to
+         * a STUN server: skip it -- there is no public v6, LAN play still works. */
+        want_v6 = skt_have_ipv6_route();
+    } else if (impl->ip_mode == SKT_IPPROTO_V4) {
+        want_v4 = 1;
+    } else if (impl->addr) {
+        struct sockaddr_in6 *d6 = (struct sockaddr_in6 *)impl->addr->ai_addr;
+        int dest_v6 = impl->addr->ai_family == AF_INET6 && !IN6_IS_ADDR_V4MAPPED(&d6->sin6_addr);
+        want_v6 = dest_v6;
+        want_v4 = !dest_v6;
+    } else {
+        want_v6 = skt_have_ipv6_route(); /* skip ~2s of v6 timeouts if none */
+        want_v4 = 1;
     }
 
+    char ip6[64]; uint16_t p6 = 0; int got6 = 0;
+    if (want_v6)
+        for (int i = 0; i < STUN_SERVER_COUNT && !got6; i++)
+            got6 = skt_stun_query(impl->fd, AF_INET6, sock_v6, s_stun_servers[i].host,
+                                  s_stun_servers[i].port, ip6, sizeof(ip6), &p6);
+
+    char ip4[64]; uint16_t p4 = 0; int got4 = 0; int used4 = 0;
+    if (want_v4)
+        for (int i = 0; i < STUN_SERVER_COUNT && !got4; i++) {
+            got4 = skt_stun_query(impl->fd, AF_INET, sock_v6, s_stun_servers[i].host,
+                                  s_stun_servers[i].port, ip4, sizeof(ip4), &p4);
+            if (got4) used4 = i;
+        }
+
+    /* Symmetric NAT is a v4 problem (v6 has no NAT): second query to a
+     * DIFFERENT server, preferring another port/provider -- mobile CGNATs
+     * can reuse one mapping toward two same-port servers and still be
+     * per-destination in practice (field-tested on 4G). */
     int sym = 0;
-    if (got1) {
+    if (got4) {
         char ip2[64]; uint16_t p2 = 0;
-        /* Prefer a second server on a different PORT and provider: mobile
-         * CGNATs can reuse one mapping toward two same-port servers and
-         * still be per-destination in practice (field-tested on 4G). */
-        int j = (used + 1) % STUN_SERVER_COUNT;
+        int j = (used4 + 1) % STUN_SERVER_COUNT;
         for (int i = 0; i < STUN_SERVER_COUNT; i++) {
-            if (i != used && strcmp(s_stun_servers[i].port, s_stun_servers[used].port) != 0) {
+            if (i != used4 && strcmp(s_stun_servers[i].port, s_stun_servers[used4].port) != 0) {
                 j = i;
                 break;
             }
         }
-        if (skt_stun_query(impl->fd, s_stun_servers[j].host, s_stun_servers[j].port,
-                           ip2, sizeof(ip2), &p2))
-            sym = (strcmp(ip1, ip2) != 0 || p1 != p2) ? 1 : 0;
+        if (skt_stun_query(impl->fd, AF_INET, sock_v6, s_stun_servers[j].host,
+                           s_stun_servers[j].port, ip2, sizeof(ip2), &p2))
+            sym = (strcmp(ip4, ip2) != 0 || p4 != p2) ? 1 : 0;
     }
 
     tmo.tv_sec = 0; tmo.tv_usec = 0;
     setsockopt(impl->fd, SOL_SOCKET, SO_RCVTIMEO, &tmo, sizeof(tmo));
 
-    if (got1) {
+    if (got6 || got4) {
+        /* Primary tuple = v6 when we have it (NAT-free path), v4 otherwise;
+         * with both, the v4 one rides along as "|alt=" for the invite. */
+        const char *ip1 = got6 ? ip6 : ip4;
+        uint16_t p1 = got6 ? p6 : p4;
         s_stun_ok  = 1;
         s_stun_sym = sym;
-        s_stun_pp  = (p1 == local_port) ? 1 : 0;
+        s_stun_pp  = (got4 ? p4 == local_port : p6 == local_port) ? 1 : 0;
         strncpy(s_public_ip, ip1, sizeof(s_public_ip) - 1);
         s_public_ip[sizeof(s_public_ip) - 1] = 0;
         s_public_port = p1;
-        snprintf(s_public_addr, sizeof(s_public_addr), "%s:%u|pp=%d|sym=%d",
-                 ip1, (unsigned)p1, s_stun_pp, s_stun_sym);
-        NLOG("STUN: public=%s:%u port_preserving=%d symmetric=%d (via %s)",
-             ip1, (unsigned)p1, s_stun_pp, s_stun_sym, s_stun_servers[used].host);
+        char host1[80];
+        if (strchr(ip1, ':'))
+            snprintf(host1, sizeof(host1), "[%s]", ip1);
+        else
+            snprintf(host1, sizeof(host1), "%s", ip1);
+        int n = snprintf(s_public_addr, sizeof(s_public_addr), "%s:%u|pp=%d|sym=%d",
+                         host1, (unsigned)p1, s_stun_pp, s_stun_sym);
+        if (got6 && got4 && n > 0 && (size_t)n < sizeof(s_public_addr))
+            snprintf(s_public_addr + n, sizeof(s_public_addr) - n, "|alt=%s:%u",
+                     ip4, (unsigned)p4);
+        NLOG("STUN: public=%s", s_public_addr);
     } else {
         NLOG("STUN: all servers failed");
     }
@@ -728,9 +899,11 @@ int skt_netplay_probe_public_ip(char *out_ip, size_t ip_len)
     struct timeval tmo; tmo.tv_sec = 0; tmo.tv_usec = 500 * 1000;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmo, sizeof(tmo));
 
+    /* Always v4: this probe only feeds the Java same-site heuristic that
+     * compares v4 publics (the v6 join path never needs it). */
     char ip[64]; uint16_t port = 0; int ok = 0;
     for (int i = 0; i < STUN_SERVER_COUNT && !ok; i++)
-        ok = skt_stun_query(fd, s_stun_servers[i].host, s_stun_servers[i].port,
+        ok = skt_stun_query(fd, AF_INET, 0, s_stun_servers[i].host, s_stun_servers[i].port,
                             ip, sizeof(ip), &port);
 
     close(fd);
@@ -751,7 +924,10 @@ static void skt_resolve_punch(skt_netplay_t *impl, const char *host, uint16_t po
 {
     struct addrinfo hints, *ai = NULL;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
+    /* Family follows the session's socket; AUTO resolves AF_UNSPEC and a
+     * v4 target gets hand-mapped below (bionic lacks AI_V4MAPPED). */
+    hints.ai_family = (impl->ip_mode == SKT_IPPROTO_V4) ? AF_INET
+                    : (impl->ip_mode == SKT_IPPROTO_AUTO) ? AF_UNSPEC : AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
     if (numeric_only)
         hints.ai_flags = AI_NUMERICHOST;
@@ -759,8 +935,14 @@ static void skt_resolve_punch(skt_netplay_t *impl, const char *host, uint16_t po
     snprintf(pb, sizeof(pb), "%hu", (unsigned short)port);
     impl->has_punch_addr = 0;
     if (getaddrinfo(host, pb, &hints, &ai) == 0 && ai) {
-        memcpy(&impl->punch_addr, ai->ai_addr, ai->ai_addrlen);
-        impl->punch_addr_len = ai->ai_addrlen;
+        if (ai->ai_family == AF_INET && impl->sock_family == AF_INET6) {
+            skt_map_v4_to_v6((const struct sockaddr_in *)ai->ai_addr,
+                             (struct sockaddr_in6 *)&impl->punch_addr);
+            impl->punch_addr_len = sizeof(struct sockaddr_in6);
+        } else {
+            memcpy(&impl->punch_addr, ai->ai_addr, ai->ai_addrlen);
+            impl->punch_addr_len = ai->ai_addrlen;
+        }
         impl->has_punch_addr = 1;
         NLOG("punch target resolved: %s:%u", host, (unsigned)port);
     } else {
@@ -776,12 +958,16 @@ static void skt_format_diagnostics(uint16_t local_port, int inet_mode,
 {
     char pub[80], peer[80], nat[48];
 
-    if (s_stun_ok)
+    if (s_stun_ok && strchr(s_public_ip, ':'))
+        snprintf(pub, sizeof(pub), "[%s]:%u", s_public_ip, (unsigned)s_public_port);
+    else if (s_stun_ok)
         snprintf(pub, sizeof(pub), "%s:%u", s_public_ip, (unsigned)s_public_port);
     else
         snprintf(pub, sizeof(pub), "%s", inet_mode ? "unavailable" : "n/a");
 
-    if (punch_host && punch_host[0])
+    if (punch_host && punch_host[0] && strchr(punch_host, ':'))
+        snprintf(peer, sizeof(peer), "[%s]:%u", punch_host, (unsigned)punch_port);
+    else if (punch_host && punch_host[0])
         snprintf(peer, sizeof(peer), "%s:%u", punch_host, (unsigned)punch_port);
     else
         snprintf(peer, sizeof(peer), "none");
@@ -793,6 +979,11 @@ static void skt_format_diagnostics(uint16_t local_port, int inet_mode,
     else
         snprintf(nat, sizeof(nat), "Rewritten (%u)", (unsigned)s_public_port);
 
+    int ipm;
+    pthread_mutex_lock(&s_inet_mutex);
+    ipm = s_ip_mode;
+    pthread_mutex_unlock(&s_inet_mutex);
+
     snprintf(s_diagnostics, sizeof(s_diagnostics),
              "Netplay diagnostics\n"
              "Local:    *:%u\n"
@@ -800,10 +991,12 @@ static void skt_format_diagnostics(uint16_t local_port, int inet_mode,
              "Peer:     %s\n"
              "NAT:      %s\n"
              "Symmetric: %s\n"
-             "Internet mode: %s",
+             "Internet mode: %s\n"
+             "IP protocol: %s",
              (unsigned)local_port, pub, peer, nat,
              s_stun_ok ? (s_stun_sym ? "Yes" : "No") : "Unknown",
-             inet_mode ? "Yes" : "No");
+             inet_mode ? "Yes" : "No",
+             ipm == SKT_IPPROTO_V6 ? "IPv6" : ipm == SKT_IPPROTO_AUTO ? "Auto (dual-stack)" : "IPv4");
 
     NLOG("%s", s_diagnostics);
 }
@@ -832,6 +1025,29 @@ void skt_netplay_set_internet_mode(int on)
     s_internet_mode = on ? 1 : 0;
     pthread_mutex_unlock(&s_inet_mutex);
     NLOG("internet mode: %d", on ? 1 : 0);
+}
+
+void skt_netplay_set_ip_family(int mode)
+{
+    pthread_mutex_lock(&s_inet_mutex);
+    s_ip_mode = (mode == SKT_IPPROTO_V6 || mode == SKT_IPPROTO_AUTO) ? mode : SKT_IPPROTO_V4;
+    pthread_mutex_unlock(&s_inet_mutex);
+    NLOG("ip family mode: %d", mode);
+}
+
+/* Family-agnostic "ip:port" / "[ip]:port" formatting for logs and UI. */
+static void skt_addr_to_str(const struct sockaddr *sa, char *buf, size_t len)
+{
+    char ip[INET6_ADDRSTRLEN] = "?";
+    if (sa->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *s6 = (const struct sockaddr_in6 *)sa;
+        inet_ntop(AF_INET6, &s6->sin6_addr, ip, sizeof(ip));
+        snprintf(buf, len, "[%s]:%u", ip, (unsigned)ntohs(s6->sin6_port));
+    } else {
+        const struct sockaddr_in *s4 = (const struct sockaddr_in *)sa;
+        inet_ntop(AF_INET, &s4->sin_addr, ip, sizeof(ip));
+        snprintf(buf, len, "%s:%u", ip, (unsigned)ntohs(s4->sin_port));
+    }
 }
 
 void skt_netplay_set_local_port(uint16_t port)

@@ -890,6 +890,7 @@
 		<CheckBoxPreference android:title="@string/pref_netplay_stats_title" android:summary="@string/pref_netplay_stats_summary" android:key="PREF_NETPLAY_STATS_ENABLED" android:defaultValue="false" />
 		<CheckBoxPreference android:title="@string/pref_netplay_desync_title" android:summary="@string/pref_netplay_desync_summary" android:key="PREF_NETPLAY_DESYNC_DETECTOR_ENABLED" android:defaultValue="true" />
 		<CheckBoxPreference android:title="@string/pref_netplay_upnp_title" android:summary="@string/pref_netplay_upnp_summary" android:key="PREF_NETPLAY_UPNP" android:defaultValue="true" />
+		<ListPreference android:entries="@array/pref_netplay_ip_protocol_options" android:title="@string/pref_netplay_ipproto_title" android:summary="@string/pref_netplay_ipproto_summary" android:key="PREF_NETPLAY_IP_PROTOCOL" android:entryValues="@array/pref_netplay_ip_protocol_values" android:defaultValue="0" />
     </PreferenceScreen>
 
     <PreferenceScreen android:key="advanced" android:title="@string/prefscr_advanced_title"

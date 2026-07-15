@@ -55,8 +55,8 @@
     <string name="np_mode_rollback">Rollback  (baja latencia, ideal para NeoGeo/CPS)</string>
     <string name="np_peer_ip_title">IP pública del compañero [:puerto]</string>
     <string name="np_enter_peer_ip">Introduce la IP del compañero (ip o ip:puerto):</string>
-    <string name="np_join_hint">O pega el mensaje compartido (pública/privada).</string>
-    <string name="np_peer_ip_hint">O pega el mensaje compartido del compañero (su IP pública).</string>
+    <string name="np_join_hint">O pega el mensaje compartido: se elige la mejor dirección automáticamente.</string>
+    <string name="np_peer_ip_hint">Opcional: solo hace falta si la conexión no se establece por sí sola. Pega el mensaje compartido del compañero (su IP pública).</string>
     <string name="clear">Limpiar</string>
     <string name="paste">Pegar</string>
     <string name="np_invalid_ip">Conexión cancelada: dirección IP no válida.</string>
@@ -75,10 +75,19 @@
     <string name="np_lan_connect_body">Partida en red local: conectando directamente por tu Wi-Fi / red.\n\nAsegúrate de que ambos dispositivos están en la misma red y usan el mismo puerto.</string>
     <string name="np_upnp_fallback_hint">Juego por internet: si el otro jugador no puede alcanzar tu IP pública, pulsa IP compañero e introduce SU dirección pública, o abre el puerto UDP %1$d en tu router.</string>
     <string name="np_upnp_mapped">Puerto del router mapeado (UPnP): los compañeros pueden unirse a tu IP pública directamente.</string>
-    <string name="np_local_ip">Tu IP local (para juego en la misma red): %1$s</string>
+    <string name="np_local_ip">Tu IPv4 local (juego en la misma red): %1$s</string>
     <string name="np_mobile_only">Solo datos móviles: sin red local (solo juego por internet)</string>
     <string name="np_tap_share">Pulsa Compartir para enviar estas direcciones por cualquier mensajería.</string>
-    <string name="np_public_ip">Tu IP pública (para juego por internet): %1$s</string>
+    <string name="np_public_ip">Tu IPv4 pública (juego por internet): %1$s</string>
+    <string name="np_ipv6_addr">Tu IPv6 pública (internet o misma red): %1$s</string>
+    <string name="np_ipv6_inet">Tu IPv6 pública (juego por internet): %1$s</string>
+    <string name="np_ipv6_mobile">Tu IPv6 pública (juego por internet, por DATOS MÓVILES): %1$s</string>
+    <string name="np_ipv6_lan">Tu IPv6 local (solo misma red): %1$s</string>
+    <string name="np_ipv6_no_public">Sin IPv6 pública: no se puede jugar por internet, pero sí en la misma red:</string>
+    <string name="np_ipv6_none">Este dispositivo no tiene IPv6 utilizable. Pon el protocolo de red en IPv4 o Auto para jugar.</string>
+    <string name="np_ip_family_mismatch">La dirección es %1$s pero el protocolo de red está en %2$s. Pega una dirección compatible o cambia el ajuste.</string>
+    <string name="np_try_ipv6">Consejo: las redes móviles suelen tener IPv6 — probad a poner el protocolo de red en IPv6 o Auto en LOS DOS dispositivos.</string>
+    <string name="np_try_auto">Consejo: probad a poner el protocolo de red en Auto en LOS DOS dispositivos — si las redes tienen IPv6, esquiva este NAT.</string>
     <string name="np_symmetric_nat">NAT simétrico detectado. El juego por internet puede fallar.</string>
     <string name="np_public_unavailable">Tu IP pública: no disponible (el juego por internet puede requerir abrir puertos)</string>
     <string name="np_same_public_ip">Misma IP pública que el anfitrión: parece que estás en su red; únete a su IP LOCAL en su lugar.</string>
@@ -469,6 +478,9 @@
     <string name="pref_netplay_desync_summary">Detecta y avisa de desincronizaciones de NetPlay (solo Rollback); desactívalo para ahorrar el coste extra de CPU</string>
     <string name="pref_netplay_upnp_title">Mapeo de puertos UPnP (anfitrión)</string>
     <string name="pref_netplay_upnp_summary">Al hacer de anfitrión, abre automáticamente el puerto de netplay en el router para que los compañeros de internet puedan unirse directamente. Se elimina al desconectar</string>
+    <string name="pref_netplay_ipproto_title">Protocolo de red</string>
+    <string name="pref_netplay_ipproto_summary">IPv4, IPv6 o automático. IPv6 no usa NAT: el juego por internet suele conectar directamente, sin abrir puertos y con menos problemas de conexión. Auto prefiere IPv6 y cae a IPv4</string>
+    <string name="np_ipproto_auto">Automático (IPv6 + IPv4)</string>
 
     <string name="prefscr_advanced_title">Avanzado</string>
     <string name="prefscr_advanced_summary">Selecciónalo para abrir las opciones avanzadas</string>

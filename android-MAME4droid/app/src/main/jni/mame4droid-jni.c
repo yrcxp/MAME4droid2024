@@ -55,6 +55,7 @@ void (*netplaySetDesyncDetectorEnabled)(int enabled) = NULL;
 int (*netplayResync)(void) = NULL;
 void (*netplaySetPunchAddr)(const char *addr, int port) = NULL;
 void (*netplaySetInternetMode)(int on) = NULL;
+void (*netplaySetIpFamily)(int mode) = NULL;
 void (*netplaySetLocalPort)(int port) = NULL;
 const char *(*netplayGetPublicAddr)(void) = NULL;
 const char *(*netplayGetDiagnostics)(void) = NULL;
@@ -212,6 +213,9 @@ static void load_lib(const char *str)
 
     netplaySetInternetMode = dlsym(libdl, "netplaySetInternetMode");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetInternetMode %d\n", netplaySetInternetMode != NULL);
+
+    netplaySetIpFamily = dlsym(libdl, "netplaySetIpFamily");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetIpFamily %d\n", netplaySetIpFamily != NULL);
 
     netplaySetLocalPort = dlsym(libdl, "netplaySetLocalPort");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplaySetLocalPort %d\n", netplaySetLocalPort != NULL);
@@ -992,6 +996,16 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetInternetMo
         netplaySetInternetMode((int)on);
     else
         __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetInternetMode symbol not found!");
+}
+
+/* IP protocol for the next netplayInit: 0=IPv4, 1=IPv6, 2=Auto (dual-stack). */
+JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetIpFamily
+  (JNIEnv *env, jclass c, jint mode)
+{
+    if (netplaySetIpFamily != NULL)
+        netplaySetIpFamily((int)mode);
+    else
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplaySetIpFamily symbol not found!");
 }
 
 /* Client's local bind port for the next netplayInit (its own settings port). */

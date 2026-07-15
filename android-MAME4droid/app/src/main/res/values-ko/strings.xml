@@ -55,8 +55,8 @@
     <string name="np_mode_rollback">롤백  (저지연, NeoGeo/CPS에 적합)</string>
     <string name="np_peer_ip_title">상대방 공용 IP[:포트]</string>
     <string name="np_enter_peer_ip">상대방 IP 주소 입력 (ip 또는 ip:포트):</string>
-    <string name="np_join_hint">공유된 초대(공용/사설)를 붙여넣어도 됩니다.</string>
-    <string name="np_peer_ip_hint">상대방이 공유한 메시지(상대방의 공용 IP)를 붙여넣어도 됩니다.</string>
+    <string name="np_join_hint">공유된 초대를 붙여넣어도 됩니다. 최적의 주소가 자동으로 선택됩니다.</string>
+    <string name="np_peer_ip_hint">선택 사항: 연결이 저절로 되지 않을 때만 필요합니다. 상대방이 공유한 메시지(상대방의 공용 IP)를 붙여넣으세요.</string>
     <string name="clear">지우기</string>
     <string name="paste">붙여넣기</string>
     <string name="np_invalid_ip">연결 취소됨: 잘못된 IP 주소입니다.</string>
@@ -75,10 +75,19 @@
     <string name="np_lan_connect_body">로컬 네트워크 게임: Wi-Fi / 네트워크로 직접 연결하는 중입니다.\n\n두 기기가 같은 네트워크에 있고 같은 포트를 사용하는지 확인하세요.</string>
     <string name="np_upnp_fallback_hint">인터넷 대전: 상대방이 공용 IP에 접근할 수 없는 경우, "상대 IP"를 눌러 상대방의 공용 주소를 입력하거나 라우터에서 UDP 포트 %1$d를 포워딩하세요.</string>
     <string name="np_upnp_mapped">라우터 포트가 매핑되었습니다(UPnP): 상대방이 공용 IP로 직접 참가할 수 있습니다.</string>
-    <string name="np_local_ip">로컬 IP(동일 네트워크 대전용): %1$s</string>
+    <string name="np_local_ip">로컬 IPv4(동일 네트워크 대전용): %1$s</string>
     <string name="np_mobile_only">모바일 데이터만: 로컬 네트워크 없음(인터넷 대전만)</string>
     <string name="np_tap_share">"공유"를 눌러 이 주소들을 아무 메신저로 전송하세요.</string>
-    <string name="np_public_ip">공용 IP(인터넷 대전용): %1$s</string>
+    <string name="np_public_ip">공용 IPv4(인터넷 대전용): %1$s</string>
+    <string name="np_ipv6_addr">공용 IPv6(인터넷 또는 같은 네트워크): %1$s</string>
+    <string name="np_ipv6_inet">공용 IPv6(인터넷 대전용): %1$s</string>
+    <string name="np_ipv6_mobile">공용 IPv6(인터넷 대전용, 모바일 데이터 사용): %1$s</string>
+    <string name="np_ipv6_lan">로컬 IPv6(같은 네트워크 전용): %1$s</string>
+    <string name="np_ipv6_no_public">공용 IPv6 없음: 인터넷 플레이는 불가하지만 같은 네트워크에서는 가능합니다:</string>
+    <string name="np_ipv6_none">이 기기에는 사용 가능한 IPv6가 없습니다. 네트워크 프로토콜을 IPv4 또는 자동으로 설정하세요.</string>
+    <string name="np_ip_family_mismatch">주소는 %1$s이지만 네트워크 프로토콜 설정은 %2$s입니다. 일치하는 주소를 붙여넣거나 설정을 변경하세요.</string>
+    <string name="np_try_ipv6">팁: 모바일 네트워크는 보통 IPv6를 지원합니다. 두 기기 모두 네트워크 프로토콜을 IPv6 또는 자동으로 설정해 보세요.</string>
+    <string name="np_try_auto">팁: 두 기기 모두 네트워크 프로토콜을 자동으로 설정해 보세요. 네트워크에 IPv6가 있으면 이 NAT를 우회합니다.</string>
     <string name="np_symmetric_nat">대칭형 NAT가 감지되었습니다. 인터넷 대전이 실패할 수 있습니다.</string>
     <string name="np_public_unavailable">공용 IP: 사용 불가(인터넷 대전에 포트 포워딩이 필요할 수 있음)</string>
     <string name="np_same_public_ip">호스트와 동일한 공용 IP입니다: 같은 네트워크에 있는 것 같습니다. 대신 호스트의 로컬 IP로 참가하세요.</string>
@@ -469,6 +478,9 @@
     <string name="pref_netplay_desync_summary">넷플레이 비동기화를 감지하고 경고합니다(롤백만). 추가 CPU 비용을 절약하려면 비활성화하세요</string>
     <string name="pref_netplay_upnp_title">UPnP 포트 매핑(호스트)</string>
     <string name="pref_netplay_upnp_summary">호스트할 때 인터넷 상대방이 직접 참가할 수 있도록 라우터에서 넷플레이 포트를 자동으로 포워딩합니다. 연결 끊기 시 제거됩니다</string>
+    <string name="pref_netplay_ipproto_title">네트워크 프로토콜</string>
+    <string name="pref_netplay_ipproto_summary">IPv4, IPv6 또는 자동. IPv6는 NAT가 없어 인터넷 플레이 시 보통 포트 포워딩 없이 직접 연결되며 연결 문제가 적습니다. 자동은 IPv6를 우선 사용하고 필요하면 IPv4로 전환합니다</string>
+    <string name="np_ipproto_auto">자동 (IPv6 + IPv4)</string>
 
     <string name="prefscr_advanced_title">고급</string>
     <string name="prefscr_advanced_summary">선택하여 고급 옵션 열기</string>

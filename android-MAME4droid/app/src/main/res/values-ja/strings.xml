@@ -55,8 +55,8 @@
     <string name="np_mode_rollback">ロールバック  （低遅延、NeoGeo/CPS に最適）</string>
     <string name="np_peer_ip_title">相手のグローバル IP[:ポート]</string>
     <string name="np_enter_peer_ip">相手の IP アドレスを入力（ip または ip:ポート）：</string>
-    <string name="np_join_hint">共有された招待（グローバル/ローカル）を貼り付けてもOK。</string>
-    <string name="np_peer_ip_hint">相手が共有したメッセージ（相手のグローバル IP）を貼り付けてもOK。</string>
+    <string name="np_join_hint">共有された招待を貼り付けてもOK：最適なアドレスを自動で選びます。</string>
+    <string name="np_peer_ip_hint">任意: 接続が自動で確立しない場合のみ必要です。相手が共有したメッセージ（相手のグローバル IP）を貼り付けてください。</string>
     <string name="clear">クリア</string>
     <string name="paste">貼り付け</string>
     <string name="np_invalid_ip">接続をキャンセルしました：IP アドレスが無効です。</string>
@@ -75,10 +75,19 @@
     <string name="np_lan_connect_body">ローカルネットワークゲーム：Wi-Fi / ネットワークで直接接続しています。\n\n両方のデバイスが同じネットワーク上にあり、同じポートを使用していることを確認してください。</string>
     <string name="np_upnp_fallback_hint">インターネット対戦：相手があなたのグローバル IP に到達できない場合、「相手 IP」をタップして相手のグローバルアドレスを入力するか、ルーターで UDP ポート %1$d を転送してください。</string>
     <string name="np_upnp_mapped">ルーターのポートがマッピングされました（UPnP）：相手はあなたのグローバル IP に直接参加できます。</string>
-    <string name="np_local_ip">あなたのローカル IP（同一ネットワーク対戦用）：%1$s</string>
+    <string name="np_local_ip">あなたのローカル IPv4（同一ネットワーク対戦用）：%1$s</string>
     <string name="np_mobile_only">モバイルデータのみ：ローカルネットワークなし（インターネット対戦のみ）</string>
     <string name="np_tap_share">「共有」をタップして、これらのアドレスを任意のメッセンジャーで送信してください。</string>
-    <string name="np_public_ip">あなたのグローバル IP（インターネット対戦用）：%1$s</string>
+    <string name="np_public_ip">あなたのグローバル IPv4（インターネット対戦用）：%1$s</string>
+    <string name="np_ipv6_addr">あなたのグローバル IPv6（インターネット／同一ネットワーク）：%1$s</string>
+    <string name="np_ipv6_inet">あなたのグローバル IPv6（インターネット対戦用）：%1$s</string>
+    <string name="np_ipv6_mobile">あなたのグローバル IPv6（インターネット対戦用、モバイルデータ経由）：%1$s</string>
+    <string name="np_ipv6_lan">あなたのローカル IPv6（同一ネットワークのみ）：%1$s</string>
+    <string name="np_ipv6_no_public">パブリック IPv6 なし: インターネット対戦は不可、同一ネットワークでの対戦は可能:</string>
+    <string name="np_ipv6_none">この端末に使える IPv6 がありません。ネットワークプロトコルを IPv4 または自動にして対戦してください。</string>
+    <string name="np_ip_family_mismatch">アドレスは %1$s ですが、ネットワークプロトコル設定は %2$s です。一致するアドレスを貼り付けるか、設定を変更してください。</string>
+    <string name="np_try_ipv6">ヒント: モバイル回線は通常 IPv6 に対応しています。両方の端末でネットワークプロトコルを IPv6 または自動にしてみてください。</string>
+    <string name="np_try_auto">ヒント: 両方の端末でネットワークプロトコルを自動にしてみてください。ネットワークに IPv6 があれば、この NAT を回避できます。</string>
     <string name="np_symmetric_nat">対称型 NAT が検出されました。インターネット対戦は失敗する可能性があります。</string>
     <string name="np_public_unavailable">あなたのグローバル IP：利用不可（インターネット対戦にはポート転送が必要な場合があります）</string>
     <string name="np_same_public_ip">ホストと同じグローバル IP です：同じネットワーク上にいるようです。代わりにホストのローカル IP に参加してください。</string>
@@ -469,6 +478,9 @@
     <string name="pref_netplay_desync_summary">ネットプレイの非同期を検出して警告します（ロールバックのみ）。追加の CPU コストを節約するには無効にしてください</string>
     <string name="pref_netplay_upnp_title">UPnP ポートマッピング（ホスト）</string>
     <string name="pref_netplay_upnp_summary">ホスト時に、インターネットの相手が直接参加できるよう、ルーターでネットプレイポートを自動的に転送します。切断時に削除されます</string>
+    <string name="pref_netplay_ipproto_title">ネットワークプロトコル</string>
+    <string name="pref_netplay_ipproto_summary">IPv4、IPv6、または自動。IPv6 は NAT がないため、インターネット対戦は通常ポート開放なしで直接接続でき、接続の問題も少なくなります。自動は IPv6 を優先し、必要に応じて IPv4 に切り替えます</string>
+    <string name="np_ipproto_auto">自動（IPv6 + IPv4）</string>
 
     <string name="prefscr_advanced_title">詳細</string>
     <string name="prefscr_advanced_summary">選択して詳細オプションを開く</string>

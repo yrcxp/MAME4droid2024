@@ -199,6 +199,35 @@
       Cliente em dados móveis jogue. É o equivalente manual do UPnP, para roteadores onde o UPnP está
       desligado ou quebrado.</p>
 
+      <h3>IPv6 (Protocolo de rede)</h3>
+      <p><em>Opções-&gt;Configurações-&gt;NetPlay-&gt;Protocolo de rede</em> seleciona como os
+      dispositivos se conectam: <strong>IPv4</strong> (padrão), <strong>IPv6</strong> ou
+      <strong>Automático (IPv6 + IPv4)</strong>. O IPv6 não usa NAT: cada dispositivo tem seu próprio
+      endereço público, então o jogo pela internet costuma conectar diretamente &mdash; sem abrir
+      portas, sem UPnP, e a limitação do CGNAT acima desaparece. Em particular, <strong>dois celulares
+      em dados móveis (4G/5G) com IPv6</strong> &mdash; a maioria das operadoras fornece &mdash;
+      conectam-se diretamente sem mexer em nenhum roteador: é a forma mais fácil e confiável de jogar
+      pela internet. O padrão é <strong>IPv4</strong> por ser o caminho mais testado, mas vale a pena
+      experimentar o <strong>Automático</strong>: funciona com qualquer adversário e escolhe a melhor
+      rota sozinho.</p>
+      <ul>
+        <li><strong>IPv4:</strong> o comportamento clássico descrito acima.</li>
+        <li><strong>IPv6:</strong> os dois jogadores conectam apenas por IPv6. O convite compartilhado
+            traz um endereço <em>[entre colchetes]</em>; Compartilhar e Colar funcionam exatamente
+            igual.</li>
+        <li><strong>Automático:</strong> o Anfitrião aceita as duas famílias e compartilha todos os
+            seus endereços (IPv6, IPv4 e rede local); o Cliente escolhe automaticamente o que funciona
+            com a própria conexão. Escolha-o se não souber o que o outro jogador tem.</li>
+      </ul>
+      <p>Os dois jogadores devem usar a mesma configuração (Automático combina com qualquer uma).
+      Alguns roteadores trazem um firewall IPv6 que bloqueia conexões de entrada: o hole punching
+      integrado normalmente o abre sozinho e, se não, liberar a porta do NetPlay nesse firewall é o
+      equivalente IPv6 de abrir portas.</p>
+      <p>Se o roteador tiver IPv6 ativado mas a operadora não fornecer um prefixo IPv6 público, os
+      dispositivos ainda recebem um endereço apenas de rede local (ULA): não dá para jogar pela
+      internet, mas dois dispositivos na mesma rede ainda podem jogar por IPv6. O Anfitrião mostra
+      esse endereço rotulado como <em>apenas mesma rede</em>.</p>
+
       <h3>Durante o jogo</h3>
       <ul>
         <li><strong>Ressincronizar:</strong> em uma sessão de Rollback ativa, o diálogo do NetPlay oferece

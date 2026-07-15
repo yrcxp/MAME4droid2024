@@ -235,6 +235,44 @@
       un Cliente con datos móviles. Es el equivalente manual de UPnP, para
       routers donde UPnP está desactivado o roto.</p>
 
+      <h3>IPv6 (Protocolo de red)</h3>
+      <p><em>Opciones-&gt;Ajustes-&gt;NetPlay-&gt;Protocolo de red</em>
+      selecciona cómo se conectan los dispositivos: <strong>IPv4</strong>
+      (por defecto), <strong>IPv6</strong> o <strong>Automático (IPv6 +
+      IPv4)</strong>. IPv6 no usa NAT: cada dispositivo tiene su propia
+      dirección pública, así que el juego por internet suele conectar
+      directamente &mdash; sin abrir puertos, sin UPnP, y la limitación del
+      CGNAT de arriba desaparece. En particular, <strong>dos móviles con datos
+      (4G/5G) e IPv6</strong> &mdash; la mayoría de operadores lo dan &mdash;
+      conectan entre sí directamente sin tocar ningún router: es la forma más
+      fácil y fiable de jugar por internet.
+      El valor por defecto es <strong>IPv4</strong> por ser el camino más
+      probado, pero merece la pena probar <strong>Automático</strong>: funciona
+      con cualquier rival y elige la mejor ruta por sí solo.</p>
+      <ul>
+        <li><strong>IPv4:</strong> el comportamiento clásico descrito
+            arriba.</li>
+        <li><strong>IPv6:</strong> ambos jugadores conectan solo por IPv6.
+            La invitación compartida lleva una dirección <em>[entre
+            corchetes]</em>; Compartir y Pegar funcionan exactamente
+            igual.</li>
+        <li><strong>Automático:</strong> el Anfitrión acepta ambas familias
+            y comparte todas sus direcciones (IPv6, IPv4 y red local); el
+            Cliente elige automáticamente la que funcione con su propia
+            conexión. Elígelo si no sabes qué tiene el otro jugador.</li>
+      </ul>
+      <p>Ambos jugadores deberían usar el mismo ajuste (Automático se
+      entiende bien con cualquiera). Algunos routers traen un cortafuegos
+      IPv6 que bloquea conexiones entrantes: el hole punching integrado
+      normalmente lo abre por sí solo, y si no, permitir el puerto de
+      NetPlay en ese cortafuegos es el equivalente IPv6 de abrir
+      puertos.</p>
+      <p>Si tu router tiene IPv6 activado pero tu operador no te da un prefijo
+      IPv6 público, tus dispositivos aún reciben una dirección de red local
+      (ULA): no se puede jugar por internet, pero dos dispositivos en la misma
+      red sí pueden jugar por IPv6. El Anfitrión la muestra etiquetada como
+      <em>solo misma red</em>.</p>
+
       <h3>Durante la partida</h3>
       <ul>
         <li><strong>Resincronizar:</strong> en una sesión de Rollback en vivo, el

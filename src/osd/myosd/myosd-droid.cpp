@@ -1739,6 +1739,12 @@ extern "C" void netplaySetInternetMode(int on) {
     skt_netplay_set_internet_mode(on);
 }
 
+/* IP protocol for the next netplayInit(): 0=IPv4 (default), 1=IPv6 strict,
+ * 2=Auto (dual-stack v6 socket that still accepts/reaches v4 peers). */
+extern "C" void netplaySetIpFamily(int mode) {
+    skt_netplay_set_ip_family(mode);
+}
+
 /* Client's local bind port for the next netplayInit() -- its OWN settings
  * port, never the join target's (that must not leak into our tuple). */
 extern "C" void netplaySetLocalPort(int port) {
