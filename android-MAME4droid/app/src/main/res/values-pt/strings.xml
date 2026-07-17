@@ -176,7 +176,7 @@
     <string name="pref_language_title">Idioma</string>
     <string name="lang_system_default">Padrão do sistema</string>
     <string name="pref_force_unifont_title">Usar fonte Unicode na interface</string>
-    <string name="pref_force_unifont_summary">Usa a fonte Unicode (unifont) na interface do MAME em vez da fonte interna. Chinês, japonês e coreano sempre a usam.</string>
+    <string name="pref_force_unifont_summary">Usa a fonte Unicode (unifont) na interface do MAME em vez da fonte do sistema.</string>
     <string name="pref_mame_language_title">Traduzir os menus do MAME</string>
     <string name="pref_mame_language_summary">Mostra os menus e mensagens internos do MAME no idioma selecionado em vez de inglês.</string>
 
@@ -240,7 +240,11 @@
     <string name="pref_animated_title">Animado</string>
     <string name="pref_animated_summary">Controle de toque animado. Desative para melhorar o desempenho</string>
     <string name="pref_vibrate_title">Vibrar</string>
-    <string name="pref_vibrate_summary">Ative para vibrar ao tocar</string>
+    <string name="pref_vibrate_summary">Interruptor geral: vibração para os controles de toque, direcional analógico, pistola e mouse</string>
+    <string name="pref_analog_vibrate_title">Vibração do direcional analógico</string>
+    <string name="pref_analog_vibrate_summary">Vibra apenas ao segurar o direcional, ou também nas mudanças de direção como os microswitches de arcade</string>
+    <string name="analog_vibrate_grab">Apenas ao segurar o direcional</string>
+    <string name="analog_vibrate_microswitch">Microswitches de arcade</string>
     <string name="pref_touch_dz_title">Zona morta digital</string>
     <string name="pref_touch_dz_summary">Ativar zona morta de toque</string>
     <string name="pref_analog_dz_title">Zona morta analógica</string>

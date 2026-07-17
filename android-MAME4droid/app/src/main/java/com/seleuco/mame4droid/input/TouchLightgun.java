@@ -104,6 +104,9 @@ public class TouchLightgun implements IController {
 
 		} else { // DOWN or MOVE events
 
+			// Snapshot button state to vibrate only on new engagements below
+			int oldButtons = digital_data[0] & (A_VALUE | B_VALUE);
+
 			// Allocate location array ONCE outside the loop to prevent Garbage Collector churn
 			// and avoid dropping frames during rapid continuous touch events.
 			final int[] location = new int[2];
@@ -191,6 +194,15 @@ public class TouchLightgun implements IController {
 					}
 				}
 			}
+			// Haptic on press edges only: trigger (button 1) clicks, the
+			// secondary button ticks lighter. Releases stay silent.
+			int pressed = (digital_data[0] & (A_VALUE | B_VALUE)) & ~oldButtons;
+			if (pressed != 0 && mm.getPrefsHelper().isVibrate()) {
+				TouchController tc = mm.getInputHandler().getTouchController();
+				if ((pressed & A_VALUE) != 0) tc.vibrate();
+				else tc.vibrateSecondary();
+			}
+
 			Emulator.setDigitalData(0, digital_data[0]);
 		}
 	}

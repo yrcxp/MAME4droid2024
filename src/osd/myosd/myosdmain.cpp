@@ -11,6 +11,7 @@
 
 // standard includes
 #include <unistd.h>
+#include <chrono>       // pointer click/hold tracking
 
 // MAME headers
 #include "osdepend.h"
@@ -27,6 +28,7 @@
 #include "corestr.h"
 
 #include "uiinput.h"
+#include "render.h"
 
 #include "modules/lib/osdobj_common.h"
 
@@ -182,9 +184,37 @@ extern "C" void myosd_speed_hack()
 //============================================================
 extern "C" void myosd_pushEvent(myosd_inputevent event)
 {
+    /* Click tracking: clicks stay positive while the
+     * press can still be a click/tap and are NEGATED once it becomes a
+     * hold or drag (>250ms or moved too far). The UI relies on this:
+     * exactly 1 activates arrows, 2 activates items, <0 means drag. */
     static unsigned buttons = 0;
+    static bool touch_down = false;
+    static int mouse_clicks = 0, touch_clicks = 0;
+    static int mouse_px = 0, mouse_py = 0, touch_px = 0, touch_py = 0;
+    static std::chrono::steady_clock::time_point mouse_t0, touch_t0;
 
     if(osdInterface!= nullptr && osdInterface->isMachine() && osdInterface->target()!= nullptr) {
+
+        /* CLICK/TAP_DISTANCE are squared desktop pixels;
+         * scale them to the current target size (~240p = 1x). */
+        int const th = osdInterface->target()->height();
+        int const unit = MAX(1, (th > 0 ? th : 480) / 240);
+        int const click_dist = 16 * unit * unit;
+        int const tap_dist = 49 * unit * unit;
+        auto const now = std::chrono::steady_clock::now();
+        auto const hold_time = std::chrono::milliseconds(250);
+
+        // negate the click count once the press stops being a click/tap
+        auto check_hold_drag = [&](int &clicks, int px, int py, int maxdist,
+                std::chrono::steady_clock::time_point t0) {
+            if (0 < clicks) {
+                int const dx = event.data.pointer_data.x - px;
+                int const dy = event.data.pointer_data.y - py;
+                if (((t0 + hold_time) < now) || (maxdist < ((dx * dx) + (dy * dy))))
+                    clicks = -clicks;
+            }
+        };
 
         switch(event.type) {
             case event.MYOSD_KEY_EVENT:
@@ -192,39 +222,46 @@ extern "C" void myosd_pushEvent(myosd_inputevent event)
                 break;
             case event.MYOSD_MOUSE_MOVE_EVENT:
             {
+                if (buttons & 1)
+                    check_hold_drag(mouse_clicks, mouse_px, mouse_py, click_dist, mouse_t0);
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::MOUSE,
                         0,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        buttons, 0, 0, 0);
+                        buttons, 0, 0, mouse_clicks);
                 break;
             }
             case event.MYOSD_MOUSE_BT1_DOWN:
             {
                 unsigned pressed = (1) << 0;
                 buttons |= pressed;
+                mouse_clicks = event.data.pointer_data.double_action ? 2 : 1;
+                mouse_px = event.data.pointer_data.x;
+                mouse_py = event.data.pointer_data.y;
+                mouse_t0 = now;
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::MOUSE,
                         0,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        buttons, pressed, 0, event.data.pointer_data.double_action ? 2 : 1);
+                        buttons, pressed, 0, mouse_clicks);
                 break;
             }
             case event.MYOSD_MOUSE_BT1_UP:
             {
                 unsigned released = (1) << 0;
                 buttons &= ~released;
+                check_hold_drag(mouse_clicks, mouse_px, mouse_py, click_dist, mouse_t0);
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::MOUSE,
                         0,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        buttons, 0, released, event.data.pointer_data.double_action ? 2 : 1);
+                        buttons, 0, released, mouse_clicks);
                 break;
             }
             case event.MYOSD_MOUSE_BT2_DOWN: {
@@ -236,7 +273,7 @@ extern "C" void myosd_pushEvent(myosd_inputevent event)
                         0,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        buttons, pressed, 0, 1);
+                        buttons, pressed, 0, mouse_clicks);
 
                 break;
             }
@@ -249,51 +286,67 @@ extern "C" void myosd_pushEvent(myosd_inputevent event)
                         0,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        buttons, 0, released, 1);
+                        buttons, 0, released, mouse_clicks);
 
                 break;
             }
             case event.MYOSD_FINGER_MOVE:
             {
+                // Java can emit MOVE before DOWN when it anchors a finger
+                // (or when one slides off a virtual control): drop those
+                if (!touch_down)
+                    break;
+                check_hold_drag(touch_clicks, touch_px, touch_py, tap_dist, touch_t0);
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::TOUCH,
                         1,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        1, 0, 0, event.data.pointer_data.double_action ? 2 : 1);
+                        1, 0, 0, touch_clicks);
                 break;
             }
             case event.MYOSD_FINGER_DOWN:
             {
+                if (touch_down)
+                    break;
+                touch_down = true;
+                touch_clicks = event.data.pointer_data.double_action ? 2 : 1;
+                touch_px = event.data.pointer_data.x;
+                touch_py = event.data.pointer_data.y;
+                touch_t0 = now;
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::TOUCH,
                         1,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        1, 1, 0, event.data.pointer_data.double_action ? 2 : 1);
+                        1, 1, 0, touch_clicks);
 
                 break;
             }
             case event.MYOSD_FINGER_UP:
             {
+                if (!touch_down)
+                    break;
+                touch_down = false;
+                check_hold_drag(touch_clicks, touch_px, touch_py, tap_dist, touch_t0);
                 osdInterface->machine().ui_input().push_pointer_update(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::TOUCH,
                         1,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        0, 0, 1, event.data.pointer_data.double_action ? 2 : -1);
-/*
+                        0, 0, 1, touch_clicks);
+                /* the finger is gone: release first (update), then leave with
+                 * released=0 or menu.cpp asserts released == its button state */
                 osdInterface->machine().ui_input().push_pointer_leave(
                         osdInterface->target(),
                         osd::ui_event_handler::pointer::TOUCH,
                         1,
                         1,
                         event.data.pointer_data.x, event.data.pointer_data.y,
-                        0, event.data.pointer_data.double_action ? 2 : 1);
-*/
+                        0, touch_clicks);
                 break;
             }
             default:

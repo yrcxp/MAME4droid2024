@@ -57,6 +57,15 @@
         <item>Digital Stick</item>
 		<item>Analog Stick</item>
 	</string-array>
+
+	<string-array name="pref_analog_vibrate_options">
+		<item>@string/analog_vibrate_grab</item>
+		<item>@string/analog_vibrate_microswitch</item>
+	</string-array>
+	<string-array name="pref_analog_vibrate_values">
+		<item>1</item>
+		<item>2</item>
+	</string-array>
 	<string-array name="pref_controller_type_values">
 		<item>1</item>
 		<item>2</item>

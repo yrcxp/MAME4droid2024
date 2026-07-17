@@ -46,6 +46,10 @@ int myosd_droid_main  (int argc, char **argv);
 }
 #endif
 
+// Boot-time UI rows policy (20 low-res OSD / 25 normal, user picks kept);
+// consumed by mame_ui_manager::load_ui_options(). 0 = keep current value
+int myosd_droid_adjust_ui_font_rows(int current);
+
 // Netplay specific helpers (C++ linkage; see myosd-droid.cpp's Netplay
 // BRIDGE section).  Callers outside this file currently redeclare these
 // locally rather than including this header.

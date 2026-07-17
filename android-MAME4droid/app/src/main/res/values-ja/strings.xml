@@ -176,7 +176,7 @@
     <string name="pref_language_title">言語</string>
     <string name="lang_system_default">システムのデフォルト</string>
     <string name="pref_force_unifont_title">Unicode UI フォントを使用</string>
-    <string name="pref_force_unifont_summary">MAME の UI に内蔵フォントの代わりに Unicode フォント（unifont）を使用します。中国語・日本語・韓国語は常に使用されます。</string>
+    <string name="pref_force_unifont_summary">MAME の UI にシステムフォントの代わりに Unicode フォント（unifont）を使用します。</string>
     <string name="pref_mame_language_title">MAME 本体のメニューを翻訳</string>
     <string name="pref_mame_language_summary">MAME の内蔵メニューやメッセージを英語ではなく選択した言語で表示します。</string>
 
@@ -240,7 +240,11 @@
     <string name="pref_animated_title">アニメーション</string>
     <string name="pref_animated_summary">アニメーション付きタッチコントロール。パフォーマンス向上のため無効にできます</string>
     <string name="pref_vibrate_title">バイブレーション</string>
-    <string name="pref_vibrate_summary">タッチ時に振動するには有効にしてください</string>
+    <string name="pref_vibrate_summary">マスタースイッチ：タッチコントロール、アナログスティック、光線銃、マウスの振動フィードバック</string>
+    <string name="pref_analog_vibrate_title">アナログスティックの振動</string>
+    <string name="pref_analog_vibrate_summary">スティックを掴んだ時のみ振動、またはアーケードのマイクロスイッチのように方向転換時にも振動します</string>
+    <string name="analog_vibrate_grab">スティックを掴んだ時のみ</string>
+    <string name="analog_vibrate_microswitch">アーケードのマイクロスイッチ</string>
     <string name="pref_touch_dz_title">デジタルデッドゾーン</string>
     <string name="pref_touch_dz_summary">タッチデッドゾーンを有効にします</string>
     <string name="pref_analog_dz_title">アナログデッドゾーン</string>

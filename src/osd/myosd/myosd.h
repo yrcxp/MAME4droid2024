@@ -57,6 +57,9 @@ extern int myosd_display_height_osd;
 //  TYPE DEFINITIONS
 //============================================================
 
+// Android system font provider (myosd_font.cpp)
+osd_font::ptr droid_font_alloc();
+
 class my_osd_interface : public osd_interface, osd_output
 {
 public:
@@ -101,7 +104,7 @@ public:
     }
 
     // font interface
-    virtual osd_font::ptr font_alloc() override { return nullptr; }
+    virtual osd_font::ptr font_alloc() override { return droid_font_alloc(); }
     virtual bool get_font_families(std::string const &font_path, std::vector<std::pair<std::string, std::string> > &result) override { return false; }
 
     // command option overrides

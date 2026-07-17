@@ -24,10 +24,6 @@
 			android:entryValues="@array/pref_osd_resolution_values"
 			android:defaultValue="9" />
 
-		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn  android:key="PREF_SPEED_HACKS_2"
-			android:title="@string/pref_speed_hacks_title" android:summary="@string/pref_speed_hacks_summary"
-			android:defaultValue="False" />
-
 	    <com.seleuco.mame4droid.prefs.ListPrefWithWarn
 			android:entries="@array/pref_sound_options"
 			android:title="@string/pref_sound_title"
@@ -97,15 +93,19 @@
 	<PreferenceScreen android:key="inputSettings" android:title="@string/prefscr_input_title"
 	    android:summary="@string/prefscr_input_summary" android:persistent="false">
 
+		<CheckBoxPreference android:key="PREF_VIBRATE_2"
+			android:title="@string/pref_vibrate_title" android:summary="@string/pref_vibrate_summary"
+			android:defaultValue="false" />
+
     <PreferenceScreen android:key="touchController" android:title="@string/prefscr_touch_controller_title"
 	        android:summary="@string/prefscr_touch_controller_summary" android:persistent="false">
 
 		<ListPreference
 			android:entries="@array/pref_controller_type_options"
 			android:title="@string/pref_controller_type_title"
-			android:key="PREF_CONTROLLER_TYPE"
+			android:key="PREF_CONTROLLER_TYPE_2"
 			android:entryValues="@array/pref_controller_type_values"
-			android:defaultValue="1" />
+			android:defaultValue="3" />
 
         <PreferenceScreen android:key="customControlLayout"
 			android:title="@string/pref_custom_layout_title" android:summary="@string/pref_custom_layout_summary" />
@@ -153,9 +153,14 @@
 			android:title="@string/pref_animated_title" android:summary="@string/pref_animated_summary"
 			android:defaultValue="true" />
 
-		<CheckBoxPreference android:key="PREF_VIBRATE"
-			android:title="@string/pref_vibrate_title" android:summary="@string/pref_vibrate_summary"
-			android:defaultValue="false" />
+		<ListPreference
+			android:entries="@array/pref_analog_vibrate_options"
+			android:title="@string/pref_analog_vibrate_title"
+			android:summary="@string/pref_analog_vibrate_summary"
+			android:key="PREF_ANALOG_VIBRATE_MODE"
+			android:entryValues="@array/pref_analog_vibrate_values"
+			android:dependency="PREF_VIBRATE_2"
+			android:defaultValue="1" />
 
 		<CheckBoxPreference android:key="PREF_TOUCH_DZ"
 			android:title="@string/pref_touch_dz_title" android:summary="@string/pref_touch_dz_summary"
@@ -355,13 +360,13 @@
 
 			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn
 				android:defaultValue="false"
-				android:key="PREF_SHADERS_ENABLED"
+				android:key="PREF_SHADERS_ENABLED_2"
 				android:summary="@string/pref_shaders_enabled_summary"
 				android:title="@string/pref_shaders_enabled_title" />
 
 			<ListPreference
 				android:defaultValue="none"
-				android:dependency="PREF_SHADERS_ENABLED"
+				android:dependency="PREF_SHADERS_ENABLED_2"
 				android:key="PREF_SHADER_EFFECT_3"
 				android:title="@string/pref_effect_shader_title" />
 
@@ -371,7 +376,7 @@
 
 			<PreferenceScreen
 				android:key="PREFSCR_HDR_SETTINGS"
-				android:dependency="PREF_SHADERS_ENABLED"
+				android:dependency="PREF_SHADERS_ENABLED_2"
 				android:title="@string/prefscr_hdr_title"
 				android:summary="@string/prefscr_hdr_summary"
 				android:persistent="false">
@@ -443,7 +448,7 @@
 
 			<CheckBoxPreference
 				android:key="PREF_VECTOR_IMPROVED"
-				android:dependency="PREF_SHADERS_ENABLED"
+				android:dependency="PREF_SHADERS_ENABLED_2"
 				android:title="@string/pref_vector_improved_title"
 				android:summary="@string/pref_vector_improved_summary"
 				android:defaultValue="true" />
@@ -754,7 +759,7 @@
 			</PreferenceScreen>
 
 <!--			<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_SHADER_30"
-				android:dependency="PREF_SHADERS_ENABLED"
+				android:dependency="PREF_SHADERS_ENABLED_2"
 				android:title="Force shaders as 3.0" android:summary="Force shaders to use 3.0 shader language for better accuracy, but some shaders may fail on older devices"
 				android:defaultValue="False" />-->
 

@@ -79,6 +79,15 @@ public class TouchMouse implements IController {
 		return mouse_pid;
 	}
 
+	// Haptic on button presses only: left click uses the primary effect,
+	// right click (3 fingers) the lighter secondary one.
+	protected void vibrateButton(boolean primary) {
+		if (!mm.getPrefsHelper().isVibrate()) return;
+		TouchController tc = mm.getInputHandler().getTouchController();
+		if (primary) tc.vibrate();
+		else tc.vibrateSecondary();
+	}
+
 	public void handleTouchMouse(View v, MotionEvent event) {
 		int action = event.getAction();
 		int actionEvent = action & MotionEvent.ACTION_MASK;
@@ -103,6 +112,7 @@ public class TouchMouse implements IController {
 
 				// Fast left-click (Tap) detection
 				if (System.currentTimeMillis() - mouse_millis < 250 && Math.abs(cx) <= tapTolerance && Math.abs(cy) <= tapTolerance) {
+					vibrateButton(true);
 					Emulator.setMouseData(0, Emulator.MOUSE_BTN_DOWN, 1, -1, -1);
 
 					// Release the click asynchronously after 60ms to ensure the native engine registers it
@@ -153,6 +163,7 @@ public class TouchMouse implements IController {
 						public void run() {
 							mouse_btn1_pressed = !mouse_btn1_cancelled;
 							if (mouse_btn1_pressed) {
+								vibrateButton(true);
 								Emulator.setMouseData(0, Emulator.MOUSE_BTN_DOWN, 1, -1, -1);
 							}
 							mouse_btn1_pending = false;
@@ -163,6 +174,7 @@ public class TouchMouse implements IController {
 					// 3-finger right click detected. Cancel the pending left click and fire right click.
 					mouse_btn1_cancelled = true;
 					mouse_btn2_pressed = true;
+					vibrateButton(false);
 					Emulator.setMouseData(0, Emulator.MOUSE_BTN_DOWN, 2, -1, -1);
 				}
 			}

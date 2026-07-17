@@ -70,6 +70,8 @@ void  (*setAnalogData)(int t, int i, float v1,float v2)=NULL;
 
 void (*setSAFCallbacks)(void *func1,void *func2,void *func3,void *func4) = NULL;
 
+void (*setFontCallbacks)(void *func1) = NULL;
+
 int  (*setKeyData)(int keyCode, int keyAction, char keyChar)=NULL;
 int  (*setMouseData)(int i, int mouseAction, int button, float x, float y)=NULL;
 int  (*setTouchData)(int i, int touchAction, float x, float y)=NULL;
@@ -96,10 +98,12 @@ jmethodID android_safReadDir;
 jmethodID android_safGetNextDirEntry;
 jmethodID android_safCloseDir;
 jmethodID android_netplayWarn;
+jmethodID android_renderFontChar = NULL;
 
 static JavaVM *jVM = NULL;
 static void *libdl = NULL;
 static jclass cEmulator = NULL;
+static jclass cFontHelper = NULL;
 
 static jbyteArray jbaAudioBuffer = NULL;
 
@@ -165,6 +169,9 @@ static void load_lib(const char *str)
 
     setSAFCallbacks = dlsym(libdl, "myosd_droid_setSAFCallbacks");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni","setSAFCallbacks %d\n", setSAFCallbacks!=NULL);
+
+    setFontCallbacks = dlsym(libdl, "myosd_droid_setFontCallbacks");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni","setFontCallbacks %d\n", setFontCallbacks!=NULL);
 
     setKeyData = dlsym(libdl, "myosd_droid_setKeyData");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "myosd_droid_setKeyData %d\n", setKeyData != NULL);
@@ -484,6 +491,52 @@ void netplay_warn_java(char *msg)
         (*jVM)->DetachCurrentThread(jVM);
 }
 
+//Font rendering bridge: renders a glyph with the Android font stack
+//(FontHelper.renderFontChar). Returns a malloc'd int array
+//{w, h, advance, xoffs, w*h ARGB pixels} that the caller frees, or
+//NULL if the char cannot be rendered.
+int *myJNI_renderFontChar(int codepoint, int textSize, int cellHeight, int baseline)
+{
+    JNIEnv *env;
+
+    if(cFontHelper==NULL || android_renderFontChar==NULL)
+        return NULL;
+
+    (*jVM)->GetEnv(jVM, (void**) &env, JNI_VERSION_1_4);
+    int attached  = 0;
+
+    if(env==NULL)
+    {
+        attached  = 1;
+        (*jVM)->AttachCurrentThread(jVM,(void *) &env, NULL);
+    }
+
+    jintArray data = (*env)->CallStaticObjectMethod(env, cFontHelper, android_renderFontChar, codepoint, textSize, cellHeight, baseline);
+
+    int *out = NULL;
+
+    if(data!=NULL)
+    {
+        jsize const length = (*env)->GetArrayLength(env, data);
+        if(length >= 4)
+        {
+            out = malloc(sizeof(int)*length);
+            (*env)->GetIntArrayRegion(env, data, 0, length, (jint *)out);
+            if(length != 4 + out[0]*out[1])
+            {
+                free(out);
+                out = NULL;
+            }
+        }
+        (*env)->DeleteLocalRef(env, data);
+    }
+
+    if(attached)
+        (*jVM)->DetachCurrentThread(jVM);
+
+    return out;
+}
+
 int JNI_OnLoad(JavaVM* vm, void* reserved)
 {
     JNIEnv *env;
@@ -598,6 +651,26 @@ int JNI_OnLoad(JavaVM* vm, void* reserved)
         return -1;
     }
 
+    //font rendering bridge; optional: without it the native side just
+    //skips the Java glyph fallback
+    jclass fontHelper = (*env)->FindClass(env, "com/seleuco/mame4droid/helpers/FontHelper");
+
+    if(fontHelper==NULL)
+    {
+        (*env)->ExceptionClear(env);
+        __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "FontHelper not found; Java font fallback disabled");
+    }
+    else
+    {
+        cFontHelper = (jclass) (*env)->NewGlobalRef(env, fontHelper);
+        android_renderFontChar = (*env)->GetStaticMethodID(env,cFontHelper,"renderFontChar","(IIII)[I");
+        if(android_renderFontChar==NULL)
+        {
+            (*env)->ExceptionClear(env);
+            __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "Failed to find method renderFontChar");
+        }
+    }
+
     return JNI_VERSION_1_4;
 }
 
@@ -634,6 +707,10 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_init
     __android_log_print(ANDROID_LOG_INFO, "mame4droid-jni","calling setSAFCallbacks");
     if(setSAFCallbacks!=NULL)
         setSAFCallbacks(&myJNI_safOpenFile,&myJNI_safReadDir,&myJNI_safGetNextDirEntry,&myJNI_safCloseDir);
+
+    __android_log_print(ANDROID_LOG_INFO, "mame4droid-jni","calling setFontCallbacks");
+    if(setFontCallbacks!=NULL)
+        setFontCallbacks(&myJNI_renderFontChar);
 
     if(setNetplayWarnCallback!=NULL)
         setNetplayWarnCallback(&netplay_warn_java);

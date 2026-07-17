@@ -176,7 +176,7 @@
     <string name="pref_language_title">Idioma</string>
     <string name="lang_system_default">Predeterminado del sistema</string>
     <string name="pref_force_unifont_title">Usar fuente Unicode en la interfaz</string>
-    <string name="pref_force_unifont_summary">Usa la fuente Unicode (unifont) para la interfaz de MAME en lugar de su fuente interna. El chino, el japonés y el coreano la usan siempre.</string>
+    <string name="pref_force_unifont_summary">Usa la fuente Unicode (unifont) para la interfaz de MAME en lugar de la fuente del sistema.</string>
     <string name="pref_mame_language_title">Traducir los menús de MAME</string>
     <string name="pref_mame_language_summary">Muestra los menús y mensajes internos de MAME en el idioma seleccionado en lugar de en inglés.</string>
 
@@ -240,7 +240,11 @@
     <string name="pref_animated_title">Animado</string>
     <string name="pref_animated_summary">Control táctil animado. Desactívalo para mejorar el rendimiento</string>
     <string name="pref_vibrate_title">Vibrar</string>
-    <string name="pref_vibrate_summary">Actívalo para vibrar al tocar</string>
+    <string name="pref_vibrate_summary">Interruptor maestro: vibración para los controles táctiles, el stick analógico, la pistola y el ratón</string>
+    <string name="pref_analog_vibrate_title">Vibración del stick analógico</string>
+    <string name="pref_analog_vibrate_summary">Vibra solo al agarrar el stick, o también en los cambios de dirección como los microswitches de recreativa</string>
+    <string name="analog_vibrate_grab">Solo al agarrar el stick</string>
+    <string name="analog_vibrate_microswitch">Microswitches de recreativa</string>
     <string name="pref_touch_dz_title">Zona muerta digital</string>
     <string name="pref_touch_dz_summary">Activar zona muerta táctil</string>
     <string name="pref_analog_dz_title">Zona muerta analógica</string>

@@ -176,7 +176,7 @@
     <string name="pref_language_title">语言</string>
     <string name="lang_system_default">系统默认</string>
     <string name="pref_force_unifont_title">使用 Unicode 界面字体</string>
-    <string name="pref_force_unifont_summary">为 MAME 界面使用 Unicode 字体（unifont），代替其内置字体。中文、日文和韩文始终使用它。</string>
+    <string name="pref_force_unifont_summary">为 MAME 界面使用 Unicode 字体（unifont），代替系统字体。</string>
     <string name="pref_mame_language_title">翻译 MAME 自身的菜单</string>
     <string name="pref_mame_language_summary">以所选语言（而非英文）显示 MAME 的内置菜单和消息。</string>
 
@@ -240,7 +240,11 @@
     <string name="pref_animated_title">动画</string>
     <string name="pref_animated_summary">动画触摸控制。禁用以提升性能</string>
     <string name="pref_vibrate_title">震动</string>
-    <string name="pref_vibrate_summary">启用以在触摸时震动</string>
+    <string name="pref_vibrate_summary">总开关：触摸控制、模拟摇杆、光枪和鼠标的震动反馈</string>
+    <string name="pref_analog_vibrate_title">模拟摇杆震动</string>
+    <string name="pref_analog_vibrate_summary">仅在握住摇杆时震动，或在方向改变时也震动（如街机微动开关）</string>
+    <string name="analog_vibrate_grab">仅握住摇杆时</string>
+    <string name="analog_vibrate_microswitch">街机微动开关</string>
     <string name="pref_touch_dz_title">数字死区</string>
     <string name="pref_touch_dz_summary">启用触摸死区</string>
     <string name="pref_analog_dz_title">模拟死区</string>

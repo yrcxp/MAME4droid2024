@@ -176,7 +176,7 @@
     <string name="pref_language_title">언어</string>
     <string name="lang_system_default">시스템 기본값</string>
     <string name="pref_force_unifont_title">유니코드 UI 글꼴 사용</string>
-    <string name="pref_force_unifont_summary">MAME UI에 내장 글꼴 대신 유니코드 글꼴(unifont)을 사용합니다. 중국어, 일본어, 한국어는 항상 사용합니다.</string>
+    <string name="pref_force_unifont_summary">MAME UI에 시스템 글꼴 대신 유니코드 글꼴(unifont)을 사용합니다.</string>
     <string name="pref_mame_language_title">MAME 자체 메뉴 번역</string>
     <string name="pref_mame_language_summary">MAME의 내장 메뉴와 메시지를 영어 대신 선택한 언어로 표시합니다.</string>
 
@@ -240,7 +240,11 @@
     <string name="pref_animated_title">애니메이션</string>
     <string name="pref_animated_summary">애니메이션 터치 컨트롤. 성능 향상을 위해 비활성화하세요</string>
     <string name="pref_vibrate_title">진동</string>
-    <string name="pref_vibrate_summary">터치 시 진동하려면 활성화하세요</string>
+    <string name="pref_vibrate_summary">마스터 스위치: 터치 컨트롤, 아날로그 스틱, 라이트건, 마우스의 진동 피드백</string>
+    <string name="pref_analog_vibrate_title">아날로그 스틱 진동</string>
+    <string name="pref_analog_vibrate_summary">스틱을 잡을 때만 진동하거나, 아케이드 마이크로스위치처럼 방향 전환 시에도 진동합니다</string>
+    <string name="analog_vibrate_grab">스틱을 잡을 때만</string>
+    <string name="analog_vibrate_microswitch">아케이드 마이크로스위치</string>
     <string name="pref_touch_dz_title">디지털 데드존</string>
     <string name="pref_touch_dz_summary">터치 데드존을 활성화합니다</string>
     <string name="pref_analog_dz_title">아날로그 데드존</string>

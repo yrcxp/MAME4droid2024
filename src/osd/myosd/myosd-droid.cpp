@@ -52,6 +52,7 @@ static int myosd_droid_video_width = 1;
 static int myosd_droid_video_height = 1;
 static int myosd_droid_resolution = 1;
 static int myosd_droid_resolution_osd = 1;
+static int myosd_droid_ui_font_rows = 25;
 static int myosd_droid_res_width = 1;
 static int myosd_droid_res_height = 1;
 static int myosd_droid_res_width_osd = 1;
@@ -885,8 +886,10 @@ int myosd_droid_setTouchData(int i, int touchAction,  float cx, float cy) {
     } else if (touchAction == com_seleuco_mame4droid_Emulator_FINGER_UP)
     {
         myosd_inputevent ev;
-        ev.data.pointer_data.x = cx;
-        ev.data.pointer_data.y = cy;
+        // Java sends (-1,-1) when the release coordinates were lost (or on
+        // input reset): release at the last known position
+        ev.data.pointer_data.x = (cx < 0 || cy < 0) ? last_cx : cx;
+        ev.data.pointer_data.y = (cx < 0 || cy < 0) ? last_cy : cy;
 
         ev.type = ev.MYOSD_FINGER_UP;
         ev.data.pointer_data.double_action = double_tap;
@@ -1033,6 +1036,12 @@ static void droid_init(void) {
 
         int reswidth = 640, resheight = 480;
         int reswidth_osd = 640, resheight_osd = 480;
+
+        /* Auto (native) game resolution implies the low-res OSD (400x300):
+         * menus, the uismall bitmap font and the 20-row UI are tuned as a
+         * set. Any other game resolution respects the OSD preference. */
+        if (myosd_droid_resolution == 0)
+            myosd_droid_resolution_osd = 0;
 
         switch (myosd_droid_resolution)
         {
@@ -1407,6 +1416,15 @@ static void split_in_args(std::vector <std::string> &qargs, std::string command)
 }
 
 //main entry point to MAME
+/* Boot-time UI rows policy for mame_ui_manager::load_ui_options(): 20/25
+ * are mode-managed (low-res OSD / normal) and swap when the mode changes;
+ * any other count is a user pick. Returns the count to force, 0 = keep. */
+int myosd_droid_adjust_ui_font_rows(int current) {
+    if ((current == 20 || current == 25) && current != myosd_droid_ui_font_rows)
+        return myosd_droid_ui_font_rows;
+    return 0;
+}
+
 int myosd_droid_main(int argc, char **argv) {
 
     __android_log_print(ANDROID_LOG_DEBUG, "libMAME4droid.so", "*********** ANDROID MAIN ********");
@@ -1589,21 +1607,29 @@ int myosd_droid_main(int argc, char **argv) {
         args[n] = "1.0";n++;
     }
 
-    /* CJK languages need a Unicode UI font: the default MAME font and
-     * uismall.bdf are Latin-only and would show CJK menus as blank boxes.
-     * The user can also force this font for any language via a preference. */
+    /* UI font per OSD resolution: low-res OSD keeps the bitmap fonts
+     * readable (uismall Latin / unifont CJK, 20 rows); otherwise system
+     * font via myosd_font.cpp (25 rows). -uifont ALWAYS explicit: cmdline
+     * outranks mame.ini, so a saved value cannot stick across changes. */
     bool cjk_ui = myosd_droid_language.rfind("Chinese", 0) == 0
                || myosd_droid_language == "Japanese"
                || myosd_droid_language == "Korean";
-    if(cjk_ui || myosd_droid_force_unifont)
+    bool lowres_ui = myosd_droid_resolution_osd==0;
+    myosd_droid_ui_font_rows = lowres_ui ? 20 : 25;
+    if(myosd_droid_force_unifont || (cjk_ui && lowres_ui))
     {
         args[n] = "-uifont";n++;
         args[n] = "unifont.bdf";n++;
     }
-    else if(myosd_droid_resolution==0 || myosd_droid_resolution_osd==0)
+    else if(lowres_ui)
     {
         args[n] = "-uifont";n++;
         args[n] = "uismall.bdf";n++;
+    }
+    else
+    {
+        args[n] = "-uifont";n++;
+        args[n] = "default";n++;
     }
 
     if(myosd_plugin_autofire !=0 || myosd_plugin_hiscore !=0 || myosd_plugin_inputmacro !=0)

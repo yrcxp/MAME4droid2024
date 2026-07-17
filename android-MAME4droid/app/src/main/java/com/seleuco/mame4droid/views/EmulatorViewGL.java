@@ -162,10 +162,23 @@ public class EmulatorViewGL extends GLSurfaceView implements IEmuView {
 			boolean useHDR = mm.getPrefsHelper().isHDRDisplayEnabled();
 			boolean fp16Supported = false;
 
+			// Capability gate: the shader path needs a GLES 3.0 context, so if
+			// the hardware doesn't report it fall back to the legacy GLES 1
+			// renderer regardless of the preference value.
+			boolean useShaders = mm.getPrefsHelper().isShadersEnabled();
+			if (useShaders) {
+				android.app.ActivityManager am = (android.app.ActivityManager)
+					mm.getSystemService(android.content.Context.ACTIVITY_SERVICE);
+				if (am == null || am.getDeviceConfigurationInfo().reqGlEsVersion < 0x30000) {
+					android.util.Log.w(TAG, "Shaders requested but GLES 3.0 is unsupported; using legacy GLES 1 renderer.");
+					useShaders = false;
+				}
+			}
+
 			// =================================================================
 			// PHASE 1: EGL PRE-FLIGHT PROBE on the Main Thread
 			// =================================================================
-			if (!mm.getPrefsHelper().isShadersEnabled()) {
+			if (!useShaders) {
 				// Legacy route (GLES 1)
 				android.util.Log.d(TAG, "Initializing context: Legacy Path selected (GLES 1.0).");
 				setEGLContextClientVersion(1);

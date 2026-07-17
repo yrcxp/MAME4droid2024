@@ -711,6 +711,19 @@ static bool netplay_iu_rollback_normal_step(netplay_t *handle, bool is_new_mame_
         bool peer_pause_confirmed = peer_paused_now &&
             (pp_now_ms - s_peer_pause_since_ms) >= PEER_PAUSE_DEBOUNCE_MS;
 
+        /* Live debounced re-check for the advantage stall below: raw pause
+         * blips (spurious during long boots) must NOT lift the stall -- that
+         * let the fast peer free-run past the rollback window during boot
+         * and desync permanently (mslug2 @70% field case). */
+        auto peer_pause_confirmed_live = [&]() -> bool {
+            struct timeval tv2; gettimeofday(&tv2, NULL);
+            uint32_t now2 = (uint32_t)((tv2.tv_sec * 1000) + (tv2.tv_usec / 1000));
+            bool pn = (handle->is_peer_paused && !myosd_is_paused());
+            if (pn) { if (s_peer_pause_since_ms == 0) s_peer_pause_since_ms = now2; }
+            else s_peer_pause_since_ms = 0;
+            return pn && (now2 - s_peer_pause_since_ms) >= PEER_PAUSE_DEBOUNCE_MS;
+        };
+
         if (handle->has_received_data && handle->has_connection &&
             peer_pause_confirmed && !handle->resync_active) {
             if (handle->netplay_warn)
@@ -760,8 +773,9 @@ static bool netplay_iu_rollback_normal_step(netplay_t *handle, bool is_new_mame_
          * never blocks, so stall whenever more than
          * ROLLBACK_MAX_FRAME_ADVANTAGE frames ahead of the peer
          * (minus one-way network delay); a hard cap guarantees we
-         * never freeze if the peer stops. */
-        if (handle->has_received_data && handle->has_connection && !handle->is_peer_paused && !myosd_is_paused()) {
+         * never freeze if the peer stops.  Gated on the DEBOUNCED
+         * pause: a raw flag blip must never disable the stall. */
+        if (handle->has_received_data && handle->has_connection && !peer_pause_confirmed && !myosd_is_paused()) {
             int stall_logged = 0;
             int stall_iters = 0;
             /* HARD depth cap: the advantage must never approach
@@ -776,7 +790,7 @@ static bool netplay_iu_rollback_normal_step(netplay_t *handle, bool is_new_mame_
             long hard_cap   = safe_depth - ROLLBACK_STALL_HARD_MARGIN;
             if (hard_cap < ROLLBACK_MAX_FRAME_ADVANTAGE + 1)
                 hard_cap = ROLLBACK_MAX_FRAME_ADVANTAGE + 1; /* sanity */
-            while (handle->has_connection && !handle->is_peer_paused && !myosd_is_paused() &&
+            while (handle->has_connection && !peer_pause_confirmed_live() && !myosd_is_paused() &&
                    !handle->resync_active /* join the resync episode promptly */) {
                 pthread_mutex_lock(&handle->sync_mutex);
                 uint32_t lrpf = handle->last_received_peer_frame;

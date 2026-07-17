@@ -47,8 +47,8 @@ package com.seleuco.mame4droid.input;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Rect;
-import android.os.Build;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
@@ -353,14 +353,17 @@ public class TouchController implements IController {
 			default: stick_state = STICK_NONE;
 		}
 
-		// Trigger targeted UI invalidations (repaints) and haptics
+		// Trigger targeted UI invalidations (repaints) and haptics.
+		// Haptics are coalesced into a single effect per pass: back-to-back
+		// vibrate() calls cancel each other and feel mushy.
+		boolean wantVibrate = false;
 		for (int j = 0; j < values.size(); j++) {
 			InputValue iv = values.get(j);
 
 			if (iv.getType() == TYPE_STICK_IMG && pH.getControllerType() == PrefsHelper.PREF_DIGITAL_DPAD) {
 				if (stick_state != old_stick_state) {
 					if (pH.isAnimatedInput()) mm.getInputView().invalidate(iv.getRect());
-					if (pH.isVibrate() && stick_state != STICK_NONE) vibrate();
+					if (pH.isVibrate() && stick_state != STICK_NONE) wantVibrate = true;
 					old_stick_state = stick_state;
 				}
 			} else if (iv.getType() == TYPE_ANALOG_RECT && pH.getControllerType() != PrefsHelper.PREF_DIGITAL_DPAD) {
@@ -370,7 +373,7 @@ public class TouchController implements IController {
 						if (pH.isDebugEnabled()) mm.getInputView().invalidate();
 						else mm.getInputView().invalidate(iv.getRect());
 					}
-					if (pH.isVibrate() && stick_state != STICK_NONE) vibrate();
+					if (pH.isVibrate() && stick_state != STICK_NONE) wantVibrate = true;
 					old_stick_state = stick_state;
 				}
 			} else if (iv.getType() == TYPE_BUTTON_IMG && !onlyStick) {
@@ -380,11 +383,13 @@ public class TouchController implements IController {
 
 				if (btnStates[iv.getValue()] != old_btnStates[iv.getValue()]) {
 					if (pH.isAnimatedInput()) mm.getInputView().invalidate(iv.getRect());
-					if (pH.isVibrate() && btnStates[i] == BTN_PRESS_STATE) vibrate();
+					if (pH.isVibrate() && btnStates[i] == BTN_PRESS_STATE) wantVibrate = true;
 					old_btnStates[iv.getValue()] = btnStates[iv.getValue()];
 				}
 			}
 		}
+
+		if (wantVibrate) vibrate();
 	}
 
 	public Boolean isHandledStick(){
@@ -593,16 +598,40 @@ public class TouchController implements IController {
 		}
 	}
 
-	protected void vibrate() {
-		Vibrator vibrator = (Vibrator) mm.getSystemService(Context.VIBRATOR_SERVICE);
-		if (vibrator == null || !vibrator.hasVibrator()) return;
+	// Haptics engine : vibrator and effects are resolved once,
+	// and the vibrate binder call runs on its own thread so it never delays
+	// the touch path. Latency is what makes haptics feel crisp or mushy.
+	private boolean hapticInitDone = false;
+	private Vibrator hapticVibrator = null;
+	private VibrationEffect hapticPressEffect = null;
+	private VibrationEffect hapticTickEffect = null;
+	private Handler hapticHandler = null;
 
-		// Use the modern Haptic API for supported devices, with a safe fallback for older APIs
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-			vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK));
-		} else {
-			// Legacy fallback
-			vibrator.vibrate(20);
+	protected void vibrate() {
+		fireHaptic(true);
+	}
+
+	// Lighter effect so secondary buttons (2/3) feel different from button 1
+	protected void vibrateSecondary() {
+		fireHaptic(false);
+	}
+
+	private void fireHaptic(boolean primary) {
+		if (!hapticInitDone) {
+			hapticInitDone = true;
+			Vibrator v = (Vibrator) mm.getSystemService(Context.VIBRATOR_SERVICE);
+			if (v != null && v.hasVibrator()) {
+				hapticVibrator = v;
+				hapticPressEffect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK);
+				hapticTickEffect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK);
+				HandlerThread ht = new HandlerThread("haptic-events");
+				ht.start();
+				hapticHandler = new Handler(ht.getLooper());
+			}
 		}
+		if (hapticVibrator == null) return;
+
+		final VibrationEffect effect = primary ? hapticPressEffect : hapticTickEffect;
+		hapticHandler.post(() -> hapticVibrator.vibrate(effect));
 	}
 }

@@ -1,8 +1,8 @@
 diff --git a/ui.cpp b/ui.cpp
-index a9982cd..5a99b69 100644
+index a9982cd..29293ec 100644
 --- a/ui.cpp
 +++ b/ui.cpp
-@@ -51,6 +51,12 @@
+@@ -51,6 +51,13 @@
  #include <functional>
  #include <type_traits>
  
@@ -11,11 +11,12 @@ index a9982cd..5a99b69 100644
 +#include "ui/miscmenu.h"
 +#include <filesystem>
 +int myosd_netplay_get_ff_active();
++int myosd_droid_adjust_ui_font_rows(int current);
 +// END DAV HACK
  
  /***************************************************************************
      LOCAL VARIABLES
-@@ -923,8 +929,162 @@
+@@ -923,8 +930,162 @@ void mame_ui_manager::set_startup_text(const char *text, bool force)
  //  render it; called by video.c
  //-------------------------------------------------
  
@@ -178,7 +179,7 @@ index a9982cd..5a99b69 100644
  	// always start clean
  	for (auto &target : machine().render().targets())
  	{
-@@ -1882,8 +2042,14 @@
+@@ -1882,8 +2043,14 @@ uint32_t mame_ui_manager::handler_ingame()
  		machine().video().set_fastforward(true);
  		show_fps_temp(0.5);
  	}
@@ -195,3 +196,19 @@ index a9982cd..5a99b69 100644
  
  	// update mute when unthrottled
  	if (m_unthrottle_mute)
+@@ -2717,6 +2884,15 @@ void mame_ui_manager::load_ui_options()
+ 			osd_printf_error("**Error loading ui.ini**\n");
+ 		}
+ 	}
++
++	// DAV HACK: the OSD decides the boot-time UI row count (0 = keep)
++	int const rows = myosd_droid_adjust_ui_font_rows(options().font_rows());
++	if (rows > 0)
++	{
++		try { options().set_value(OPTION_FONT_ROWS, rows, OPTION_PRIORITY_CMDLINE); }
++		catch (options_exception &) { }
++	}
++	// END DAV HACK
+ }
+ 
+ //-------------------------------------------------

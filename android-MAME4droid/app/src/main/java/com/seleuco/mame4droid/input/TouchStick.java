@@ -78,6 +78,7 @@ public class TouchStick implements IController {
 	float rx, ry, oldRx, oldRy;
 
 	int motion_pid = -1;
+	int haptic_sector = STICK_NONE;
 
 	static BitmapDrawable inner_img = null;
 	static BitmapDrawable outer_img = null;
@@ -122,6 +123,7 @@ public class TouchStick implements IController {
 			rx = ry = mag = 0;
 			oldRx = oldRy = -999;
 			motion_pid = -1;
+			haptic_sector = STICK_NONE;
 		}
 	}
 
@@ -223,6 +225,35 @@ public class TouchStick implements IController {
 		return pad_data;
 	}
 
+	// Direction sector for analog haptics: mirrors the digital way-mapping
+	// boundaries so clicks land where a microswitch stick would engage.
+	protected int hapticSector() {
+		if (mag < deadZone) return STICK_NONE;
+
+		int ways = mm.getPrefsHelper().getStickWays();
+		if (ways == -1) ways = Emulator.getValue(Emulator.NUMWAYS);
+		boolean inGame = Emulator.isInGameButNotInMenu();
+		float v = ang;
+
+		if (ways == 2 && inGame) {
+			return v < 180 ? STICK_RIGHT : STICK_LEFT;
+		} else if (ways == 4 || !inGame) {
+			if (v >= 315 || v < 45) return STICK_DOWN;
+			if (v < 135) return STICK_RIGHT;
+			if (v < 225) return STICK_UP;
+			return STICK_LEFT;
+		} else {
+			if (v >= 330 || v < 30) return STICK_DOWN;
+			if (v < 60) return STICK_DOWN_RIGHT;
+			if (v < 120) return STICK_RIGHT;
+			if (v < 150) return STICK_UP_RIGHT;
+			if (v < 210) return STICK_UP;
+			if (v < 240) return STICK_UP_LEFT;
+			if (v < 300) return STICK_LEFT;
+			return STICK_DOWN_LEFT;
+		}
+	}
+
 	protected void calculateStickState(Point pt, Point min, Point max, Point center) {
 		// Enforce boundary constraints
 		if (pt.x > max.x) pt.x = max.x;
@@ -299,6 +330,8 @@ public class TouchStick implements IController {
 		int pointerIndex = event.getActionIndex();
 		int pid = event.getPointerId(pointerIndex);
 
+		boolean wantHaptic = false;
+
 		if (actionMasked == MotionEvent.ACTION_UP ||
 			(actionMasked == MotionEvent.ACTION_POINTER_UP && pid == motion_pid) ||
 			actionMasked == MotionEvent.ACTION_CANCEL) {
@@ -314,6 +347,7 @@ public class TouchStick implements IController {
 				//TODO: revisar si hayq e comentar motion_pid == -1 no sea que interfiera con otro control
 				if (rStickArea.contains(x, y) && motion_pid == -1) {
 					motion_pid = pointerId;
+					wantHaptic = true; // click on stick grab
 				}
 
 				if (motion_pid == pointerId) {
@@ -325,6 +359,22 @@ public class TouchStick implements IController {
 		}
 
 		pad_data = updateAnalog(pad_data);
+
+		// Pure analog stick haptics: click on grab (default mode) and, in
+		// microswitch mode, also on deadzone crossing and sector changes;
+		// coalesced into one effect per pass. Digital modes click in handleImageStates.
+		if (mm.getPrefsHelper().isVibrate() &&
+			mm.getPrefsHelper().getControllerType() == PrefsHelper.PREF_ANALOG_STICK &&
+			!mm.getInputHandler().getTiltSensor().isEnabled()) {
+			if (mm.getPrefsHelper().getAnalogVibrateMode() == PrefsHelper.PREF_ANALOG_VIBRATE_MICROSWITCH) {
+				int sector = hapticSector();
+				if (sector != haptic_sector) {
+					if (sector != STICK_NONE) wantHaptic = true;
+					haptic_sector = sector;
+				}
+			}
+			if (wantHaptic) mm.getInputHandler().getTouchController().vibrate();
+		}
 
 		// Limit UI invalidations by only redrawing when significant deltas occur
 		double inc = mm.getPrefsHelper().isDebugEnabled() ? 0.01 : 0.08;

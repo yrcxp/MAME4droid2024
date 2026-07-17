@@ -44,9 +44,13 @@
 
 package com.seleuco.mame4droid.helpers;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.preference.PreferenceManager;
 
 import com.seleuco.mame4droid.Emulator;
@@ -88,7 +92,8 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_GLOBAL_WARN_ON_EXIT = "PREF_GLOBAL_WARN_ON_EXIT";
 
 	final static public String PREF_SHADERS = "shaders";
-	final static public String PREF_SHADERS_ENABLED = "PREF_SHADERS_ENABLED";
+	// Key bumped to _2: the smart default (GLES 3.0 check) re-seeds on update
+	final static public String PREF_SHADERS_ENABLED = "PREF_SHADERS_ENABLED_2";
 	final static public String PREF_SHADER_EFFECT = "PREF_SHADER_EFFECT_3";
 
 	final static public String PREF_SCRAPE_ENABLED = "PREF_SCRAPE_ENABLED";
@@ -123,13 +128,16 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_TOUCH_LIGHTGUN = "PREF_TOUCH_LIGHTGUN";
 	final static public String PREF_TOUCH_LIGHTGUN_FORCE = "PREF_TOUCH_LIGHTGUN_FORCE";
 	final static public String PREF_TOUCH_DZ = "PREF_TOUCH_DZ";
-	final static public String PREF_CONTROLLER_TYPE = "PREF_CONTROLLER_TYPE";
+	// Key bumped to _2: default changed to analog stick, re-seeds on update
+	final static public String PREF_CONTROLLER_TYPE = "PREF_CONTROLLER_TYPE_2";
 	final static public String PREF_STICK_TYPE = "PREF_STICK_TYPE";
 	final static public String PREF_NUMBUTTONS = "PREF_NUMBUTTONS";
 	final static public String PREF_CONTROLLER_AUTODETECT = "PREF_CONTROLLER_AUTODETECT";
 	final static public String PREF_ANALOG_DZ = "PREF_ANALOG_DZ";
 	final static public String PREF_GAMEPAD_DZ = "PREF_GAMEPAD_DZ";
-	final static public String PREF_VIBRATE = "PREF_VIBRATE";
+	// Key bumped to _2: the smart default (haptic hardware check) re-seeds on update
+	final static public String PREF_VIBRATE = "PREF_VIBRATE_2";
+	final static public String PREF_ANALOG_VIBRATE_MODE = "PREF_ANALOG_VIBRATE_MODE";
 	final static public String PREF_MOUSE = "PREF_MOUSE";
 	final static public String PREF_TOUCH_MOUSE = "PREF_TOUCH_MOUSE";
 	final static public String PREF_TOUCH_UI = "PREF_TOUCH_UI";
@@ -195,6 +203,9 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public int PREF_DIGITAL_STICK = 2;
 	final static public int PREF_ANALOG_STICK = 3;
 
+	final static public int PREF_ANALOG_VIBRATE_GRAB = 1;
+	final static public int PREF_ANALOG_VIBRATE_MICROSWITCH = 2;
+
 	final static public int PREF_INPUT_NO_DETECT_CONTROLLER = 1;
 	final static public int PREF_INPUT_DETECT_CONTROLLER = 2;
 
@@ -228,6 +239,38 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public PrefsHelper(MAME4droid value) {
 		mm = value;
+		seedSmartDefaults();
+	}
+
+	// One-time smart defaults, re-run when a key is bumped (_2): vibration ON
+	// only when the device truly implements EFFECT_CLICK in hardware; GL 3.0
+	// shader renderer ON only when the device reports GLES 3.0 and isn't low-RAM.
+	protected void seedSmartDefaults() {
+		SharedPreferences p = getSharedPreferences();
+		SharedPreferences.Editor e = null;
+
+		if (!p.contains(PREF_VIBRATE)) {
+			boolean on = false;
+			Vibrator v = (Vibrator) mm.getSystemService(Context.VIBRATOR_SERVICE);
+			if (v != null && v.hasVibrator()) {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+					on = v.areAllEffectsSupported(VibrationEffect.EFFECT_CLICK) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES;
+				else
+					on = v.hasAmplitudeControl();
+			}
+			e = p.edit();
+			e.putBoolean(PREF_VIBRATE, on);
+		}
+
+		if (!p.contains(PREF_SHADERS_ENABLED)) {
+			ActivityManager am = (ActivityManager) mm.getSystemService(Context.ACTIVITY_SERVICE);
+			boolean gl3 = am != null && am.getDeviceConfigurationInfo().reqGlEsVersion >= 0x30000
+				&& !am.isLowRamDevice();
+			if (e == null) e = p.edit();
+			e.putBoolean(PREF_SHADERS_ENABLED, gl3);
+		}
+
+		if (e != null) e.apply();
 	}
 
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
@@ -407,7 +450,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getControllerType() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_CONTROLLER_TYPE, "1")).intValue();
+		return Integer.valueOf(getSharedPreferences().getString(PREF_CONTROLLER_TYPE, "3")).intValue();
 	}
 
 	public boolean isTouchLightgunForced() {
@@ -521,6 +564,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public boolean isVibrate() {
 		return getSharedPreferences().getBoolean(PREF_VIBRATE, false);
+	}
+
+	public int getAnalogVibrateMode() {
+		return Integer.valueOf(getSharedPreferences().getString(PREF_ANALOG_VIBRATE_MODE, "1")).intValue();
 	}
 
 	public String getROMsDIR() {
