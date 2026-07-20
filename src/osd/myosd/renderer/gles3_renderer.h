@@ -53,8 +53,10 @@ public:
 
 		if (!initiated)
 		{
-			s_filters = filter_shader::load_filters(root_path);
+			// mark attempted first so a load failure never retries every frame;
+			// myosd_video_loadShaders contains any exception thrown here
 			initiated = true;
+			s_filters = filter_shader::load_filters(root_path);
 		}
 	}
 

@@ -34,6 +34,7 @@
 #include <mutex>
 #include <vector>
 #include <string>
+#include <stdexcept>
 
 #define MAX(a,b) ((a)<(b) ? (b) : (a))
 
@@ -335,7 +336,16 @@ extern "C" bool myosd_video_setShader(const char* shader_name)
 
 extern "C" void myosd_video_loadShaders(const char* path)
 {
-    // load effect shaders for gles2 renderer
-    gles3_renderer::load_shaders(path);
+    // load effect shaders; never let a shader error abort the app (missing or
+    // broken shaders.cfg / shader file) - degrade to no effects
+    try {
+        gles3_renderer::load_shaders(path);
+    }
+    catch (const std::exception& e) {
+        MYOSD_LOG("loadShaders failed, continuing without effects: %s", e.what());
+    }
+    catch (...) {
+        MYOSD_LOG("loadShaders failed, continuing without effects");
+    }
 }
 

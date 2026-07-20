@@ -52,6 +52,7 @@ import android.util.Log;
 
 import com.seleuco.mame4droid.Emulator;
 import com.seleuco.mame4droid.MAME4droid;
+import com.seleuco.mame4droid.R;
 import com.seleuco.mame4droid.helpers.PrefsHelper;
 import com.seleuco.mame4droid.widgets.WarnWidget;
 
@@ -325,7 +326,19 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 		}
 		else if(!init && mm != null)
 		{
-			Emulator.loadShaders(mm.getMainHelper().getInstallationDIR());
+			String installDir = mm.getMainHelper().getInstallationDIR();
+			// warn once if shaders.cfg is absent (missing or read-only install
+			// dir): effects can't load; native side degrades without crashing
+			if(!new java.io.File(installDir, "shaders.cfg").exists())
+			{
+				mm.runOnUiThread(new Runnable() {
+					public void run() {
+						new WarnWidget.WarnWidgetHelper(mm,
+							mm.getString(R.string.shaders_load_error), 6, Color.YELLOW, true);
+					}
+				});
+			}
+			Emulator.loadShaders(installDir);
 			Emulator.setShader(oldEffect.equals("none") ? null : oldEffect);
 			syncRendererParameters(prefsHelper.getSharedPreferences());
 			init = true;

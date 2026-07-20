@@ -114,7 +114,13 @@ std::vector<std::pair<std::string, filter_data>> filter_shader::load_filters(con
 	ANDROID_LOG("Opening %s...", path.c_str());
 	std::FILE* file = std::fopen(path.c_str(), "rb");
 
-	if (!file) throw std::runtime_error("Failure on opening shaders.cfg");
+	if (!file)
+	{
+		// shaders.cfg is optional; missing means no effect shaders (not fatal)
+		// - return empty so GL rendering keeps working
+		ANDROID_LOG("shaders.cfg not found at %s, no effect shaders loaded", path.c_str());
+		return filters;
+	}
 
 	char buf[150];
 	while (std::fgets(buf, sizeof buf, file))

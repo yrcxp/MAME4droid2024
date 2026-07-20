@@ -504,4 +504,5 @@
     <string name="pref_touch_controller_visible_summary">Desactívalo para ocultar el mando táctil. Útil cuando usas un GamePad</string>
     <string name="pref_fullscreen_portrait_title">Pantalla completa</string>
     <string name="pref_fullscreen_portrait_summary">Selecciónalo para activar el modo vertical a pantalla completa</string>
+    <string name="shaders_load_error">No se pudieron cargar los shaders de efectos: falta shaders.cfg. Reinstala la app o asegúrate de que la carpeta de instalación no sea de solo lectura.</string>
 </resources>

@@ -504,4 +504,5 @@
     <string name="pref_touch_controller_visible_summary">禁用以隐藏触摸手柄。使用游戏手柄时有用</string>
     <string name="pref_fullscreen_portrait_title">全屏</string>
     <string name="pref_fullscreen_portrait_summary">选择以启用竖屏全屏模式</string>
+    <string name="shaders_load_error">无法加载特效着色器：缺少 shaders.cfg 文件。请重新安装应用，或确认安装文件夹不是只读的。</string>
 </resources>
