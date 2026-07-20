@@ -1,13 +1,13 @@
 // license:BSD-3-Clause
 //============================================================
 //
-//  myosd-droid.cpp - Implementation of osd droid stuff
+//  myosd_droid.cpp - Implementation of osd droid stuff
 //
 //  MAME4DROID  by David Valdeita (Seleuco)
 //
 //============================================================
 
-#include "myosd-droid.h"
+#include "myosd_droid.h"
 #include "opensl_snd.h"
 
 
@@ -21,7 +21,7 @@
 //#include "emuopts.h"
 
 #include "netplay.h"
-#include "myosd-netplay.h"
+#include "myosd_netplay.h"
 #include "skt_netplay.h"
 
 #include <pthread.h>
@@ -36,7 +36,7 @@
 #include "myosd_core.h"
 #include "myosd_saf.h"
 
-#include "../../../android-MAME4droid/app/src/main/jni/com_seleuco_mame4droid_Emulator.h"
+#include "../../../../android-MAME4droid/app/src/main/jni/com_seleuco_mame4droid_Emulator.h"
 
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #define MAX(a,b) ((a)<(b) ? (b) : (a))
@@ -1037,11 +1037,10 @@ static void droid_init(void) {
         int reswidth = 640, resheight = 480;
         int reswidth_osd = 640, resheight_osd = 480;
 
-        /* Auto (native) game resolution implies the low-res OSD (400x300):
-         * menus, the uismall bitmap font and the 20-row UI are tuned as a
-         * set. Any other game resolution respects the OSD preference. */
-        if (myosd_droid_resolution == 0)
-            myosd_droid_resolution_osd = 0;
+        /* Auto game resolution implies the low-res OSD (400x300). Derive a
+         * local effective value instead of writing back into the Java-owned
+         * resolution_osd, so it can't desync with setValue ordering. */
+        int eff_resolution_osd = (myosd_droid_resolution == 0) ? 0 : myosd_droid_resolution_osd;
 
         switch (myosd_droid_resolution)
         {
@@ -1058,7 +1057,7 @@ static void droid_init(void) {
             case 10:{reswidth = myosd_droid_res_width_native;resheight = myosd_droid_res_height_native;break;}//fullscreen
         }
 
-        switch (myosd_droid_resolution_osd)
+        switch (eff_resolution_osd)
         {
             case 0:{reswidth_osd = 400;resheight_osd = 300;break;}
            // case 11:{reswidth_osd = 450;resheight_osd = 300;break;}
@@ -1614,7 +1613,9 @@ int myosd_droid_main(int argc, char **argv) {
     bool cjk_ui = myosd_droid_language.rfind("Chinese", 0) == 0
                || myosd_droid_language == "Japanese"
                || myosd_droid_language == "Korean";
-    bool lowres_ui = myosd_droid_resolution_osd==0;
+    /* auto game res implies low-res OSD even if the OSD pref arrived
+     * (again) after droid_init's forcing - robust to setValue ordering */
+    bool lowres_ui = myosd_droid_resolution_osd==0 || myosd_droid_resolution==0;
     myosd_droid_ui_font_rows = lowres_ui ? 20 : 25;
     if(myosd_droid_force_unifont || (cjk_ui && lowres_ui))
     {
@@ -1631,6 +1632,10 @@ int myosd_droid_main(int argc, char **argv) {
         args[n] = "-uifont";n++;
         args[n] = "default";n++;
     }
+
+    __android_log_print(ANDROID_LOG_DEBUG, "libMAME4droid.so",
+            "uifont: res=%d res_osd=%d cjk=%d -> %s", myosd_droid_resolution,
+            myosd_droid_resolution_osd, (int)cjk_ui, args[n-1]);
 
     if(myosd_plugin_autofire !=0 || myosd_plugin_hiscore !=0 || myosd_plugin_inputmacro !=0)
     {
@@ -1848,7 +1853,7 @@ const char* myosd_droid_get_netplay_force_game(void) {
 }
 
 /* 1 while a netplay-forced game (re)load is pending or in flight; gates
- * has_begun_game in myosd-netplay.cpp so the netplay start machinery can
+ * has_begun_game in myosd_netplay.cpp so the netplay start machinery can
  * never engage on the PRE-restart machine. */
 int myosd_droid_netplay_restart_pending(void) {
     if (myosd_droid_netplay_restarting)

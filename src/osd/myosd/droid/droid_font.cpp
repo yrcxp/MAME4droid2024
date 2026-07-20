@@ -1,7 +1,7 @@
 // license:BSD-3-Clause
 //============================================================
 //
-//  myosd_font.cpp - Android system font provider for the UI
+//  droid_font.cpp - Android system font provider for the UI
 //
 //  Serves MAME's osd_font interface from the fonts installed
 //  on the device: the primary family is resolved with the NDK
@@ -19,6 +19,9 @@
 #include "unicode.h"
 #include "osdcore.h"
 #include "osdepend.h"
+
+#include "modules/font/font_module.h"
+#include "modules/osdmodule.h"
 
 #include "bitmap.h"
 #include "palette.h"
@@ -567,12 +570,11 @@ bool osd_font_droid::get_bitmap(char32_t chnum, bitmap_argb32 &bitmap, std::int3
 
 } // anonymous namespace
 
-
 //============================================================
-//  factory used by my_osd_interface::font_alloc()
+//  platform font factory (contract declared in myosd.h)
 //============================================================
 
-osd_font::ptr droid_font_alloc()
+osd_font::ptr myosd_platform_font_alloc()
 {
 	return std::make_unique<osd_font_droid>();
 }

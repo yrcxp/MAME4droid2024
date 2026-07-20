@@ -2,7 +2,7 @@
 // copyright-holders: David Valdeita (Seleuco)
 /***************************************************************************
 
-    myosd-netplay.cpp
+    myosd_netplay.cpp
 
     Rollback netplay bridge functions, plus the netplay step of
     my_osd_interface::input_update() (myosd_netplay_input_update and its
@@ -24,7 +24,7 @@
 
 ***************************************************************************/
 
-#include "myosd-netplay.h"
+#include "myosd_netplay.h"
 
 #include "emu.h"
 #include "screen.h"
@@ -47,7 +47,7 @@
 /* Defined in myosdmain.cpp; this TU only reads it. */
 extern my_osd_interface *osdInterface;
 
-/* Droid bridge (myosd-droid.cpp) - netplay restart / pause helpers.  Plain C++
+/* Droid bridge (myosd_droid.cpp) - netplay restart / pause helpers.  Plain C++
  * linkage, same as the declarations netplay.cpp uses for this family.        */
 int  myosd_droid_netplay_restart_pending(void);
 void myosd_droid_netplay_set_exitPause(int val);
@@ -85,7 +85,7 @@ static volatile int               g_rb_pending_canon = 0;
 
 /* Set while a rollback fast-forward pass is in progress (see the rollback
  * state machine below, myosd_netplay_input_update).  Checked by
- * droid_video_draw_cb (myosd-droid.cpp) to suppress rendering. */
+ * droid_video_draw_cb (myosd_droid.cpp) to suppress rendering. */
 static volatile int g_rb_ff_active = 0;
 
 /* Set/cleared alongside g_rb_ff_active; checked by droid_sound_play_cb to
@@ -156,7 +156,7 @@ static long     g_rate_adv_ema_x16 = 0;
 static uint32_t g_rate_last_eval   = 0;    /* frame of the last speed step   */
 
 /* Netplay step of my_osd_interface::input_update() (declared in
- * myosd-netplay.h).  Returns true if input_update() must return
+ * myosd_netplay.h).  Returns true if input_update() must return
  * immediately this call. */
 bool myosd_netplay_input_update(netplay_t *handle, bool is_new_mame_frame, bool is_java_paused)
 {
@@ -253,7 +253,7 @@ extern "C" void myosd_netplay_service_deferred_load(void)
     myosd_netplay_service_timer_canon();
 }
 
-/* Latch a deferred reload; see myosd-netplay.h and myosd_netplay_service_
+/* Latch a deferred reload; see myosd_netplay.h and myosd_netplay_service_
  * deferred_load above.  Exposed so netplay.cpp's session/sync logic can
  * schedule one without touching the (private) pending-load state itself. */
 void myosd_netplay_rollback_arm_pending_load(uint32_t frame)
@@ -263,7 +263,7 @@ void myosd_netplay_rollback_arm_pending_load(uint32_t frame)
 }
 
 /* Cancel any pending deferred load and reset the dynamic rate controller to
- * 1000 (100%); see myosd-netplay.h.  Called at the start of a mid-game
+ * 1000 (100%); see myosd_netplay.h.  Called at the start of a mid-game
  * RESYNC episode, which replaces the timeline wholesale. */
 void myosd_netplay_rollback_reset_for_resync(void)
 {
@@ -1323,7 +1323,7 @@ size_t myosd_netplay_get_state_size()
 
 /* ============================================================
  * SECTION 4 -- FF / audio / speed / selfcheck control accessors
- * Thin control surface over the section-1 flags; read by myosd-droid.cpp's
+ * Thin control surface over the section-1 flags; read by myosd_droid.cpp's
  * video/audio callbacks and by the trunk's dynamic rate controller.
  * ============================================================ */
 

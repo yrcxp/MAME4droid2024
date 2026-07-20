@@ -43,7 +43,7 @@
  * The emulator never blocks. Each frame it predicts the peer's input
  * (repeat last known), executes immediately with local + predicted input,
  * and captures the resulting machine state into a ring buffer of savestates
- * (myosd-netplay.cpp). When the peer's REAL input for a past frame finally
+ * (myosd_netplay.cpp). When the peer's REAL input for a past frame finally
  * arrives and differs from the prediction, that frame is mispredicted: the
  * machine rolls back to the last correct ring-buffer slot and fast-forwards
  * back to the present, re-simulating every frame in between with the
@@ -77,7 +77,7 @@
  * - Mid-game RESYNC (NETPLAY_MSG_RESYNC): a user-triggered recovery that
  *   re-synchronizes both peers from a freshly transferred state without
  *   restarting the session, for a driver that desyncs during play.
- * - CRC desync detector (myosd-netplay.cpp, NETPLAY_CRC_DETECTOR_ENABLED,
+ * - CRC desync detector (myosd_netplay.cpp, NETPLAY_CRC_DETECTOR_ENABLED,
  *   diagnostic / off by default): periodically hashes every "memory/"
  *   save_item and compares peers, naming the exact diverging item when a
  *   driver turns out not to be rollback-safe.
@@ -123,7 +123,7 @@
 
 #include <stdio.h>
 #include "netplay.h"
-#include "myosd-netplay.h"
+#include "myosd_netplay.h"
 #include <unistd.h>
 #include <time.h>
 
@@ -137,7 +137,7 @@
 #define NLOG(...) do { if(NETPLAY_LOG_ENABLED) __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay", __VA_ARGS__); } while(0)
 #define NLOG_VERBOSE(...) do { if(0) __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay", __VA_ARGS__); } while(0)
 
-// Netplay C++ helper functions imported from myosd-droid.cpp
+// Netplay C++ helper functions imported from myosd_droid.cpp
 extern void myosd_droid_netplay_set_exitPause(int val);
 extern void myosd_droid_netplay_force_pause();
 extern int myosd_droid_netplay_get_inMenu();
@@ -147,7 +147,7 @@ extern float myosd_droid_netplay_joystick_read_analog(int i, char axis);
 extern unsigned long myosd_droid_netplay_mouse_read(int i);
 extern float myosd_droid_netplay_mouse_read_analog(int i, char axis);
 extern float myosd_droid_netplay_lightgun_read_analog(int i, char axis);
-/* Cross-peer sample-rate sync (see myosd-droid.cpp).                       */
+/* Cross-peer sample-rate sync (see myosd_droid.cpp).                       */
 extern int  myosd_droid_get_effective_sound_rate(void);
 extern void myosd_droid_set_netplay_sound_rate(int rate);
 
@@ -241,7 +241,7 @@ static void encode_peer_state(netplay_state_t *out_net, const netplay_state_t *i
 }
 
 /* Effective rollback ring depth for the current game.  Computed by the
- * myosd-netplay.cpp size gate as min(ROLLBACK_MAX_FRAMES, BUDGET/state_size);
+ * myosd_netplay.cpp size gate as min(ROLLBACK_MAX_FRAMES, BUDGET/state_size);
  * every frame->slot mapping and safe_depth derivation goes through the
  * ROLLBACK_RING_FRAMES macro (netplay.h) reading this.                      */
 uint32_t myosd_netplay_ring_frames = ROLLBACK_MAX_FRAMES;
@@ -249,7 +249,7 @@ uint32_t myosd_netplay_ring_frames = ROLLBACK_MAX_FRAMES;
 /* ============================================================
  * SECTION 2 -- Per-frame game-thread trunk
  * netplay_pre_frame_net() / netplay_post_frame_net() are called once per
- * MAME video frame from myosd-netplay.cpp's rollback step (and the
+ * MAME video frame from myosd_netplay.cpp's rollback step (and the
  * lockstep path), just before/after MAME executes the frame -- see the
  * file header's INTEGRATION WITH MAME section.
  * ============================================================ */
@@ -328,7 +328,7 @@ void netplay_pre_frame_net(netplay_t *handle)
         }
 
         /* 4. Expose committed states via handle->state / handle->peer_state
-         *    so that apply_netplay_input_state (myosd-netplay.cpp) works  */
+         *    so that apply_netplay_input_state (myosd_netplay.cpp) works  */
         // handle->state is set in netplay_post_frame_net AFTER reading local input!
         handle->frame_history[idx].applied_peer_state = handle->frame_history[idx].peer_state;
         handle->peer_state = handle->frame_history[idx].applied_peer_state;
@@ -1918,7 +1918,7 @@ int netplay_send_state_chunks(netplay_t *handle)
     return 1;
 }
 
-/* Called from myosd-netplay.cpp's sync wait loop: keep the HOST's chunk-send
+/* Called from myosd_netplay.cpp's sync wait loop: keep the HOST's chunk-send
  * window sliding forward while the game thread waits for the initial sync. */
 void myosd_netplay_sync_poll(void) {
     netplay_t *handle = netplay_get_handle();
@@ -2301,7 +2301,7 @@ int netplay_init_handle(netplay_t *handle){
     return 1;
 }
 
-/* has_connection edge tracking for the game-start bootstrap (myosd-netplay.
+/* has_connection edge tracking for the game-start bootstrap (myosd_netplay.
  * cpp's netplay_iu_on_game_start); was_connected itself isn't consumed
  * elsewhere, it's just latched per-connection. */
 void netplay_track_connection(netplay_t *handle)
@@ -2321,8 +2321,8 @@ void netplay_track_connection(netplay_t *handle)
  * because the savestate layout was found incompatible, or because a resync
  * episode just completed and the current frame must be discarded).
  * Talks to the MAME side only through handle->rollback_* (agnostic function
- * pointers, wired by myosd-netplay.cpp's netplay_iu_on_game_start) and the
- * myosd_netplay_* control helpers (myosd-netplay.h). */
+ * pointers, wired by myosd_netplay.cpp's netplay_iu_on_game_start) and the
+ * myosd_netplay_* control helpers (myosd_netplay.h). */
 bool netplay_initial_sync(netplay_t *handle)
 {
     if (!(handle && handle->has_connection && handle->has_begun_game &&
@@ -2719,7 +2719,7 @@ int netplay_resync_begin(netplay_t *handle, const char *origin)
     handle->crc_dirty_low     = 0;
     /* Detector state must not straddle the resync -- an un-reset
      * confirmed_watermark stays frozen pre-resync and keeps comparing a
-     * diverged old-timeline CRC forever.  Completion points (myosd-netplay.cpp)
+     * diverged old-timeline CRC forever.  Completion points (myosd_netplay.cpp)
      * raise it back to F-1.                                                 */
     handle->confirmed_watermark  = 0;
     handle->last_crc_match_frame = 0;
@@ -2763,7 +2763,7 @@ int myosd_netplay_request_resync(void)
 /* ============================================================
  * SECTION 6 -- External predicates / UI hooks
  * Session-state queries for core-emu callers (DAV HACK sites, machine.cpp)
- * and the two Java-UI setters.  Debug-only symbols live in myosd-netplay.cpp
+ * and the two Java-UI setters.  Debug-only symbols live in myosd_netplay.cpp
  * (per-item CRC diagnostics) and are not duplicated here.
  * ============================================================ */
 

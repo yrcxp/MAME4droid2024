@@ -17,7 +17,7 @@ static void queue(unsigned char *p,unsigned size);
 static unsigned short dequeue(unsigned char *p,unsigned size);
 static inline int emptyQueue(void);
 
-/* Netplay-aware rebuffering (see dequeue).  Defined in myosd-droid.cpp
+/* Netplay-aware rebuffering (see dequeue).  Defined in myosd_droid.cpp
  * (same ad-hoc declaration style luaengine.cpp uses for this bridge).   */
 int myosd_droid_is_netplay_active(void);
 

@@ -1,7 +1,7 @@
 // license:BSD-3-Clause
 //============================================================
 //
-//  myosd-droid.h - Header of osd droid stuff
+//  myosd_droid.h - Header of osd droid stuff
 //
 //  MAME4DROID by David Valdeita (Seleuco)
 //
@@ -50,7 +50,7 @@ int myosd_droid_main  (int argc, char **argv);
 // consumed by mame_ui_manager::load_ui_options(). 0 = keep current value
 int myosd_droid_adjust_ui_font_rows(int current);
 
-// Netplay specific helpers (C++ linkage; see myosd-droid.cpp's Netplay
+// Netplay specific helpers (C++ linkage; see myosd_droid.cpp's Netplay
 // BRIDGE section).  Callers outside this file currently redeclare these
 // locally rather than including this header.
 int myosd_droid_netplay_get_inMenu();              // whether the MAME menu is up

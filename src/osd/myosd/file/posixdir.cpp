@@ -56,7 +56,7 @@
 #include <sys/types.h>
 
 #include <android/log.h>
-#include "../myosd_saf.h"
+#include "myosd_saf.h"
 
 
 

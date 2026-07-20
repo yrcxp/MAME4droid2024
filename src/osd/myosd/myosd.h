@@ -15,6 +15,7 @@
 #include "modules/font/font_module.h"
 #include "../frontend/mame/ui/menuitem.h"
 
+#include "myosdopts.h"
 #include "myosd_core.h"
 
 //============================================================
@@ -35,36 +36,24 @@ extern int myosd_display_width;
 extern int myosd_display_height;
 extern int myosd_display_width_osd;
 extern int myosd_display_height_osd;
+extern int myosd_fps;
+extern int myosd_zoom_to_window;
 
-//============================================================
-//  OPTIONS
-//============================================================
-
-#define KEYBOARDINPUT_PROVIDER   "keyboardprovider"
-#define MOUSEINPUT_PROVIDER      "mouseprovider"
-#define LIGHTGUNINPUT_PROVIDER   "lightgunprovider"
-#define JOYSTICKINPUT_PROVIDER   "joystickprovider"
-
-
-#define OPTION_HISCORE  "hiscore"
-#define OPTION_BEAM     "beam"
-#define OPTION_BENCH    "bench"
-#define OPTION_SOUND    "sound"
-#define OPTION_VIDEO    "video"
-#define OPTION_NUMPROCESSORS "numprocessors"
+// input state shared with the input modules and myosd_netplay.cpp
+extern myosd_input_state g_input;
 
 //============================================================
 //  TYPE DEFINITIONS
 //============================================================
 
-// Android system font provider (myosd_font.cpp)
-osd_font::ptr droid_font_alloc();
+// platform contract: each port implements this (droid/droid_font.cpp)
+osd_font::ptr myosd_platform_font_alloc();
 
-class my_osd_interface : public osd_interface, osd_output
+class my_osd_interface : public osd_common_t
 {
 public:
 	// construction/destruction
-	my_osd_interface(emu_options & options, myosd_callbacks & callbacks);
+	my_osd_interface(myosd_options &options, myosd_callbacks &callbacks);
 	virtual ~my_osd_interface();
 
     // general overridables
@@ -72,53 +61,24 @@ public:
     virtual void update(bool skip_redraw) override;
     virtual void input_update(bool relative_reset) override;
     virtual void check_osd_inputs() override;
-    virtual void set_verbose(bool verbose) override { m_verbose = verbose; }
-
-    // debugger overridables
-    virtual void init_debugger() override {}
-    virtual void wait_for_debugger(device_t &device, bool firststop) override {}
-
-    // audio overridables
-    virtual bool no_sound() override;
-    virtual bool sound_external_per_channel_volume() override { return false; }
-    virtual bool sound_split_streams_per_source() override { return false; }
-    virtual uint32_t sound_get_generation() override { return 1; }
-    virtual osd::audio_info sound_get_information() override;
-
-    virtual uint32_t sound_stream_sink_open(uint32_t node, std::string name, uint32_t rate) override;
-    virtual uint32_t sound_stream_source_open(uint32_t node, std::string name, uint32_t rate) override { return 0; }
-    virtual void sound_stream_set_volumes(uint32_t id, const std::vector<float> &db) override {}
-    virtual void sound_stream_close(uint32_t id) override;
-    virtual void sound_stream_sink_update(uint32_t id, const int16_t *buffer, int samples_this_frame) override;
-    virtual void sound_stream_source_update(uint32_t id, int16_t *buffer, int samples_this_frame) override {}
-    virtual void sound_begin_update() override {}
-    virtual void sound_end_update() override {}
 
     // input overridables
     virtual void customize_input_type_list(std::vector<input_type_entry> &typelist) override;
 
-    // video overridables
-    virtual void add_audio_to_recording(const int16_t *buffer, int samples_this_frame) override {}
-    virtual std::vector<ui::menu_item> get_slider_list() override {
-        return std::vector<ui::menu_item>();
-    }
+    // video overridables (called by osd_common_t::init_subsystems/exit_subsystems)
+    virtual bool video_init() override;
+    virtual bool window_init() override;
+    virtual void video_exit() override;
+    virtual void window_exit() override;
 
-    // font interface
-    virtual osd_font::ptr font_alloc() override { return droid_font_alloc(); }
-    virtual bool get_font_families(std::string const &font_path, std::vector<std::pair<std::string, std::string> > &result) override { return false; }
+    // audio: keep the legacy "no configured rate means silent" contract
+    virtual bool no_sound() override;
 
-    // command option overrides
-    virtual bool execute_command(const char *command) override {return true;}
-
-    // midi interface
-    //virtual std::unique_ptr<osd_midi_device> create_midi_device() override {return nullptr;}
-    virtual std::unique_ptr<osd::midi_input_port> create_midi_input(std::string_view name) override {return nullptr;}
-	virtual std::unique_ptr<osd::midi_output_port> create_midi_output(std::string_view name)override {return nullptr;}
-	virtual std::vector<osd::midi_port_info> list_midi_ports() override { return std::vector<osd::midi_port_info>(); }
-
-    //network interface
-    virtual std::unique_ptr<osd::network_device> open_network_device(int id, osd::network_handler &handler) override{return nullptr;}
-     virtual std::vector<osd::network_device_info> list_network_devices() override{return std::vector<osd::network_device_info>(); }
+    // osd_common_t plumbing (no event loop of our own; Java drives us)
+    virtual void process_events() override { }
+    virtual bool has_focus() const override { return true; }
+    virtual void osd_exit() override;
+    virtual myosd_options &options() override { return m_options; }
 
     // osd_output
     virtual void output_callback(osd_output_channel channel, const util::format_argument_pack<char> &args) override;
@@ -126,36 +86,21 @@ public:
     // getters
     bool isMachine() {return m_machine!=nullptr;}
     running_machine &machine() const { assert(m_machine != nullptr); return *m_machine; }
-    render_target *target() const { assert(m_target != nullptr); return m_target; }
-    emu_options &options() { return m_options; }
+    render_target *target() const;
+    myosd_callbacks &callbacks() { return m_callbacks; }
+    int sample_rate() const { return m_sample_rate; }
 
 private:
-    void video_init();
-    void video_exit();
-
-    void input_init();
-    void input_exit();
-
-    void sound_init();
-    void sound_exit();
-
-    void machine_exit();
-
-    // internal state
+    // internal state; shadows the (private) base pointer so isMachine()
+    // keeps its legacy never-cleared semantics between sessions
     running_machine *m_machine;
-    emu_options &m_options;
-    bool m_verbose;
+    myosd_options &m_options;
 
     // video
-    render_target * m_target;
-    int m_min_width, m_min_height;
-    int m_vis_width, m_vis_height;
     int m_video_none;
 
     // audio
     int m_sample_rate;
-    int m_current_stream_id = 0;
-    int m_next_stream_id = 1;
 
     // host app callbacks
     myosd_callbacks m_callbacks;

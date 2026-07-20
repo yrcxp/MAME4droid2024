@@ -2,12 +2,12 @@
 // copyright-holders: David Valdeita (Seleuco)
 /***************************************************************************
 
-    myosd-netplay.h
+    myosd_netplay.h
 
     Rollback netplay bridge: save/restore MAME machine states and the
     per-item CRC desync detector, without depending on MAME core types
     directly in the netplay / input layers.  Implemented in
-    myosd-netplay.cpp.
+    myosd_netplay.cpp.
 
     Declared here in the same most-central-first order as the .cpp: the
     input_update() trunk, the savestate bridge, the control accessors,
@@ -28,7 +28,7 @@
 struct netplay;
 typedef struct netplay netplay_t;
 
-/* Shared input-state instance (defined in input.cpp).  myosd-netplay.cpp
+/* Shared input-state instance (defined in input.cpp).  myosd_netplay.cpp
  * reads/writes it from apply_netplay_input_state() to inject network input
  * into MAME and from my_osd_interface::input_update()'s netplay step. */
 extern myosd_input_state g_input;
@@ -69,7 +69,7 @@ void myosd_netplay_rollback_arm_pending_load(uint32_t frame);
  * active() is true. */
 void myosd_netplay_rollback_reset_for_resync(void);
 
-/* Rollback fast-forward state, checked by myosd-droid.cpp's draw/audio callbacks. */
+/* Rollback fast-forward state, checked by myosd_droid.cpp's draw/audio callbacks. */
 void myosd_netplay_set_ff_active(int active);   /* mark/clear a fast-forward replay burst */
 int  myosd_netplay_get_ff_active();
 void myosd_netplay_set_audio_mute(int mute);    /* mute/unmute audio during fast-forward */

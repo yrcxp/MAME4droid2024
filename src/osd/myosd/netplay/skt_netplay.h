@@ -6,7 +6,7 @@
 
     UDP transport for netplay.h: implements read_pkt_data/send_pkt_data
     (recvfrom/sendto over one UDP socket) and the network thread that
-    drives netplay_read_data.  Kept separate so netplay.cpp / myosd-netplay.
+    drives netplay_read_data.  Kept separate so netplay.cpp / myosd_netplay.
     cpp never need <sys/socket.h> directly.
 
 ***************************************************************************/

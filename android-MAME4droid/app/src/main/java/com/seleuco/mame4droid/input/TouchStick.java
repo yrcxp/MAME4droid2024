@@ -159,8 +159,17 @@ public class TouchStick implements IController {
 
 			// Direct Analog Routing
 			if (mm.getPrefsHelper().getControllerType() != PrefsHelper.PREF_DIGITAL_STICK) {
+				// Keep the thumb visually analog but constrain the OUTPUT: 2-way
+				// -> horizontal; 4-way and any menu (!inGame) -> dominant cardinal
+				// axis only; 8-way/free keep full range. Kills off-axis diagonals.
+				float ox = rx, oy = ry;
+				if (ways == 2 && inGame) {
+					oy = 0.0f;
+				} else if (ways == 4 || !inGame) {
+					if (Math.abs(ox) >= Math.abs(oy)) oy = 0.0f; else ox = 0.0f;
+				}
 				// Invert Y axis to match MAME's native coordinate system
-				Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, 0, rx, ry * -1.0f);
+				Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, 0, ox, oy * -1.0f);
 				return pad_data; // Pure analog handling bypasses digital state flags
 			}
 

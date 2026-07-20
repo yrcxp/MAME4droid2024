@@ -794,7 +794,16 @@ public class GameController implements IController {
 			if (mag >= deadZone) {
 				if (i == 0) {
 					if (mm.getPrefsHelper().getControllerType() != PrefsHelper.PREF_DIGITAL_STICK) {
-						Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, joy, x, y * -1.0f);
+						// Constrain the pure-analog OUTPUT to the allowed dirs:
+						// 2-way -> horizontal; 4-way and any menu (!b) -> dominant
+						// cardinal axis only; 8-way/free keep full range.
+						float ox = x, oy = y;
+						if (ways == 2 && b) {
+							oy = 0.0f;
+						} else if (ways == 4 || !b) {
+							if (Math.abs(ox) >= Math.abs(oy)) oy = 0.0f; else ox = 0.0f;
+						}
+						Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, joy, ox, oy * -1.0f);
 						continue;
 					}
 				}

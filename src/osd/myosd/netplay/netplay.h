@@ -57,7 +57,7 @@
      * -- flipping REQUIRES a protocol bump.                                */
     #define NETPLAY_ROLLBACK_INITIAL_STATE_TRANSFER 0
 
-    /* Effective ring depth for THIS game (set by the myosd-netplay.cpp size
+    /* Effective ring depth for THIS game (set by the myosd_netplay.cpp size
      * gate, ROLLBACK_MAX_FRAMES otherwise).  Defined in netplay.cpp.       */
     extern uint32_t myosd_netplay_ring_frames;
     #define ROLLBACK_RING_FRAMES (myosd_netplay_ring_frames)
@@ -378,7 +378,7 @@
 
         /* Rollback fields: frame_history is the per-frame input ring;
          * requires_rollback/rollback_to_frame flag+target a correction; the
-         * rollback_* callbacks are myosd-netplay.cpp bridges so netplay.cpp
+         * rollback_* callbacks are myosd_netplay.cpp bridges so netplay.cpp
          * never depends on MAME core types directly.                       */
         netplay_frame_history_t frame_history[ROLLBACK_MAX_FRAMES];
         volatile int            requires_rollback;
@@ -503,7 +503,7 @@
     int  netplay_init_handle(netplay_t *handle);         /* reset the handle for a new session */
     /* has_connection edge tracking / boot-time+RESYNC sync wait / symmetric
      * first-frame barrier -- the game-start bootstrap sequence called from
-     * myosd_netplay_input_update() (myosd-netplay.cpp) each frame.  Pure
+     * myosd_netplay_input_update() (myosd_netplay.cpp) each frame.  Pure
      * protocol/session logic.                     */
     void netplay_track_connection(netplay_t *handle);
     bool netplay_initial_sync(netplay_t *handle);        /* true = caller must return immediately */
@@ -535,7 +535,7 @@
     void netplay_ui_set_delay(netplay_t *handle, int value);      /* UI: input-delay/frameskip slider */
 
     /* Debug (desync diagnosis): arm the in-memory APPLIED input ring-buffer
-     * flush.  Defined in myosd-netplay.cpp; called from the desync triggers
+     * flush.  Defined in myosd_netplay.cpp; called from the desync triggers
      * here so the window around the first mismatch is dumped once, on the
      * game thread.                                                          */
     extern "C" void netplay_applied_ring_arm(const char *reason, uint32_t frame);
@@ -543,11 +543,11 @@
     /* Perform a DEFERRED savestate reload at a clean scheduler boundary (never
      * inside the vblank timer callback -- load()->postload() would corrupt the
      * timer list mid-iteration).  Called from running_machine::run() between
-     * timeslices.  No-op when nothing is pending.  Defined in myosd-netplay.cpp. */
+     * timeslices.  No-op when nothing is pending.  Defined in myosd_netplay.cpp. */
     extern "C" void myosd_netplay_service_deferred_load(void);
 
     /* myosd_netplay_set_speed (per-mille, 1000 = 100%) is declared in
-     * myosd-netplay.h -- used by the dynamic rate controller in
+     * myosd_netplay.h -- used by the dynamic rate controller in
      * myosd_netplay_input_update() (see NETPLAY_RATE_* above).             */
 
 #endif
