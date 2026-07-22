@@ -401,28 +401,40 @@ void my_osd_interface::customize_input_type_list(std::vector<input_type_entry> &
             case IPT_COIN2:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1UP_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_UP_SWITCH_INDEXED(0);
                 break;
             case IPT_COIN3:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1RIGHT_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_X_RIGHT_SWITCH_INDEXED(0);
                 break;
             case IPT_COIN4:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1DOWN_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_SELECT);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_DOWN_SWITCH_INDEXED(0);
                 break;
 
             //START+UP/RIGHT/DOWN starts 2P/3P/4P game
             case IPT_START2:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1UP_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_UP_SWITCH_INDEXED(0);
                 break;
             case IPT_START3:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1RIGHT_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_X_RIGHT_SWITCH_INDEXED(0);
                 break;
             case IPT_START4:
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1DOWN_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_START);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_DOWN_SWITCH_INDEXED(0);
                 break;
 
             case IPT_UI_PASTE:
@@ -455,7 +467,7 @@ void my_osd_interface::customize_input_type_list(std::vector<input_type_entry> &
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1UP_INDEXED(0);
 
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_BUTTON1);
-                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_V_NEG_SWITCH_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_UP_SWITCH_INDEXED(0);
                 break;
             case IPT_UI_PAGE_DOWN:
                 entry.defseq(SEQ_TYPE_STANDARD) |= JOYCODE_BUTTON6;
@@ -464,7 +476,7 @@ void my_osd_interface::customize_input_type_list(std::vector<input_type_entry> &
                 entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_HAT1DOWN_INDEXED(0);
 
                 entry.defseq(SEQ_TYPE_STANDARD) |= (JOYCODE_BUTTON1);
-                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_V_POS_SWITCH_INDEXED(0);
+                entry.defseq(SEQ_TYPE_STANDARD) += JOYCODE_Y_DOWN_SWITCH_INDEXED(0);
                 break;
 
             /* LEFT Joystick these are mostly the same as MAME defaults, except we add dpad to them */

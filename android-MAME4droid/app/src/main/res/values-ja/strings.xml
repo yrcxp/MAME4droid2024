@@ -505,4 +505,6 @@
     <string name="pref_fullscreen_portrait_title">全画面</string>
     <string name="pref_fullscreen_portrait_summary">縦画面全画面モードを有効にするには選択してください</string>
     <string name="shaders_load_error">エフェクトシェーダーを読み込めませんでした：shaders.cfg が見つかりません。アプリを再インストールするか、インストール先フォルダーが読み取り専用でないか確認してください。</string>
+    <string name="pref_frame_pacing_title">フレームペーシングとパフォーマンスヒント</string>
+    <string name="pref_frame_pacing_summary">90/120Hz画面でディスプレイのリフレッシュをゲームの速度に合わせ、ADPFのCPU/温度ヒントを使ってより滑らかで発熱の少ない動作にします。不具合が出る場合は無効にしてください。</string>
 </resources>

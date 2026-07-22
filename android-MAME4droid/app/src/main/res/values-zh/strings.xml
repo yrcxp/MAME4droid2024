@@ -505,4 +505,6 @@
     <string name="pref_fullscreen_portrait_title">全屏</string>
     <string name="pref_fullscreen_portrait_summary">选择以启用竖屏全屏模式</string>
     <string name="shaders_load_error">无法加载特效着色器：缺少 shaders.cfg 文件。请重新安装应用，或确认安装文件夹不是只读的。</string>
+    <string name="pref_frame_pacing_title">帧率同步与性能提示</string>
+    <string name="pref_frame_pacing_summary">在 90/120Hz 屏幕上让显示刷新率匹配游戏速度，并使用 ADPF 的 CPU/温度提示以获得更流畅、更低发热的性能。如设备异常请关闭。</string>
 </resources>

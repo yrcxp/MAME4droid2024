@@ -525,4 +525,6 @@
     <string name="pref_fullscreen_portrait_title">Fullscreen</string>
     <string name="pref_fullscreen_portrait_summary">Select to enable fullscreen portrait mode</string>
     <string name="shaders_load_error">Could not load the graphic effect shaders: shaders.cfg is missing. Please reinstall the app, or make sure the installation folder is not read-only.</string>
+    <string name="pref_frame_pacing_title">Frame pacing &amp; performance hints</string>
+    <string name="pref_frame_pacing_summary">Match the display to the game\'s refresh on 90/120 Hz screens and use ADPF CPU/thermal hints for smoother, cooler performance. Turn off if a device misbehaves.</string>
 </resources>

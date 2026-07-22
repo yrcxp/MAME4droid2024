@@ -59,6 +59,10 @@
 			android:title="@string/pref_skip_gameinfo_title" android:summary="@string/pref_skip_gameinfo_summary"
 			android:defaultValue="false" />
 
+		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_FRAME_PACING"
+			android:title="@string/pref_frame_pacing_title" android:summary="@string/pref_frame_pacing_summary"
+			android:defaultValue="true" />
+
 		<CheckBoxPreference android:key="PREF_ZOOM_TO_WINDOW"
 			android:title="@string/pref_zoom_to_window_title" android:summary="@string/pref_zoom_to_window_summary"
 			android:defaultValue="true" />

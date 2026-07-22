@@ -62,6 +62,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
+import com.seleuco.mame4droid.helpers.AdpfHelper;
 import com.seleuco.mame4droid.helpers.DialogHelper;
 import com.seleuco.mame4droid.helpers.LocaleHelper;
 import com.seleuco.mame4droid.helpers.MainHelper;
@@ -89,6 +90,7 @@ public class MAME4droid extends Activity {
 	protected SAFHelper safHelper = null;
 	protected ScraperHelper scraperHelper = null;
 	protected NetPlayHelper NetPlayHelper = null;
+	protected AdpfHelper adpfHelper = null;
 
 	protected InputHandler inputHandler = null;
 
@@ -114,6 +116,10 @@ public class MAME4droid extends Activity {
 
 	public NetPlayHelper getNetPlay() {
 		return NetPlayHelper;
+	}
+
+	public AdpfHelper getAdpfHelper() {
+		return adpfHelper;
 	}
 
 	public View getEmuView() {
@@ -160,6 +166,7 @@ public class MAME4droid extends Activity {
 
 		scraperHelper = new ScraperHelper(this);
 		NetPlayHelper = new NetPlayHelper(this);
+		adpfHelper = new AdpfHelper(this);
 
 		inputHandler = new InputHandler(this);
 
@@ -329,6 +336,9 @@ public class MAME4droid extends Activity {
 			scraperHelper.resume();
 		}
 
+		if (adpfHelper != null && prefsHelper != null && prefsHelper.isFramePacingEnabled())
+			adpfHelper.startThermal();
+
 		//System.out.println("OnResume");
 	}
 
@@ -351,6 +361,9 @@ public class MAME4droid extends Activity {
 		if(scraperHelper!=null){
 			scraperHelper.pause();
 		}
+
+		if (adpfHelper != null)
+			adpfHelper.stopThermal();
 
 		//System.out.println("OnPause");
 	}
@@ -407,6 +420,9 @@ public class MAME4droid extends Activity {
 		/* Never leak the netplay Wi-Fi radio lock past the activity. */
 		if (NetPlayHelper != null)
 			NetPlayHelper.releaseWifiLock();
+
+		if (adpfHelper != null)
+			adpfHelper.close();
 
         /*
         if(inputView!=null)

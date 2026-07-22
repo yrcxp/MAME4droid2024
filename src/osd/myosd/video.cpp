@@ -17,6 +17,7 @@
 #include "ui/menu.h"
 
 #include "drivenum.h"
+#include "screen.h"
 
 //MYOSD headers
 #include "myosd.h"
@@ -42,6 +43,16 @@ int myosd_fps;
 int myosd_zoom_to_window;
 
 float g_hack_offscreen_overdrive = 0.0f;
+
+// game's declared screen refresh in milli-Hz (0 = unknown); read by Java for
+// frame-rate matching. Cached in update() where machine() is valid.
+static int g_game_refresh_millihz = 0;
+
+// last frame's emu WORK wall-time in ns, deposited by the update_throttle
+// DAV HACK in emu/video.cpp; Java reads+clears it each frame to feed ADPF.
+// Same-thread by construction; volatile future-proofs it (arm64: 64-bit
+// aligned accesses are single-copy atomic) at zero cost.
+volatile s64 g_myosd_frame_work_ns = 0;
 
 // every OSD defines the one instance of this (see osdwindow.h)
 osd_video_config video_config;
@@ -120,6 +131,8 @@ bool my_osd_interface::video_init()
 {
 	MYOSD_LOG("my_osd_interface::video_init");
 
+	g_game_refresh_millihz = 0; // arm refresh capture for this machine
+
 	// single virtual screen; osd_window reads this global
 	video_config.windowed = 0;
 	video_config.prescale = 1;
@@ -162,6 +175,8 @@ void my_osd_interface::video_exit()
 {
 	MYOSD_LOG("my_osd_interface::video_exit");
 
+	g_game_refresh_millihz = 0;
+
 	window_exit();
 }
 
@@ -196,6 +211,14 @@ void my_osd_interface::update(bool skip_redraw)
     bool in_game = /*machine().phase() == machine_phase::RUNNING &&*/ &(machine().system()) != &GAME_NAME(___empty);
     bool in_menu = /*machine().phase() == machine_phase::RUNNING &&*/ machine().ui().is_menu_active();
     bool running = machine().phase() == machine_phase::RUNNING;
+    // capture the game's refresh once per machine (0 = not captured yet, reset
+    // in video_init/video_exit); the enumerator walk runs only until a valid
+    // value is found, after that this is a single int compare.
+    if (in_game && running && g_game_refresh_millihz == 0) {
+        screen_device *scr = screen_device_enumerator(machine().root_device()).first();
+        attoseconds_t ra = scr ? scr->refresh_attoseconds() : 0;
+        g_game_refresh_millihz = ra > 0 ? (int)(ATTOSECONDS_TO_HZ(ra) * 1000.0 + 0.5) : 0;
+    }
     mame_machine_manager::instance()->ui().set_show_fps(myosd_fps);
 
     // if skipping this redraw, bail
@@ -332,6 +355,20 @@ extern "C" bool myosd_video_setShader(const char* shader_name)
 	}
 
 	return true;
+}
+
+extern "C" int myosd_video_getGameRefreshMilliHz()
+{
+	return g_game_refresh_millihz;
+}
+
+// read-and-clear (same emu thread as the depositor): 0 = no fresh sample,
+// e.g. throttle disabled - Java then falls back to the wall interval
+extern "C" int64_t myosd_video_getFrameWorkNs()
+{
+	int64_t v = g_myosd_frame_work_ns;
+	g_myosd_frame_work_ns = 0;
+	return v;
 }
 
 extern "C" void myosd_video_loadShaders(const char* path)

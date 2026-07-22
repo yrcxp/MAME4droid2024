@@ -104,6 +104,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_BITMAP_FILTERING = "PREF_BITMAP_FILTERING";
 	final static public String PREF_VECTOR_IMPROVED = "PREF_VECTOR_IMPROVED";
 	final static public String PREF_HDR_DISPLAY = "PREF_HDR";
+	final static public String PREF_FRAME_PACING = "PREF_FRAME_PACING";
 	final static public String PREF_FORCE_UNIFONT = "PREF_FORCE_UNIFONT";
 	final static public String PREF_MAME_LANGUAGE = "PREF_MAME_LANGUAGE";
 
@@ -303,6 +304,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public boolean isVectorBloom() {
 		return getSharedPreferences().getBoolean(PREF_VECTOR_IMPROVED, true);
+	}
+
+	public boolean isFramePacingEnabled() {
+		return getSharedPreferences().getBoolean(PREF_FRAME_PACING, true);
 	}
 
 	public boolean isHDRDisplayEnabled() {

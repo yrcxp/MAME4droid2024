@@ -83,6 +83,8 @@ int (*newRenderer)() = NULL;
 void (*getShaders)(const char***, int*) = NULL;
 bool (*setShader)(const char*) = NULL;
 void (*loadShaders)(const char*) = NULL;
+int (*getGameRefreshMilliHz)(void) = NULL;
+int64_t (*getFrameWorkNs)(void) = NULL;
 
 void (*setRendererParameters)(const char**, const char**, int) = NULL;
 
@@ -196,6 +198,12 @@ static void load_lib(const char *str)
 
     loadShaders = dlsym(libdl, "myosd_video_loadShaders");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "myosd_video_loadShaders %d\n", loadShaders != NULL);
+
+    getGameRefreshMilliHz = dlsym(libdl, "myosd_video_getGameRefreshMilliHz");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "myosd_video_getGameRefreshMilliHz %d\n", getGameRefreshMilliHz != NULL);
+
+    getFrameWorkNs = dlsym(libdl, "myosd_video_getFrameWorkNs");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "myosd_video_getFrameWorkNs %d\n", getFrameWorkNs != NULL);
 
     setRendererParameters = dlsym(libdl, "gles3_renderer_setParameters");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "gles3_renderer_setParameters %d\n", setRendererParameters != NULL);
@@ -961,6 +969,18 @@ JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_loadShaders
     loaded = true;
 
     return 0;
+}
+
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_getGameRefreshMilliHz
+        (JNIEnv* env, jclass c)
+{
+    return getGameRefreshMilliHz != NULL ? getGameRefreshMilliHz() : 0;
+}
+
+JNIEXPORT jlong JNICALL Java_com_seleuco_mame4droid_Emulator_getFrameWorkNs
+        (JNIEnv* env, jclass c)
+{
+    return getFrameWorkNs != NULL ? (jlong)getFrameWorkNs() : 0;
 }
 
 JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setRendererParameters

@@ -120,6 +120,21 @@ public class EmulatorViewGL extends GLSurfaceView implements IEmuView {
 		this.scaleType = scaleType;
 	}
 
+	// Frame-rate matching: hint the panel the game's target refresh so a 90/120Hz
+	// display paces fixed-rate content cleanly (API 30+; no-op below or if invalid).
+	public void setContentFrameRate(float fps) {
+		if (Build.VERSION.SDK_INT < 30 || fps <= 1.0f) return;
+		try {
+			android.view.Surface s = getHolder().getSurface();
+			if (s == null || !s.isValid()) return;
+			if (Build.VERSION.SDK_INT >= 31)
+				s.setFrameRate(fps, android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
+					android.view.Surface.CHANGE_FRAME_RATE_ALWAYS);
+			else
+				s.setFrameRate(fps, android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+		} catch (Throwable ignored) {}
+	}
+
 	/**
 	 * Assigns the main MAME4droid instance to this view and initializes it.
 	 * @param mm The MAME4droid instance.

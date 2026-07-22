@@ -505,4 +505,6 @@
     <string name="pref_fullscreen_portrait_title">Tela cheia</string>
     <string name="pref_fullscreen_portrait_summary">Selecione para ativar o modo retrato em tela cheia</string>
     <string name="shaders_load_error">Não foi possível carregar os shaders de efeitos: o shaders.cfg está ausente. Reinstale o app ou verifique se a pasta de instalação não é somente leitura.</string>
+    <string name="pref_frame_pacing_title">Ritmo de frames e dicas de desempenho</string>
+    <string name="pref_frame_pacing_summary">Ajusta o refresh da tela ao ritmo do jogo em telas de 90/120 Hz e usa dicas de CPU/térmicas (ADPF) para um desempenho mais fluido e frio. Desative se o aparelho se comportar mal.</string>
 </resources>

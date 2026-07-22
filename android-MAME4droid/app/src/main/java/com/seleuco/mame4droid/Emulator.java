@@ -335,6 +335,47 @@ public class Emulator {
 		window_height = h;
 	}
 
+	// --- frame pacing + ADPF (v1, Java only) ---
+	private static boolean framePacingEnabled = false;
+	private static long fpsLastNs = 0;
+	private static float gameRefreshHz = 0f; // authoritative target from MAME
+	// 1 Hz telemetry accumulators
+	private static long telemStartNs = 0;
+	private static int telemFrames = 0;
+	private static float telemMin = 0f, telemMax = 0f;
+	private static long telemWorkSumNs = 0, telemWorkMaxNs = 0, telemGlSumNs = 0;
+	// last GL-thread render wall-time (written from the GL thread)
+	private static volatile long glRenderNs = 0;
+	// 1 Hz FramePacing telemetry log gate; set false for release
+	private static final boolean FRAME_PACING_TELEMETRY = false;
+
+	private static void resetFpsEstimator() {
+		fpsLastNs = 0; gameRefreshHz = 0f; telemStartNs = 0;
+	}
+
+	// poll MAME's declared refresh and apply it (setFrameRate + ADPF target)
+	// only when it changes; authoritative, immune to boot bursts / perf drops.
+	private static void applyGameRefresh() {
+		int mhz = getGameRefreshMilliHz();
+		if (mhz <= 1000) return;
+		float hz = mhz / 1000f;
+		if (Math.abs(hz - gameRefreshHz) < 0.05f) return;
+		gameRefreshHz = hz;
+		try { ((EmulatorViewGL) mm.getEmuView()).setContentFrameRate(hz); } catch (Throwable ignored) {}
+		if (mm.getAdpfHelper() != null) mm.getAdpfHelper().setTargetFps(hz);
+	}
+
+	// GL render wall-time for ADPF (called from the GL thread each draw)
+	public static void reportGlRenderNs(long ns) {
+		if (framePacingEnabled) glRenderNs = ns;
+	}
+
+	// surface recreated: re-arm pacing so the NEW Surface gets its frame-rate
+	// vote again and a recreated AdpfHelper gets its target re-applied
+	public static void onGlSurfaceCreated() {
+		gameRefreshHz = 0f;
+	}
+
 	//Method to update frame
 	static void requestRenderFrame() {
 
@@ -360,6 +401,64 @@ public class Emulator {
 					}
 				}
 				oldInMenu = inMenu;
+				// target = MAME's declared refresh (native, boot/perf-immune); ADPF
+				// gets the real frame WORK time (native, pre-throttle-sleep) merged
+				// with the GL render time. Whole path dormant during rollback FF.
+				if (framePacingEnabled && !inMenu) {
+					long now = System.nanoTime();
+					if (gameRefreshHz <= 0f) applyGameRefresh();
+					if (fpsLastNs != 0) {
+						long dt = now - fpsLastNs;
+						float inst = dt > 0 ? (float) (1_000_000_000.0 / dt) : 0f;
+						// low bound 5: keep reporting when a game collapses below 20fps
+						// (the frames ADPF most needs); menu/pause gaps are still <5
+						if (inst >= 5f && inst <= 130f) {
+							com.seleuco.mame4droid.helpers.AdpfHelper adpf = mm.getAdpfHelper();
+							// re-register the emu tid if the helper was recreated (activity recycle)
+							if (adpf != null && adpf.needsEmuTid())
+								adpf.setEmuThreadTid(android.os.Process.myTid());
+							// ADPF wants WORK, not the frame interval: MAME's pre-sleep wall time
+							// (read-and-clear; 0 = no sample -> fall back to the interval),
+							// combined with the GL thread's render time
+							long work = getFrameWorkNs();
+							if (work <= 0 || work > dt) work = dt;
+							long gl = glRenderNs;
+							if (adpf != null)
+								adpf.reportActualWorkDuration(Math.max(work, gl));
+							// 1 Hz telemetry (pacing on): rate, jitter, ADPF, thermal
+							if (telemStartNs == 0) { telemStartNs = now; telemFrames = 0; telemMin = inst; telemMax = inst; telemWorkSumNs = 0; telemWorkMaxNs = 0; telemGlSumNs = 0; }
+							telemFrames++;
+							if (inst < telemMin) telemMin = inst;
+							if (inst > telemMax) telemMax = inst;
+							telemWorkSumNs += work; telemGlSumNs += gl;
+							if (work > telemWorkMaxNs) telemWorkMaxNs = work;
+							if (now - telemStartNs >= 1_000_000_000L) {
+								applyGameRefresh(); // re-check in case the game changed refresh
+								if (FRAME_PACING_TELEMETRY) {
+								float avg = telemFrames * 1_000_000_000f / (now - telemStartNs);
+								float budgetMs = gameRefreshHz > 0f ? 1000f / gameRefreshHz : 0f;
+								float workAvgMs = telemWorkSumNs / 1e6f / telemFrames;
+								float workMaxMs = telemWorkMaxNs / 1e6f;
+								float useAvgPct = budgetMs > 0f ? workAvgMs / budgetMs * 100f : 0f;
+								float useMaxPct = budgetMs > 0f ? workMaxMs / budgetMs * 100f : 0f;
+								Log.d("FramePacing", String.format(java.util.Locale.US,
+									"refresh=%.2f avg=%.2f min=%.2f max=%.2f n=%d work=%.1f/%.1fms (budget=%.1f use=%.0f%%/%.0f%%) gl=%.1fms adpf=%s thermal=%d headroom=%.2f",
+									gameRefreshHz, avg, telemMin, telemMax, telemFrames,
+									workAvgMs, workMaxMs, budgetMs, useAvgPct, useMaxPct,
+									telemGlSumNs / 1e6f / telemFrames,
+									(adpf != null && adpf.isHintSessionActive()) ? "on" : "off",
+									adpf != null ? adpf.getThermalStatus() : -1,
+									adpf != null ? adpf.getThermalHeadroom(0) : Float.NaN));
+								}
+								telemStartNs = now; telemFrames = 0; telemMin = inst; telemMax = inst;
+								telemWorkSumNs = 0; telemWorkMaxNs = 0; telemGlSumNs = 0;
+							}
+							// frame-rate target now set by applyGameRefresh() (native)
+						}
+					}
+					fpsLastNs = now;
+				}
+
 				((EmulatorViewGL) mm.getEmuView()).requestRender();
 
 			} catch (/*Throwable*/NullPointerException t) {
@@ -375,6 +474,9 @@ public class Emulator {
 	static public void changeVideo(final int newWidth, final int newHeight, int newVisWidth, int newVisHeight) {
 
 		Log.d("Thread Video", "changeVideo emu_width:" + emu_width + " emu_height: " + emu_height + " newWidth:" + newWidth + " newHeight: " + newHeight + " newVisWidth:" + newVisWidth + " newVisHeight: " + newVisHeight);
+
+		// new game/mode: re-seed the frame-rate estimator
+		resetFpsEstimator();
 
 		final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
 
@@ -749,6 +851,11 @@ public class Emulator {
 				}
 				Log.d(TAG,"priority after change = " + android.os.Process.getThreadPriority(tid));
 
+				framePacingEnabled = mm.getPrefsHelper().isFramePacingEnabled();
+				if (framePacingEnabled && mm.getAdpfHelper() != null)
+					mm.getAdpfHelper().setEmuThreadTid(tid);
+				resetFpsEstimator();
+
 				boolean extROM = false;
 				Size sz = mm.getMainHelper().getWindowSize();
 				init(libPath, resPath, Math.max(sz.getWidth(), sz.getHeight()), Math.min(sz.getWidth(), sz.getHeight()));
@@ -849,7 +956,7 @@ public class Emulator {
 						}
 
 						Emulator.setValueStr(Emulator.ROM_NAME, fileName);
-						
+
 						String gameSelected = fileName;
 						if (gameSelected.toLowerCase().endsWith(".zip")) {
 							gameSelected = gameSelected.substring(0, gameSelected.length() - 4);
@@ -986,6 +1093,10 @@ public class Emulator {
 	public static native String[] getShaders();
 	public static native boolean setShader(String shader);
 	public static native int loadShaders(String path);
+
+	public static native int getGameRefreshMilliHz();
+
+	public static native long getFrameWorkNs();
 
 	public static native void setRendererParameters(String[] keys, String[] values);
 

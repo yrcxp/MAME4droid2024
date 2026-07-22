@@ -1,18 +1,19 @@
 diff --git a/video.cpp b/video.cpp
-index a8900d3..e1e29b8 100644
+index a8900d3..ada94c7 100644
 --- a/video.cpp
 +++ b/video.cpp
-@@ -29,6 +29,9 @@
+@@ -29,6 +29,10 @@
  
  #include "rendersw.hxx"
  
 +// DAV HACK
 +bool myosd_netplay_is_rollback();
++extern volatile s64 g_myosd_frame_work_ns;   // defined in the OSD (myosd/video.cpp)
 +// END DAV HACK
  
  //**************************************************************************
  //  DEBUGGING
-@@ -695,6 +698,28 @@
+@@ -695,6 +699,28 @@ void video_manager::update_throttle(attotime emutime)
  
  */
  
@@ -41,7 +42,20 @@ index a8900d3..e1e29b8 100644
  	// outer scope so we can break out in case of a resync
  	while (1)
  	{
-@@ -774,8 +799,20 @@
+@@ -747,6 +773,12 @@ void video_manager::update_throttle(attotime emutime)
+ 			break;
+ 		}
+ 
++// DAV HACK
++		// diff_ticks = wall time since the previous throttle ended = this
++		// frame's emu WORK (pre-sleep); the OSD reads+clears it for ADPF
++		g_myosd_frame_work_ns = s64(double(diff_ticks) * 1e9 / double(ticks_per_second));
++// END DAV HACK
++
+ 		// convert this value into attoseconds for easier comparison
+ 		attoseconds_t real_delta_attoseconds = diff_ticks * attoseconds_per_tick;
+ 
+@@ -774,8 +806,20 @@ void video_manager::update_throttle(attotime emutime)
  		}
  
  		// if we're behind, it's time to just get out

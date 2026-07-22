@@ -505,4 +505,6 @@
     <string name="pref_fullscreen_portrait_title">Pantalla completa</string>
     <string name="pref_fullscreen_portrait_summary">Selecciónalo para activar el modo vertical a pantalla completa</string>
     <string name="shaders_load_error">No se pudieron cargar los shaders de efectos: falta shaders.cfg. Reinstala la app o asegúrate de que la carpeta de instalación no sea de solo lectura.</string>
+    <string name="pref_frame_pacing_title">Ritmo de frames y hints de rendimiento</string>
+    <string name="pref_frame_pacing_summary">Ajusta el refresco de la pantalla al ritmo del juego en paneles de 90/120 Hz y usa hints de CPU/térmicos (ADPF) para un rendimiento más fluido y frío. Desactívalo si tu dispositivo va mal.</string>
 </resources>

@@ -304,6 +304,13 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 		//Call JNI method to do initialization stuff
 		Log.d("GLRENDERER", "onSurfaceCreated called");
 		Emulator.newRenderer();
+		// register the GL thread with ADPF and re-arm pacing so the NEW surface
+		// gets its frame-rate vote again (no-op if pacing off / <API31)
+		if (mm != null && mm.getPrefsHelper() != null && mm.getPrefsHelper().isFramePacingEnabled()) {
+			Emulator.onGlSurfaceCreated();
+			if (mm.getAdpfHelper() != null)
+				mm.getAdpfHelper().setRenderThreadTid(android.os.Process.myTid());
+		}
 	}
 
 	@Override
@@ -317,7 +324,11 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 	@Override
 	public void onDrawFrame(GL10 gl) {
 		//Call JNI method to do GLES rendering on native side
+		// timed for ADPF: excludes eglSwapBuffers (done after we return), so
+		// no vsync wait pollutes the GL work sample
+		long t0 = System.nanoTime();
 		int res = Emulator.onDrawFrame(Emulator.RENDERER_GL_NATIVE, isHdr? maxnits : 0);
+		if (res != -1) Emulator.reportGlRenderNs(System.nanoTime() - t0);
 		if(res==-1)
 		{
 			gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
