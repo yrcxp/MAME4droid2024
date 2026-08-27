@@ -21,6 +21,20 @@
       </h3>
 DEVELOPMENT:
 <ul>
+	<li><b>2026-08-28 Version 1.40 </b>
+		Added <b>Public Rooms</b>, an optional board for finding someone to play NetPlay with, so addresses no longer have to be swapped by hand:<br/>
+		- <b>Opt-in:</b> you are asked before it is ever used and it can be switched off at any time; with it off, NetPlay by hand works exactly as before.<br/>
+		- <b>Room codes and private rooms:</b> every room gets a short code you can share, and a room can be locked with a PIN so only the people you tell can get in.<br/>
+		- <b>Connection forecast:</b> rooms are shown green, amber or red according to how likely the two routers are to connect, measured rather than guessed.<br/>
+		- <b>ROM check:</b> the app confirms you actually have the game before joining, instead of letting you break the host's room.<br/>
+		Added <b>Drop-in NetPlay</b>: start playing on your own and stay listed on the board, letting somebody join the game already in progress (Rollback sessions only).
+	</li>
+	<li><b>2026-08-03 Version 1.38.3 </b>
+		Controllers now offer <b>10 buttons per player</b>, renamed BTN1-BTN10 to match MAME's own numbering. Savestate deletion goes through SAF so the file really disappears from MAME's list, and every face button can name a slot in the save/load menus. Note: custom controller mappings reset to defaults because of the added button indices.
+	</li>
+	<li><b>2026-07-11 Version 1.37.6 </b>
+		Added frame pacing and ADPF support for smoother and cooler performance on compatible devices. The MAME menu and Lua plugins can now be used during a NetPlay session, plus touch lightgun fixes and vector/HDR rendering improvements.
+	</li>
 	<li><b>2026-07-08 Version 1.37 </b>
 		Added peer-to-peer NetPlay:<br/>
 		- <b>Two modes:</b> Lockstep (perfectly synchronized, higher input lag) and Rollback (low-latency, ideal for fast-reflex games).<br/>
