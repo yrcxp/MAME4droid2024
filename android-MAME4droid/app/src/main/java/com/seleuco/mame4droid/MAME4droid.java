@@ -178,6 +178,11 @@ public class MAME4droid extends Activity {
 
 		mainHelper.updateMAME4droid();
 
+		/* Wake the board server now rather than when the netplay dialog opens:
+		 * a free instance takes tens of seconds to come back, and by then it
+		 * is up. Consent-gated and throttled inside. */
+		com.seleuco.mame4droid.helpers.LobbySession.wakeServer(this);
+
 		String uri = getPrefsHelper().getSAF_Uri();
 		if (uri != null) {
 			safHelper.setURI(uri);

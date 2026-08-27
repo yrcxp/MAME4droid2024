@@ -380,20 +380,12 @@ public class NetPlayHelper {
     }
 
     /**
-     * Nudge the board's server awake as the netplay dialog opens. A sleeping
-     * free server takes tens of seconds to come back, and that lands on
-     * whoever arrives first. Not at app start: that would hand our server an
-     * address for every player who never touches netplay.
+     * Second chance for the wake ping, in case the one at app start was
+     * throttled away or the server has dozed off since. Costs nothing when
+     * it was already nudged recently.
      */
     private void wakeLobbyServer() {
-        if (!LobbySession.isUsable(mm)) return;
-
-        final String base = mm.getPrefsHelper().getNetplayLobbyUrl();
-        new Thread(new Runnable() {
-            public void run() {
-                LobbyClient.health(base);
-            }
-        }).start();
+        LobbySession.wakeServer(mm);
     }
 
     protected static boolean isIPv4Address(final String input) {

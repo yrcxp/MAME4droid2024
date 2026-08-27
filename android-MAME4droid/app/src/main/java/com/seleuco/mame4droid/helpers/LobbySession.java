@@ -90,6 +90,40 @@ public class LobbySession {
     /** Whether to bother the board at all: switched on, told about it once,
      *  and a .so new enough to tell us its protocol. Publishing hands our
      *  address to whoever joins, so the consent gate is not optional. */
+
+    /** The platform unloads an idle instance after about twenty minutes, so
+     *  nudging it more often than this buys nothing at all. */
+    private static final long WAKE_INTERVAL_MS = 15 * 60 * 1000L;
+
+    /**
+     * Nudge the board's server awake so it is up by the time somebody wants
+     * it: a sleeping free instance takes tens of seconds to come back, and
+     * that wait lands on whoever arrives first.
+     *
+     * Gated on consent like every other call to our server, and throttled per
+     * device so restarting the app in a loop sends one request, not one each
+     * time. The protocol check isUsable() makes is deliberately not applied
+     * here: this asks the server nothing and tells it nothing, so it does not
+     * need a working netplay build behind it.
+     */
+    public static void wakeServer(final MAME4droid mm) {
+        PrefsHelper prefs = mm.getPrefsHelper();
+        if (!prefs.isNetplayLobbyEnabled() || !prefs.isNetplayLobbyConsentGiven()) return;
+
+        long now = System.currentTimeMillis();
+        long last = prefs.getNetplayLastWake();
+        // "now >= last" so a clock moved backwards costs one ping, not silence
+        // until it catches up again.
+        if (last != 0 && now >= last && (now - last) < WAKE_INTERVAL_MS) return;
+        prefs.setNetplayLastWake(now);
+
+        final String base = prefs.getNetplayLobbyUrl();
+        new Thread(new Runnable() {
+            public void run() {
+                LobbyClient.health(base);
+            }
+        }).start();
+    }
     public static boolean isUsable(MAME4droid mm) {
         return mm.getPrefsHelper().isNetplayLobbyEnabled()
                 && mm.getPrefsHelper().isNetplayLobbyConsentGiven()

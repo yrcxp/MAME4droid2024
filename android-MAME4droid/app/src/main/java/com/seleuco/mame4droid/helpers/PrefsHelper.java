@@ -204,6 +204,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_LOBBY_URL = "PREF_NETPLAY_LOBBY_URL";
 	final static public String PREF_NETPLAY_LAST_NAT = "PREF_NETPLAY_LAST_NAT";
 	final static public String PREF_NETPLAY_LAST_ROOM = "PREF_NETPLAY_LAST_ROOM";
+	final static public String PREF_NETPLAY_LAST_WAKE = "PREF_NETPLAY_LAST_WAKE";
 	final static public String PREF_NETPLAY_LOBBY_PIN = "PREF_NETPLAY_LOBBY_PIN";
 	final static public String PREF_NETPLAY_LOBBY_PRIVATE = "PREF_NETPLAY_LOBBY_PRIVATE";
 
@@ -955,6 +956,16 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public void setNetplayLastRoom(String room) {
 		getSharedPreferences().edit().putString(PREF_NETPLAY_LAST_ROOM, room).commit();
+	}
+
+	/* When we last nudged the board server awake, so restarting the app in a
+	 * loop does not turn into one request per restart. */
+	public long getNetplayLastWake() {
+		return getSharedPreferences().getLong(PREF_NETPLAY_LAST_WAKE, 0L);
+	}
+
+	public void setNetplayLastWake(long millis) {
+		getSharedPreferences().edit().putLong(PREF_NETPLAY_LAST_WAKE, millis).commit();
 	}
 
 	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */

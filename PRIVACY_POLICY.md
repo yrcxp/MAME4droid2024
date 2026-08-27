@@ -33,7 +33,9 @@ To find each other, the two devices have to learn each other's address. You can 
 
 **Public Rooms is optional and you are asked before it is ever used.** You can decline, and you can switch it off at any time under *Options &rarr; Settings &rarr; NetPlay &rarr; Public rooms*. With it off, the app never contacts the board and NetPlay by hand keeps working exactly as it always has.
 
-When it is on, this is what is sent, and only while you are actually using it:
+When it is on, the app knocks on the board once when it starts, and again when you open NetPlay, for one reason: the server it talks to is a small free one that goes to sleep when nobody is using it and takes a while to wake up. That knock carries **nothing at all** &mdash; no game, no country, none of your addresses &mdash; and the answer to it is the word "ok". Like any request made over the internet it does show the server your IP address, which is not recorded. It is sent at most a few times a day, and never if you declined.
+
+Everything below is sent only while you are actually hosting or joining a game:
 
 * Your **public IP address and the port** NetPlay uses. There is no way around this: it is what the other player's device dials in order to reach you.
 * The **game** you are playing, so people can see what is on offer.
