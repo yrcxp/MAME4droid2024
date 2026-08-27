@@ -17,25 +17,19 @@
  * along with this program; if not, see <http://www.gnu.org/licenses>.
  */
 
-using Mame4droid.Lobby.Contracts;
-using Mame4droid.Lobby.Services;
-
 namespace Mame4droid.Lobby.Endpoints;
 
-public static class TelemetryEndpoints
+public static class NoStoreExtensions
 {
-    /// Fire and forget from the client's point of view: it reports how the
-    /// session ended and never waits for or acts on the answer.
-    public static void MapTelemetryEndpoints(this WebApplication routes)
-    {
-        routes.MapPost("/api/v1/telemetry", (TelemetryRequest report, TelemetrySink sink) =>
-            {
-                sink.Record(report);
-
-                /* Even a malformed report answers 204: this endpoint must never
-                 * give a client a reason to retry. */
-                return Results.NoContent();
-            })
-            .RequireRateLimiting(RateLimitPolicies.Telemetry);
-    }
+    /// Marks a GET whose answer must never come from a cache. None of them is
+    /// worth storing and a stale one misleads: config decides what the client
+    /// does, and whoami is about whoever is asking. The room list is the one
+    /// GET left out on purpose -- its ETag and 304s are what keep the board
+    /// cheap to watch.
+    public static RouteHandlerBuilder NoStore(this RouteHandlerBuilder builder) =>
+        builder.AddEndpointFilter(async (ctx, next) =>
+        {
+            ctx.HttpContext.Response.Headers.CacheControl = "no-store";
+            return await next(ctx);
+        });
 }

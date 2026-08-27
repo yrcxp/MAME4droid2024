@@ -258,6 +258,18 @@ static void load_lib(const char *str)
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayGetDriverDesc %d\n", netplayGetDriverDesc != NULL);
 }
 
+/* A Java exception left pending makes the NEXT JNI call abort, wherever that
+ * happens to be, so the crash names the wrong culprit.  Every bridge below
+ * clears it here instead, while the log still points at what threw. */
+static void jni_clear_pending(JNIEnv *env)
+{
+    if((*env)->ExceptionCheck(env))
+    {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+}
+
 void myJNI_dumpVideo()
 {
     JNIEnv *env;
@@ -268,6 +280,7 @@ void myJNI_dumpVideo()
 #endif
 
    (*env)->CallStaticVoidMethod(env, cEmulator, android_dumpVideo);
+   jni_clear_pending(env);
 }
 
 void myJNI_changeVideo(int newWidth, int newHeight, int newVisWidth, int newVisHeight)
@@ -280,6 +293,7 @@ void myJNI_changeVideo(int newWidth, int newHeight, int newVisWidth, int newVisH
 #endif
 
     (*env)->CallStaticVoidMethod(env, cEmulator, android_changeVideo, (jint)newWidth,(jint)newHeight,(jint)newVisWidth,(jint)newVisHeight );
+    jni_clear_pending(env);
 }
 
 void myJNI_closeAudio()
@@ -292,6 +306,7 @@ void myJNI_closeAudio()
 #endif
 
     (*env)->CallStaticVoidMethod(env, cEmulator, android_closeAudio);
+    jni_clear_pending(env);
 }
 
 void myJNI_openAudio(int rate, int stereo)
@@ -305,6 +320,7 @@ void myJNI_openAudio(int rate, int stereo)
 #endif
 
     (*env)->CallStaticVoidMethod(env, cEmulator, android_openAudio, (jint)rate,(jboolean)stereo);
+    jni_clear_pending(env);
 
     if(jbaAudioBuffer==NULL)
     {
@@ -334,6 +350,7 @@ void myJNI_dumpAudio(void *buffer, int size)
     (*env)->SetByteArrayRegion(env, jbaAudioBuffer, 0, size, (jbyte *)buffer);
 
     (*env)->CallStaticVoidMethod(env, cEmulator, android_dumpAudio,jbaAudioBuffer,(jint)size);
+    jni_clear_pending(env);
 
     if (attached) {
         (*jVM)->DetachCurrentThread(jVM);
@@ -350,6 +367,7 @@ void myJNI_initInput()
 #endif
 
     (*env)->CallStaticVoidMethod(env, cEmulator, android_initInput);
+    jni_clear_pending(env);
 }
 
 /*
@@ -377,6 +395,13 @@ int myJNI_safOpenFile(const char *pathName,const char *mode)
         jstring jstrBuf1 = (*env)->NewStringUTF(env, pathName);
         jstring jstrBuf2 = (*env)->NewStringUTF(env, mode);
         jint ret =(*env)->CallStaticIntMethod(env, cEmulator, android_safOpenFile, jstrBuf1,jstrBuf2);
+        jni_clear_pending(env);
+
+        /* The emulator thread sits inside one native call for the life of
+         * the app, so locals it makes are never reclaimed for it.  Drop the
+         * handles; Java keeps the strings alive as long as it needs them. */
+        (*env)->DeleteLocalRef(env, jstrBuf1);
+        (*env)->DeleteLocalRef(env, jstrBuf2);
 
         if(attached)
             (*jVM)->DetachCurrentThread(jVM);
@@ -384,7 +409,6 @@ int myJNI_safOpenFile(const char *pathName,const char *mode)
         return ret;
     }
     return -1;
-    //(*env)->DeleteLocalRef(env, jstrBuf);
 }
 
 int myJNI_safDeleteFile(const char *pathName)
@@ -403,6 +427,9 @@ int myJNI_safDeleteFile(const char *pathName)
 
         jstring jstrBuf = (*env)->NewStringUTF(env, pathName);
         jint ret =(*env)->CallStaticIntMethod(env, cEmulator, android_safDeleteFile, jstrBuf);
+        jni_clear_pending(env);
+
+        (*env)->DeleteLocalRef(env, jstrBuf);
 
         if(attached)
             (*jVM)->DetachCurrentThread(jVM);
@@ -432,6 +459,9 @@ int myJNI_safReadDir(const char *dirName, int reload)
 
         jstring jstrBuf = (*env)->NewStringUTF(env, dirName);
         jint ret =(*env)->CallStaticIntMethod(env, cEmulator, android_safReadDir, jstrBuf, reload);
+        jni_clear_pending(env);
+
+        (*env)->DeleteLocalRef(env, jstrBuf);
 
         if(attached)
             (*jVM)->DetachCurrentThread(jVM);
@@ -439,7 +469,6 @@ int myJNI_safReadDir(const char *dirName, int reload)
         return ret;
     }
     return 0;
-    //(*env)->DeleteLocalRef(env, jstrBuf);
 }
 
 char **myJNI_safGetNextDirEntry(int id)
@@ -461,6 +490,7 @@ char **myJNI_safGetNextDirEntry(int id)
         }
 
         jarray data =(*env)->CallStaticObjectMethod(env, cEmulator, android_safGetNextDirEntry, id);
+        jni_clear_pending(env);
 
         char** args = NULL;
 
@@ -479,6 +509,8 @@ char **myJNI_safGetNextDirEntry(int id)
                 (*env)->ReleaseStringUTFChars(env, element, tmp);
                 (*env)->DeleteLocalRef(env, element );
             }
+
+            (*env)->DeleteLocalRef(env, data);
         }
 
         if(attached)
@@ -487,7 +519,6 @@ char **myJNI_safGetNextDirEntry(int id)
         return args;
     }
     return NULL;
-    //(*env)->DeleteLocalRef(env, jstrBuf);
 }
 
 void myJNI_safCloseDir(int id)
@@ -509,12 +540,12 @@ void myJNI_safCloseDir(int id)
         }
 
         (*env)->CallStaticVoidMethod(env, cEmulator, android_safCloseDir, id);
+        jni_clear_pending(env);
 
         if(attached)
             (*jVM)->DetachCurrentThread(jVM);
     }
 
-    //(*env)->DeleteLocalRef(env, jstrBuf);
 }
 
 void netplay_warn_java(char *msg)
@@ -531,6 +562,7 @@ void netplay_warn_java(char *msg)
 
     jstring jmsg = (*env)->NewStringUTF(env, msg);
     (*env)->CallStaticVoidMethod(env, cEmulator, android_netplayWarn, jmsg);
+    jni_clear_pending(env);
     (*env)->DeleteLocalRef(env, jmsg);
 
     if(attached)
@@ -558,6 +590,7 @@ int *myJNI_renderFontChar(int codepoint, int textSize, int cellHeight, int basel
     }
 
     jintArray data = (*env)->CallStaticObjectMethod(env, cFontHelper, android_renderFontChar, codepoint, textSize, cellHeight, baseline);
+    jni_clear_pending(env);
 
     int *out = NULL;
 
@@ -871,6 +904,11 @@ JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_getValueStr
 JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_setValueStr
   (JNIEnv *env, jclass c, jint key, jint i, jstring s1)
 {
+    /* A null String reaches the core as a null char*, and every setter there
+     * builds a std::string from it.  Drop it here rather than in seven cases. */
+    if(s1 == NULL)
+        return;
+
     if(setMyValueStr!=NULL)
     {
        const char *value = (*env)->GetStringUTFChars(env, s1, 0);

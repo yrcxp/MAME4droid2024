@@ -19,6 +19,13 @@
          the page and at your own clock and see the same thing. -->
     <VersionPrefix>1.0.0</VersionPrefix>
     <SourceRevisionId>$([System.DateTime]::Now.ToString(yyyyMMdd-HHmm))</SourceRevisionId>
+
+    <!-- One publish destination, whoever presses publish: the editor button,
+         the command line or a profile. Two output folders is how a package
+         from an earlier session gets uploaded a second time. An explicit -o
+         still wins, so nothing that needs a one-off is blocked. -->
+    <LobbyPublishDir>$(MSBuildThisFileDirectory)..\..\artifacts\publish\</LobbyPublishDir>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(LobbyPublishDir)</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,4 +40,14 @@
                       Lines="build=$(VersionPrefix)+$(SourceRevisionId);published=$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss zzz'))" />
   </Target>
 
+  <!-- dotnet publish copies over whatever is already there, so a file dropped
+       from the project would still be sitting in the folder we zip and deploy.
+       Only fires for our own output folder, never for an explicit -o. -->
+  <Target Name="CleanLobbyPublishDir" BeforeTargets="PrepareForPublish"
+          Condition="'$([MSBuild]::NormalizeDirectory($(PublishDir)))' == '$([MSBuild]::NormalizeDirectory($(LobbyPublishDir)))'">
+    <ItemGroup>
+      <_LobbyStalePublish Include="$(LobbyPublishDir)**\*" />
+    </ItemGroup>
+    <Delete Files="@(_LobbyStalePublish)" ContinueOnError="true" />
+  </Target>
 </Project>

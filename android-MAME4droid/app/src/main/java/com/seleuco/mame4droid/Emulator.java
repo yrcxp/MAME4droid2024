@@ -979,6 +979,12 @@ public class Emulator {
 						error = true;
 					}
 
+					// Some providers hand back a URI we cannot name: no display name
+					// and no usable path.  Without a file name there is nothing to
+					// launch, so take the same exit as any other unreadable file.
+					if (fileName == null || fileName.length() == 0)
+						error = true;
+
 					if (error) {
 						mm.runOnUiThread(new Runnable() {
 							public void run() {

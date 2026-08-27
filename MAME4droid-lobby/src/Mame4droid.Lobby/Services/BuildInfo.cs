@@ -1,3 +1,22 @@
+/*
+ * This file is part of MAME4droid (NetPlay lobby server).
+ *
+ * Copyright (C) 2026 David Valdeita (Seleuco)
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <http://www.gnu.org/licenses>.
+ */
+
 using System.Reflection;
 
 namespace Mame4droid.Lobby.Services;
@@ -14,6 +33,31 @@ public static class BuildInfo
     /// leaves beside the binaries. The same file sits in the local publish
     /// folder, so the two can be compared without guessing.
     public static string Published { get; } = ReadPublished();
+
+    /// When this process came up. The site is put to sleep after a spell with
+    /// no traffic and the next request wakes it, so this doubles as "when did
+    /// it last wake up": there is no going-to-sleep event to record, the
+    /// process simply ends.
+    public static DateTimeOffset Started { get; } = DateTimeOffset.UtcNow;
+
+    /// Time since Started, off a monotonic clock so a time correction cannot
+    /// make it jump or run backwards.
+    public static TimeSpan Uptime => s_uptime.Elapsed;
+
+    /// Uptime at the coarsest unit that still says something useful.
+    public static string UptimeText
+    {
+        get
+        {
+            var t = Uptime;
+            if (t.TotalMinutes < 1) return $"{t.Seconds}s";
+            if (t.TotalHours < 1) return $"{t.Minutes}m";
+            if (t.TotalDays < 1) return $"{t.Hours}h {t.Minutes}m";
+            return $"{(int)t.TotalDays}d {t.Hours}h";
+        }
+    }
+
+    private static readonly System.Diagnostics.Stopwatch s_uptime = System.Diagnostics.Stopwatch.StartNew();
 
     private static string ReadVersion()
     {

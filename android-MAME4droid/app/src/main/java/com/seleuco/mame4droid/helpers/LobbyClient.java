@@ -71,7 +71,7 @@ public class LobbyClient {
      * trace and pure noise in a shipped build.  NETPLAY_LOG_ENABLED only
      * silences the native side; javac strips these branches when false.
      * KEEP false FOR RELEASE. */
-    static final boolean DEBUG = true;
+    static final boolean DEBUG = false;
 
     /** Public board. Overridable from the prefs so anyone can host their own. */
     public static final String DEFAULT_URL =

@@ -107,6 +107,12 @@ public class SAFHelper {
 
 	private static final String TAG = "SAFHelper";
 
+	/* SAF chatter. openUriFd logs once per file MAME opens, which over a session
+	 * is thousands of lines and as many JNI string round-trips for nothing.
+	 * javac drops these branches when false; warnings and errors stay on.
+	 * KEEP false FOR RELEASE. */
+	static final boolean DEBUG = false;
+
 	private static final String CACHE_FILE_NAME = "saf_cache.bin";
 	private static final String JOURNAL_FILE_NAME = "saf_cache.dirty";
 	private static final int CACHE_MAGIC = 0x4D344443; // "M4DC"
@@ -154,7 +160,7 @@ public class SAFHelper {
 	 * @param uriStr The string representation of the tree URI granted by the user.
 	 */
 	public void setURI(String uriStr) {
-		Log.d(TAG, "Setting SAF URI: " + uriStr);
+		if (DEBUG) Log.d(TAG, "Setting SAF URI: " + uriStr);
 		if (uriStr == null) {
 			rootUri = null;
 		} else {
@@ -304,7 +310,7 @@ public class SAFHelper {
 	}
 
 	public int openUriFd(String pathName, String flags) {
-		Log.d(TAG, "Opening URI for path: " + pathName + " with flags: " + flags);
+		if (DEBUG) Log.d(TAG, "Opening URI for path: " + pathName + " with flags: " + flags);
 
 		if (!ensureInit()) {
 			return -1;
@@ -541,7 +547,7 @@ public class SAFHelper {
 				return true;
 			}
 		}
-		Log.i(TAG, "No usable SAF cache. Starting in lazy mode.");
+		if (DEBUG) Log.i(TAG, "No usable SAF cache. Starting in lazy mode.");
 		initMaps();
 		return true;
 	}
@@ -600,7 +606,7 @@ public class SAFHelper {
 				pw.end();
 				pw = null;
 			}
-			Log.i(TAG, "Using persisted SAF cache.");
+			if (DEBUG) Log.i(TAG, "Using persisted SAF cache.");
 			cacheComplete = true;
 			return true;
 		}
@@ -610,7 +616,7 @@ public class SAFHelper {
 		// everything; fall back to the full scan if that fails.
 		boolean refreshed = false;
 		if (cacheLoaded) {
-			Log.i(TAG, "SAF cache is stale. Refreshing changed directories.");
+			if (DEBUG) Log.i(TAG, "SAF cache is stale. Refreshing changed directories.");
 			try {
 				if (freshRoot == null) {
 					freshRoot = queryChildren(fileIDs.get("/"));
@@ -898,7 +904,7 @@ public class SAFHelper {
 			} catch (Exception e) {
 				cachedRootMtime = 0;
 			}
-			Log.i(TAG, "Applied SAF dirty journal: " + dirs.size() + " dirs.");
+			if (DEBUG) Log.i(TAG, "Applied SAF dirty journal: " + dirs.size() + " dirs.");
 			return true;
 		} catch (Exception e) {
 			Log.w(TAG, "Discarding SAF cache: dirty journal could not be applied.", e);
@@ -973,7 +979,7 @@ public class SAFHelper {
 					}
 				}
 				out.flush();
-				Log.i(TAG, "Saved SAF cache: " + dirs.size() + " dirs, " + nFiles + " entries.");
+				if (DEBUG) Log.i(TAG, "Saved SAF cache: " + dirs.size() + " dirs, " + nFiles + " entries.");
 			}
 			renamed = tmp.renameTo(getCacheFile());
 			if (renamed) {
@@ -1042,7 +1048,7 @@ public class SAFHelper {
 			cachedRootMtime = rootMtime;
 			cacheDirty = false;
 			dirtyDirs.clear();
-			Log.i(TAG, "Loaded SAF cache: " + nDirs + " dirs, " + fi.size() + " paths.");
+			if (DEBUG) Log.i(TAG, "Loaded SAF cache: " + nDirs + " dirs, " + fi.size() + " paths.");
 			return true;
 		} catch (Exception e) {
 			Log.w(TAG, "Discarding unreadable SAF cache.", e);
