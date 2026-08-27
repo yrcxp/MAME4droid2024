@@ -1,0 +1,105 @@
+//@host = http://localhost:5000
+@host = https://mamelobby-api-fse4a3gbehavfdhd.westcentralus-01.azurewebsites.net/
+
+# Your own public IPv4, which steps 2 and 4 advertise. The server refuses a room
+# whose address is not the caller's own, so against a real deployment this has to
+# be yours or step 2 answers 400 address_mismatch: get it from https://api.ipify.org
+# and expect a dynamic ISP to change it now and then. Against localhost anything
+# goes -- the dev settings skip the check. Leave the placeholder here when
+# committing: nobody's home address belongs in the repo.
+@myIp = 203.0.113.10
+
+# Both sides come from the same machine here, so they differ only by port and the
+# answers will say sameSite:true. That is correct, and it is the same conclusion
+# the client reaches when two players sit behind one router.
+@hostPort = 2080
+@clientPort = 41320
+
+
+### 1. Check server configuration (and Kill Switch)
+GET {{host}}/api/v1/config?proto=11&app=1.39.0
+
+### 2. HOST: Create a public room
+# @name createRoom
+POST {{host}}/api/v1/rooms
+Content-Type: application/json
+
+{
+  "proto": 11,
+  "app": "1.39.0",
+  "game": "mslug",
+  "mode": 1,
+  "delay": 0,
+  "plugins": false,
+  "public": "{{myIp}}:{{hostPort}}",
+  "lan": ["192.168.1.50:2080"],
+  "nat": { "sym": false, "pp": true, "upnp": true }
+}
+
+### -- Captures the room ID and token created above --
+@roomId = {{createRoom.response.body.id}}
+@roomToken = {{createRoom.response.body.token}}
+
+### 3. CLIENT: View the room board (You will see the room created above)
+GET {{host}}/api/v1/rooms?proto=11
+
+### 4. CLIENT: Join the room (And send its own IP to the server)
+POST {{host}}/api/v1/rooms/{{roomId}}/join
+Content-Type: application/json
+
+{
+  "proto": 11,
+  "app": "1.39.0",
+  "public": "{{myIp}}:{{clientPort}}",
+  "lan": ["192.168.1.100:2080"],
+  "nat": { "sym": false, "pp": true, "upnp": false }
+}
+
+### 5. HOST: Send heartbeat (Poll) (And the server hands over the Client's IP)
+POST {{host}}/api/v1/rooms/{{roomId}}/poll
+Content-Type: application/json
+
+{
+  "token": "{{roomToken}}"
+}
+
+### 6. HOST: Cancel or delete the room
+DELETE {{host}}/api/v1/rooms/{{roomId}}?token={{roomToken}}
+
+### 7. BOTH: Report how the session ended (fire and forget, answers 204 no body)
+# natSelf/natPeer mirror the two NATs from steps 2 and 4: this pairing is what
+# turns a pile of sessions into "punching works unless a side is symmetric".
+# outcome: connected | timeout | rom_missing | build_mismatch | cancelled
+# path:    lan | punch | forward | upnp        role: host | client
+POST {{host}}/api/v1/telemetry
+Content-Type: application/json
+
+{
+  "proto": 11,
+  "app": "1.39.0",
+  "game": "mslug",
+  "role": "host",
+  "outcome": "connected",
+  "natSelf": { "sym": false, "pp": true, "upnp": true },
+  "natPeer": { "sym": false, "pp": true, "upnp": false },
+  "path": "punch",
+  "waitMs": 4200
+}
+
+### 8. The failure worth measuring: two symmetric NATs cannot punch at all
+POST {{host}}/api/v1/telemetry
+Content-Type: application/json
+
+{
+  "proto": 11,
+  "app": "1.39.0",
+  "game": "mslug",
+  "role": "client",
+  "outcome": "timeout",
+  "natSelf": { "sym": true, "pp": false, "upnp": false },
+  "natPeer": { "sym": true, "pp": false, "upnp": false },
+  "path": "punch",
+  "waitMs": 60000
+}
+
+### Both land in /home/LogFiles/lobby/telemetry-YYYYMM.log, one line each.

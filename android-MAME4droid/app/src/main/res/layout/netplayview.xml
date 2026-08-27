@@ -22,10 +22,16 @@
         android:layout_gravity="center_horizontal"            
         android:text="@string/start_game" />
     <Button
+        android:id="@+id/PublicRoomsBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="@string/np_public_rooms" />
+    <Button
         android:id="@+id/JoinPeerGameBtn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"              
+        android:layout_gravity="center_horizontal"
         android:text="@string/join_peer_game" />
     <Button
         android:id="@+id/DisconnectBtn"

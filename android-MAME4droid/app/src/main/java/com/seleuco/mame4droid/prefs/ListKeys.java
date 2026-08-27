@@ -235,11 +235,13 @@ public class ListKeys extends ListActivity {
 		if (resultCode == RESULT_OK && requestCode == 0) {
 			int androidKeyCode = data.getIntExtra("androidKeyCode", 0);
 			int androidGamePadID = data.getIntExtra("androidGamePadID", 0);
+			int androidDeviceId = data.getIntExtra("androidDeviceId", -1);
 			int iKeyCodeWithDeviceId = GameController.makeKeyCodeWithDeviceID(androidGamePadID, androidKeyCode);
 
-			// make this block belong to the pad being mapped, seeded with the
-			// factory values, so the keys left untouched keep working
-			GameController.adoptControllerBlock(controllerIndex, androidGamePadID);
+			// make this block belong to the pad being mapped, seeded with its
+			// autodetect layout (or the factory values), so the keys left
+			// untouched keep working exactly as they did
+			GameController.adoptControllerBlock(controllerIndex, androidGamePadID, androidDeviceId);
 
 			for (int i = 0; i < GameController.keyMapping.length; i++) {
 				if (GameController.keyMapping[i] == iKeyCodeWithDeviceId)

@@ -124,7 +124,10 @@ public class KeySelect extends Activity {
 
 				setResult(RESULT_OK, new Intent()
 					.putExtra("androidKeyCode", keyCode)
-					.putExtra("androidGamePadID", GameController.getPersistentDeviceId(event.getDevice())));
+					.putExtra("androidGamePadID", GameController.getPersistentDeviceId(event.getDevice()))
+					// the Android id too: it is what identifies the pad in the
+					// autodetect tables, which the profile is seeded from
+					.putExtra("androidDeviceId", event.getDevice() != null ? event.getDevice().getId() : -1));
 
 				finish();
 				return true;

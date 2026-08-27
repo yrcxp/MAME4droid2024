@@ -149,6 +149,26 @@ public class Emulator {
 	//game screen inside the render target, normalized x10000 (i = 0..3)
 	final static public int SCREEN_RECT = 78;
 
+	/** Smoothed round trip to the peer in ms (the EMA that drives the auto
+	 *  input delay), and its mean deviation = jitter. Both 0 until a netplay
+	 *  game is actually running. */
+	final static public int NETPLAY_RTT = 79;
+	final static public int NETPLAY_JITTER = 80;
+
+	/** Decaying floor and ceiling of the round trip. The smoothed average
+	 *  weights recent samples, so these two are what turn it into a range
+	 *  instead of a number that hides how the session actually went. */
+	final static public int NETPLAY_RTT_MIN = 81;
+	final static public int NETPLAY_RTT_MAX = 82;
+
+	/** Drop-in: the host plays alone with its room published and whoever
+	 *  joins is lifted into the running game. Set BEFORE netplayInit. */
+	final static public int NETPLAY_DROP_IN = 83;
+
+	/** 1 if a drop-in started right now would keep the running game, 0 if it
+	 *  would relaunch it to apply the netplay pinning. Read-only. */
+	final static public int NETPLAY_KEEPS_GAME = 84;
+
 	//set str
 	final static public int SAF_PATH = 1;
 	final static public int ROM_NAME = 2;
@@ -1176,6 +1196,17 @@ public class Emulator {
 	 *  Returns the IP, or "" when offline / STUN blocked. */
 	public static native String netplayProbePublicIp();
 
+	/** Wire/build handshake version this .so speaks, or 0 if the symbol is
+	 *  missing. The lobby filters the board by it, so it is read from the
+	 *  native side rather than duplicated here, where it would drift on the
+	 *  next bump. */
+	public static native int netplayGetProtocolVersion();
+
+	/** Driver title for a rom name ("mslug" -> "Metal Slug ..."), or "" when
+	 *  this build has no such driver -- which also tells the board that a room
+	 *  cannot be played here. */
+	public static native String netplayGetDriverDesc(String name);
+
 	/** Latch a mid-game state resync (rollback sessions only).
 	 *  The host recaptures its live state and streams it to the client, which
 	 *  adopts it -- both machines freeze briefly and resume bit-identical.
@@ -1209,6 +1240,7 @@ public class Emulator {
 			case "disconnected":           resId = R.string.np_msg_disconnected; break;
 			case "rom_error":              resId = R.string.np_msg_rom_error; break;
 			case "connection_lost":        resId = R.string.np_msg_connection_lost; break;
+			case "no_ack":                 resId = R.string.np_msg_no_ack; break;
 			case "peer_disconnected":      resId = R.string.np_msg_peer_disconnected; break;
 			case "send_failed":            resId = R.string.np_msg_send_failed; break;
 			case "bind_failed":            resId = R.string.np_msg_bind_failed; break;
@@ -1222,6 +1254,13 @@ public class Emulator {
 	}
 
 	static void netplayWarn(final String msg) {
+		/* A peer that says goodbye is not a peer that vanished. The native side
+		 * only sends this after a DISCONNECT actually arrived, so it is the one
+		 * place that can tell the two apart -- and without it every normal exit
+		 * was logged as a drop by whichever side did not press the button. */
+		if (msg != null && msg.contains("@peer_disconnected") && mm.getNetPlay() != null)
+			mm.getNetPlay().notePeerLeftCleanly();
+
 		mm.runOnUiThread(new Runnable() {
 			public void run() {
 				if (msg != null && msg.startsWith("TOASTERR:")) {

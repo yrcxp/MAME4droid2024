@@ -150,6 +150,17 @@ public class NetPlayHelper {
      * KEEP false FOR RELEASE. */
     private static final boolean V6_DEBUG = false;
 
+    /* Cap on the client's JOIN retries. Only the handshake is timed: both
+     * games are already up, so this measures one round trip, never a boot.
+     * The host has its own JOIN_ACK_TIMEOUT_MS for the mirror case. */
+    private static final long JOIN_ANSWER_TIMEOUT_MS = 30000;
+
+    /* Typing an address by hand says nothing about the other side: they may
+     * not have pressed Create yet, and cutting them off is worse than a long
+     * wait. From the board we claimed a live room seconds ago, so 30s there
+     * is already several times the worst punch. */
+    private static final long JOIN_ANSWER_TIMEOUT_MANUAL_MS = 90000;
+
     private volatile boolean canceled = false;
 
     /* Host waiting-dialog text is composed by two racing workers (netplayInit
@@ -158,6 +169,64 @@ public class NetPlayHelper {
     private volatile String hostBaseMsg = null;
     private volatile String upnpLine = null;
     private volatile String upnpFallbackHint = "";
+
+    /* Public board, when the user opted in: it automates the same tuple swap
+     * the Share / Peer IP buttons do by hand, and both keep working whether
+     * it publishes, fails or is switched off. */
+    private volatile LobbySession lobby = null;
+    private volatile String lobbyLine = null;
+    private volatile LobbyClient.Endpoint lobbyPeer = null;
+    private volatile long hostWaitMs = 0;
+    private AlertDialog boardProgress = null;
+    private volatile String lobbyClaimBase = null;
+    private volatile String lobbyClaimRoom = null;
+    private volatile String lobbyAimedAt = null;
+
+    /* Kept from the moment a session connects until it ends, so the length of
+     * the game can be reported: it is what separates a pairing that worked
+     * from one that merely completed a handshake. */
+    private volatile long sessionStartMs = 0;
+    private volatile String playedGame = null;
+    private volatile String playedRole = null;
+    private volatile String playedPath = null;
+    private volatile String playedPeerCountry = null;
+    private volatile LobbyClient.Nat playedSelfNat = null;
+    private volatile LobbyClient.Nat playedPeerNat = null;
+    private volatile String joinPeerCountry = null;
+    private volatile int joinMode = 0;
+    private volatile int joinDelay = 0;
+    private volatile boolean joinSameSite = false;
+    private volatile boolean joinLocked = false;
+    private volatile String joinRoom = null;
+    private volatile boolean joinFromBoard = false;
+
+    /* The room we claimed was a game already under way. */
+    private volatile boolean joinIsDropIn = false;
+    private volatile String joinGameName = null;
+    private volatile LobbyClient.Nat joinPeerNat = null;
+    /* Drop-in: the host plays on with the room published and whoever joins is
+     * lifted into the running game. Off until the rollback screen offers it,
+     * so every existing flow behaves exactly as before. */
+    private volatile boolean dropIn = false;
+
+    private volatile boolean lobbyPrivate = false;
+    private volatile boolean samplerRunning = false;
+    private volatile int publishRetrySeconds = 3;
+    private volatile long publishWaitingSince = 0;
+    private volatile boolean lobbyPaused = false;
+    private volatile LobbyBoardDialog board = null;
+    private volatile int playedRtt = 0;
+    private volatile int playedJitter = 0;
+    private volatile int playedRttMin = 0;
+    private volatile int playedRttMax = 0;
+    private volatile int playedMode = 0;
+    private volatile int playedDelay = 0;
+    private volatile boolean playedLocked = false;
+    /* Snapshotted with the rest at connect time: which kind of session this
+     * was is a property of the pairing, not of a setting the user may have
+     * changed by the time it ends. */
+    private volatile boolean playedDropIn = false;
+    private volatile String playedRoom = null;
 
     /* Local address for the Share sheet; null when joining (the client only
      * ever shares its public tuple) or on mobile-only hosts. */
@@ -237,8 +306,14 @@ public class NetPlayHelper {
 
         final Button startButton = (Button) netplayDlg.findViewById(R.id.StartGameBtn);
         final Button joinButton = (Button) netplayDlg.findViewById(R.id.JoinPeerGameBtn);
+        final Button publicRoomsButton = (Button) netplayDlg.findViewById(R.id.PublicRoomsBtn);
         final Button disconnectButton = (Button) netplayDlg.findViewById(R.id.DisconnectBtn);
         final Button resyncButton = (Button) netplayDlg.findViewById(R.id.ResyncBtn);
+
+        /* Deliberately not gated on having a game selected, unlike Start: a
+         * client joining from the board doesn't choose the game, the host
+         * imposes it and MAME loads it on its own. */
+        publicRoomsButton.setEnabled(Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) != 1);
 
         if (Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 1) {
             startButton.setEnabled(false);
@@ -257,6 +332,9 @@ public class NetPlayHelper {
              * drop the radio lock and the router mapping now.             */
             releaseWifiLock();
             deleteUpnpMappingAsync();
+            /* Same place catches a session the peer or a desync ended: it
+             * only fires once, and only if one was actually running. */
+            reportSessionEnded(endingOutcome());
         }
 
         String name = Emulator.getValueStr(Emulator.GAME_SELECTED);
@@ -286,6 +364,9 @@ public class NetPlayHelper {
         final Button joinButton = (Button) netplayDlg.findViewById(R.id.JoinPeerGameBtn);
         joinButton.setOnClickListener(joinGameClick);
 
+        final Button publicRoomsButton = (Button) netplayDlg.findViewById(R.id.PublicRoomsBtn);
+        publicRoomsButton.setOnClickListener(publicRoomsClick);
+
         final Button disconnectButton = (Button) netplayDlg.findViewById(R.id.DisconnectBtn);
         disconnectButton.setOnClickListener(disconnectGameClick);
 
@@ -295,6 +376,24 @@ public class NetPlayHelper {
         prepareButtons();
 
         netplayDlg.show();
+        wakeLobbyServer();
+    }
+
+    /**
+     * Nudge the board's server awake as the netplay dialog opens. A sleeping
+     * free server takes tens of seconds to come back, and that lands on
+     * whoever arrives first. Not at app start: that would hand our server an
+     * address for every player who never touches netplay.
+     */
+    private void wakeLobbyServer() {
+        if (!LobbySession.isUsable(mm)) return;
+
+        final String base = mm.getPrefsHelper().getNetplayLobbyUrl();
+        new Thread(new Runnable() {
+            public void run() {
+                LobbyClient.health(base);
+            }
+        }).start();
     }
 
     protected static boolean isIPv4Address(final String input) {
@@ -327,7 +426,7 @@ public class NetPlayHelper {
     /* Every non-loopback IPv4 except carrier interfaces, so the host can share
      * ALL its LAN/hotspot addresses and the peer keeps the one on its own /24
      * (a hotspot host often has both a mobile and a reachable AP address). */
-    private java.util.List<String> getAllLocalIPv4() {
+    java.util.List<String> getAllLocalIPv4() {
         java.util.List<String> out = new java.util.ArrayList<String>();
         try {
             for (NetworkInterface intf : Collections.list(NetworkInterface.getNetworkInterfaces())) {
@@ -490,28 +589,110 @@ public class NetPlayHelper {
         return false;
     }
 
-    /** Persist and apply the chosen rollback mode, then run the given action. */
+    /**
+     * Everything that is decided per hosted game, in one place: the sync mode
+     * and whether the room goes on the public board behind a PIN. Both are
+     * choices about the game being created, so they belong here rather than
+     * among the actions in the netplay dialog.
+     */
     private void pickModeAndRun(final Runnable action) {
         // Read persisted mode
         SharedPreferences sp = mm.getPrefsHelper().getSharedPreferences();
         rollbackMode = sp.getBoolean(PREF_NETPLAY_ROLLBACK_MODE, false);
 
+        float d = mm.getResources().getDisplayMetrics().density;
+        LinearLayout box = new LinearLayout(mm);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding((int) (20 * d), (int) (12 * d), (int) (20 * d), 0);
+
+        final android.widget.RadioGroup modes = new android.widget.RadioGroup(mm);
+        final android.widget.RadioButton lockstep = new android.widget.RadioButton(mm);
+        lockstep.setId(1);
+        lockstep.setText(mm.getString(R.string.np_mode_lockstep));
+        lockstep.setPadding(0, (int) (4 * d), 0, (int) (4 * d));
+        final android.widget.RadioButton rollback = new android.widget.RadioButton(mm);
+        rollback.setId(2);
+        rollback.setText(mm.getString(R.string.np_mode_rollback));
+        rollback.setPadding(0, (int) (4 * d), 0, (int) (4 * d));
+        modes.addView(lockstep);
+        modes.addView(rollback);
+        modes.check(rollbackMode ? 2 : 1);
+        box.addView(modes);
+
+        /* Only offered when a PIN exists: a box that cannot close the room
+         * would promise privacy the room does not have. */
+        final boolean hasPin = mm.getPrefsHelper().hasNetplayLobbyPin();
+        final android.widget.CheckBox privateRoom = new android.widget.CheckBox(mm);
+        privateRoom.setText(mm.getString(hasPin
+                ? R.string.np_private_room : R.string.np_private_room_no_pin));
+        privateRoom.setEnabled(hasPin);
+        privateRoom.setChecked(hasPin && mm.getPrefsHelper().isNetplayLobbyPrivate());
+        /* Set apart from the modes above: that pair is one choice, this is a
+         * separate one, and with equal spacing they read as three options. */
+        privateRoom.setPadding(0, (int) (14 * d), 0, (int) (4 * d));
+        if (LobbySession.isUsable(mm)) box.addView(privateRoom);
+
+        /* Drop-in. Rollback only, and not because of a UI preference: the
+         * joiner is lifted into a running game with a state transfer, and
+         * that machinery only exists in the rollback path. The box follows
+         * the radio buttons live so it cannot be left ticked under a mode
+         * that could not honour it. */
+        /* Ticking the box on a game that did not boot pinned costs the run
+         * in progress. Said here, next to the box, while it can still be
+         * unticked -- not as a surprise once the machine resets. */
+        final boolean wouldRestart = Emulator.isInGame()
+                && Emulator.getValue(Emulator.NETPLAY_KEEPS_GAME) == 0;
+        final TextView dropInRestart = new TextView(mm);
+        dropInRestart.setText(mm.getString(R.string.np_drop_in_restarts));
+        dropInRestart.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+        dropInRestart.setTextColor(android.graphics.Color.YELLOW);
+        dropInRestart.setPadding(0, 0, 0, (int) (4 * d));
+        dropInRestart.setVisibility(View.GONE);
+
+        final android.widget.CheckBox dropInBox = new android.widget.CheckBox(mm);
+        dropInBox.setText(mm.getString(R.string.np_drop_in));
+        dropInBox.setPadding(0, (int) (14 * d), 0, 0);
+        final TextView dropInWhy = new TextView(mm);
+        dropInWhy.setText(mm.getString(R.string.np_drop_in_summary));
+        dropInWhy.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+        dropInWhy.setPadding(0, 0, 0, (int) (4 * d));
+        if (LobbySession.isUsable(mm)) {
+            box.addView(dropInBox);
+            box.addView(dropInWhy);
+            box.addView(dropInRestart);
+            dropInBox.setOnCheckedChangeListener(
+                    new android.widget.CompoundButton.OnCheckedChangeListener() {
+                        public void onCheckedChanged(android.widget.CompoundButton b, boolean on) {
+                            dropInRestart.setVisibility(on && wouldRestart
+                                    ? View.VISIBLE : View.GONE);
+                        }
+                    });
+            dropInBox.setEnabled(rollbackMode);
+            dropInWhy.setEnabled(rollbackMode);
+            modes.setOnCheckedChangeListener(
+                    new android.widget.RadioGroup.OnCheckedChangeListener() {
+                        public void onCheckedChanged(android.widget.RadioGroup g, int id) {
+                            boolean roll = (id == 2);
+                            dropInBox.setEnabled(roll);
+                            dropInWhy.setEnabled(roll);
+                            if (!roll) dropInBox.setChecked(false);
+                            dropInRestart.setVisibility(roll && dropInBox.isChecked()
+                                    && wouldRestart ? View.VISIBLE : View.GONE);
+                        }
+                    });
+        }
+
         new AlertDialog.Builder(mm)
-            .setTitle(mm.getString(R.string.np_mode_title))
-            .setSingleChoiceItems(
-                new String[]{mm.getString(R.string.np_mode_lockstep), mm.getString(R.string.np_mode_rollback)},
-                rollbackMode ? 1 : 0,
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        rollbackMode = (which == 1);
-                    }
-                }
-            )
+            .setTitle(mm.getString(R.string.np_create_options_title))
+            .setView(box)
             .setPositiveButton(mm.getString(R.string.ok), new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int which) {
+                    rollbackMode = (modes.getCheckedRadioButtonId() == 2);
                     // Persist choice
                     SharedPreferences sp = mm.getPrefsHelper().getSharedPreferences();
                     sp.edit().putBoolean(PREF_NETPLAY_ROLLBACK_MODE, rollbackMode).apply();
+                    mm.getPrefsHelper().setNetplayLobbyPrivate(hasPin && privateRoom.isChecked());
+                    dropIn = rollbackMode && dropInBox.isChecked() && LobbySession.isUsable(mm);
                     // Apply mode to native layer BEFORE netplayInit()
                     Emulator.netplaySetMode(rollbackMode ? 1 : 0);
                     action.run();
@@ -822,7 +1003,7 @@ public class NetPlayHelper {
      * skips carrier interfaces (their v6 makes dead LAN invites), STUN can still
      * publish an rmnet global, so the guard must not refuse it.  The ipsec
      * (VoWiFi/IMS) tunnel is app-unusable: never counts. */
-    private boolean hasUsableIPv6() {
+    boolean hasUsableIPv6() {
         try {
             for (NetworkInterface intf : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (intf.getName().toLowerCase().contains("ipsec")) continue;
@@ -842,7 +1023,7 @@ public class NetPlayHelper {
     /* An error the user MUST see while the NetPlay menu is open: a WarnWidget
      * draws on the activity frame, BEHIND dialogs, so it would be hidden.  An
      * AlertDialog has its own window and sits on top.  UI thread only. */
-    private void showNetplayError(String msg) {
+    void showNetplayError(String msg) {
         new AlertDialog.Builder(mm)
                 .setMessage(msg)
                 .setPositiveButton(android.R.string.ok, null)
@@ -875,13 +1056,545 @@ public class NetPlayHelper {
         /* extra starts with "\n"; the added "\n" makes the blank line
          * between the IP block and the UPnP/fallback status. */
         final String extra = (upnpLine != null) ? upnpLine : upnpFallbackHint;
-        final String msg = extra.isEmpty() ? base : base + "\n" + extra;
+        String body = extra.isEmpty() ? base : base + "\n" + extra;
+        /* Board status goes last: it is the newest information and the one
+         * that changes while the dialog is up. The room's own code rides with
+         * it so the host can read it out: "join the one called K7M2QP4A" is
+         * the only way to tell two rooms of the same game apart. */
+        final String board = lobbyLine;
+        if (board != null) {
+            body += "\n" + board;
+            LobbySession live = lobby;
+            String code = (live != null) ? live.getRoomId() : null;
+            if (code != null && code.length() > 0)
+                body += "\n" + mm.getString(R.string.np_lobby_room_code, code);
+        }
+        final String msg = body;
         mm.runOnUiThread(new Runnable() {
             public void run() {
                 if (progressDialog != null && progressDialog.isShowing() && progressText != null)
                     progressText.setText(msg);
             }
         });
+    }
+
+    /**
+     * Asked once, before anything of ours reaches the board. Declining turns
+     * the feature off instead of asking again on every game, and the setting
+     * is there to change one's mind.
+     *
+     * @return true when the caller may carry on right now; false means the
+     * dialog is up and {@code onAccept} runs from it.
+     */
+    boolean ensureLobbyConsent(final Runnable onAccept, final Runnable onDecline) {
+        final PrefsHelper prefs = mm.getPrefsHelper();
+        if (!prefs.isNetplayLobbyEnabled() || prefs.isNetplayLobbyConsentGiven())
+            return true;
+
+        new AlertDialog.Builder(mm)
+                .setTitle(mm.getString(R.string.np_lobby_consent_title))
+                .setMessage(mm.getString(R.string.np_lobby_consent_body))
+                .setCancelable(false)
+                .setPositiveButton(mm.getString(R.string.np_lobby_consent_accept),
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int w) {
+                                prefs.setNetplayLobbyConsentGiven(true);
+                                if (onAccept != null) onAccept.run();
+                            }
+                        })
+                .setNegativeButton(mm.getString(R.string.np_lobby_consent_decline),
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int w) {
+                                prefs.setNetplayLobbyEnabled(false);
+                                if (onDecline != null) onDecline.run();
+                            }
+                        })
+                .show();
+        return false;
+    }
+
+    private void openBoard() {
+        board = new LobbyBoardDialog(mm, this);
+        board.show();
+    }
+
+    /**
+     * App going to the background: stop talking to the board. A list nobody is
+     * looking at spends the server's traffic and the phone's battery, and
+     * Android freezes those threads sooner or later anyway. The host's room
+     * expires within the minute, which the republish path treats as normal.
+     */
+    public void pause() {
+        lobbyPaused = true;
+
+        LobbyBoardDialog open = board;
+        if (open != null) open.pause();
+    }
+
+    /** Back in the foreground: pick the board up where it left off. */
+    public void resume() {
+        lobbyPaused = false;
+
+        LobbyBoardDialog open = board;
+        if (open != null) open.resume();
+    }
+
+    /** Open the board of games other people are hosting. */
+    public void showPublicRooms() {
+        if (Emulator.netplayGetProtocolVersion() <= 0) {
+            showNetplayError(mm.getString(R.string.np_lobby_unsupported));
+            return;
+        }
+        if (!mm.getPrefsHelper().isNetplayLobbyEnabled()) {
+            showNetplayError(mm.getString(R.string.np_lobby_switched_off));
+            return;
+        }
+        /* Any room on the board may turn out to be on this very network, and
+         * Android 17 blocks local traffic without the permission -- silently,
+         * so the join would just sit at "connecting" forever. Ask here, like
+         * both manual paths do, since the address is only known later. */
+        final Runnable open = new Runnable() {
+            public void run() {
+                if (ensureLocalNet(new Runnable() {
+                    public void run() {
+                        openBoard();
+                    }
+                })) openBoard();
+            }
+        };
+
+        /* Declining consent means the board never opens: it was the whole
+         * point of the tap, so there is nothing to fall back to. */
+        if (!ensureLobbyConsent(open, null)) return;
+        open.run();
+    }
+
+    /** The netplay port from the settings, which is also our bind port. */
+    int getConfiguredPort() {
+        try {
+            return Integer.parseInt(mm.getPrefsHelper().getNetplayPort());
+        } catch (Exception e) {
+            return 2080;
+        }
+    }
+
+    /** Our private v4 addresses, for the LAN half of a rendezvous. */
+    java.util.List<String> getLocalAddresses() {
+        return getAllLocalIPv4();
+    }
+
+    /** Spinner while the board claims a room; the join dialog takes over. */
+    void showBoardProgress(String message) {
+        canceled = false;
+        AlertDialog.Builder builder = new AlertDialog.Builder(mm);
+        builder.setView(buildProgressView(message, ""));
+        builder.setCancelable(false);
+        boardProgress = builder.create();
+        boardProgress.show();
+    }
+
+    void hideBoardProgress() {
+        if (boardProgress != null && boardProgress.isShowing())
+            boardProgress.dismiss();
+        boardProgress = null;
+    }
+
+    /* ---- Public board ------------------------------------------------- *
+     * Automates the tuple swap the Share / Peer IP buttons do by hand.  Every
+     * step is best-effort: a board that is off, unreachable or refuses us just
+     * leaves the manual path exactly as it was.  Worker thread only.        */
+
+    /** Advertise the running game, once STUN has produced our public tuple. */
+    private void publishOnLobby(int gamePort) {
+        if (!LobbySession.isUsable(mm)) return;
+
+        String game = Emulator.getValueStr(Emulator.GAME_SELECTED);
+        if (game == null || game.length() == 0) return;
+
+        java.util.List<String> lan = new java.util.ArrayList<String>();
+        for (String local : getAllLocalIPv4())
+            lan.add(local + ":" + gamePort);
+
+        LobbySession.rememberNat(mm, Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped());
+
+        /* Private only when the user asked for it AND a usable PIN exists:
+         * publishing without one would put a room the host believes is closed
+         * in front of everybody. */
+        boolean wantsPrivate = mm.getPrefsHelper().isNetplayLobbyPrivate()
+                && mm.getPrefsHelper().hasNetplayLobbyPin();
+        String pin = wantsPrivate ? mm.getPrefsHelper().getNetplayLobbyPin() : null;
+
+        if (publishWaitingSince == 0)
+            publishWaitingSince = android.os.SystemClock.elapsedRealtime();
+
+        LobbySession board = new LobbySession(mm);
+        boolean published = board.publish(game, rollbackMode ? 1 : 0,
+                mm.getPrefsHelper().getNetplayDelayValue(),
+                mm.getPrefsHelper().isNetplayAllowPluginsEnabled(),
+                lan, UpnpHelper.isMapped(), pin, dropIn);
+
+        lobby = published ? board : null;
+        lobbyPrivate = published && pin != null;
+
+        /* How soon to try again, decided by who said no. A call that never
+         * reached the lobby means the free instance is still waking, and those
+         * cost nothing -- the platform answers them, so our own rate limit
+         * never sees them. A refusal that DID come from our server is either
+         * temporary and expensive to retry (429) or permanent (a rejected
+         * address), and hammering it would only spend the create budget. */
+        if (published) {
+            publishRetrySeconds = 0;
+        } else if (board.lastPublishWasUnreachable()) {
+            publishRetrySeconds = 3;
+        } else if (board.getLastPublishStatus() == 429) {
+            publishRetrySeconds = 60;
+        } else {
+            publishRetrySeconds = 0;
+        }
+
+        /* Saying "unavailable" while a retry is already scheduled reads as
+         * giving up, and on a cold start that is exactly the moment it is
+         * least true. Same rule as the board: hopeful for a minute. But the
+         * room quota arrives as a 429 too and is none of those things -- it
+         * is a full board from this address, and only saying so lets anyone
+         * work out that a friend has to finish first. */
+        int line;
+        if (published) {
+            line = lobbyPrivate ? R.string.np_lobby_published_private
+                    : R.string.np_lobby_published;
+        } else if (board.lastPublishHitRoomQuota()) {
+            line = R.string.np_lobby_too_many;
+        } else if (publishRetrySeconds > 0) {
+            long waited = android.os.SystemClock.elapsedRealtime() - publishWaitingSince;
+            line = (waited < 60000L) ? R.string.np_lobby_waking
+                    : R.string.np_lobby_unavailable;
+        } else {
+            line = R.string.np_lobby_unavailable;
+        }
+
+        lobbyLine = mm.getString(line);
+        postHostMessage();
+    }
+
+
+    /* Drop-in has gone live: the room is up and the game is the user's again. */
+    private volatile boolean dropInLive = false;
+
+    /**
+     * Close the waiting dialogs and let the host play. Nothing about the
+     * session is torn down -- the worker thread stays in its loop keeping the
+     * room alive, and the native side simply has not begun a netplay session
+     * yet, so the machine runs the way it does with netplay switched off.
+     */
+    private void goLiveForDropIn() {
+        dropInLive = true;
+        final String code = (lobby != null) ? lobby.getRoomId() : "";
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                if (progressDialog != null && progressDialog.isShowing())
+                    progressDialog.dismiss();
+                if (netplayDlg != null && netplayDlg.isShowing())
+                    netplayDlg.hide();
+                new WarnWidget.WarnWidgetHelper(mm,
+                        mm.getString(R.string.np_drop_in_live, code), 4, Color.GREEN, false);
+                Emulator.resume();
+            }
+        });
+    }
+
+    /** Somebody claimed the room: warn before the state transfer stops the
+     *  picture, so a freeze mid-game reads as expected rather than as a bug. */
+    private void warnDropInJoining() {
+        if (!dropInLive) return;
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                new WarnWidget.WarnWidgetHelper(mm,
+                        mm.getString(R.string.np_drop_in_joining), 3, Color.YELLOW, false);
+            }
+        });
+    }
+    /** One heartbeat: keeps the room alive and arms the punch when claimed. */
+    private void pollLobby(LobbySession board, int gamePort) {
+        LobbyClient.Endpoint peer = board.poll();
+
+        if (peer == null) {
+            if (!board.isPublished()) {
+                /* The room went with a server recycle. Publishing again is the
+                 * honest fix, and the user never has to know it happened. */
+                publishOnLobby(gamePort);
+                return;
+            }
+            int viewers = board.getViewers();
+            lobbyLine = (viewers > 0)
+                    ? mm.getString(R.string.np_lobby_watching, viewers)
+                    : mm.getString(R.string.np_lobby_published);
+            postHostMessage();
+            return;
+        }
+
+        /* The peer comes back on every poll by design, but re-arming an
+         * unchanged target only makes the network thread resolve it again. */
+        String aim = (peer.sameSite && peer.lan.length > 0) ? peer.lan[0]
+                : (peer.publicAddr != null) ? peer.publicAddr : peer.publicAlt;
+        if (aim != null && aim.equals(lobbyAimedAt)) return;
+
+        lobbyPeer = peer;
+        if (LobbySession.aimAt(peer, gamePort)) {
+            lobbyAimedAt = aim;
+            lobbyLine = mm.getString(R.string.np_lobby_peer_found);
+            postHostMessage();
+            warnDropInJoining();
+        }
+    }
+
+    /** What the board told us about the host we are joining, kept for the
+     *  report: the joining side has no room of its own to read it from. */
+    void setLobbyPeerInfo(String country, int mode, int delay, boolean sameSite,
+                          boolean locked, LobbyClient.Nat peerNat) {
+        joinPeerCountry = country;
+        joinMode = mode;
+        joinDelay = delay;
+        joinSameSite = sameSite;
+        joinLocked = locked;
+        joinPeerNat = peerNat;
+    }
+
+    /** Outcome of a join that came from the board, from the joiner's side. */
+    private void reportJoinOutcome(String outcome, long waitMs) {
+        if (lobbyClaimRoom == null && joinPeerCountry == null) return;
+        if (!LobbySession.isUsable(mm)) return;
+
+        String info = Emulator.netplayGetPublicAddr();
+        LobbyClient.Nat self = LobbySession.natOf(info, UpnpHelper.isMapped());
+
+        /* The room is the host's: its game, mode, delay and privacy come from
+         * the board, never from our own settings. No latency yet either -- the
+         * game has not started, and a zero here is honest. */
+        String game = (joinGameName != null && joinGameName.length() > 0)
+                ? joinGameName : Emulator.getValueStr(Emulator.GAME_SELECTED);
+
+        new LobbySession(mm).report(game, "client",
+                outcome, self, joinPeerNat, joinSameSite ? "lan" : "punch", waitMs,
+                joinPeerCountry, joinMode, joinDelay, 0, 0, 0, 0, 0, joinLocked, joinRoom,
+                joinIsDropIn);
+
+        if ("connected".equals(outcome)) {
+            sessionStartMs = System.currentTimeMillis();
+            peerLeftCleanly = false;
+            playedGame = game;
+            playedRole = "client";
+            playedPath = joinSameSite ? "lan" : "punch";
+            playedPeerCountry = joinPeerCountry;
+            playedSelfNat = self;
+            playedPeerNat = joinPeerNat;
+            playedMode = joinMode;
+            playedDelay = joinDelay;
+            playedLocked = joinLocked;
+            playedDropIn = joinIsDropIn;
+            playedRoom = joinRoom;
+            startLatencySampler();
+        }
+        joinPeerCountry = null;
+        /* Cleared with its siblings, not when joinGame reads it: the report
+         * runs afterwards and needs to know which kind of session this was. */
+        joinIsDropIn = false;
+        joinGameName = null;
+    }
+
+    /**
+     * Keeps the last live latency reading of a running session. Reading it at
+     * the end is too late: the native handle is already torn down and every
+     * counter reads zero, which is why the joining side reported nothing at
+     * all. One sample a second describes the session, not its last instant.
+     */
+    private void startLatencySampler() {
+        if (samplerRunning) return;
+        samplerRunning = true;
+
+        new Thread(new Runnable() {
+            public void run() {
+                while (samplerRunning && Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 1) {
+                    int rtt = Emulator.getValue(Emulator.NETPLAY_RTT);
+                    if (rtt > 0) {
+                        playedRtt = rtt;
+                        playedJitter = Emulator.getValue(Emulator.NETPLAY_JITTER);
+                        playedRttMin = Emulator.getValue(Emulator.NETPLAY_RTT_MIN);
+                        playedRttMax = Emulator.getValue(Emulator.NETPLAY_RTT_MAX);
+                    }
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+
+                /* Still armed means we are not the ones who stopped: the
+                 * session ended on its own. This is the only hook that catches
+                 * every way out -- exiting the game, the peer hanging up, a
+                 * desync abort -- because the other two only run if the user
+                 * happens to open the netplay dialog again afterwards. */
+                if (samplerRunning) reportSessionEnded(endingOutcome());
+                samplerRunning = false;
+            }
+        }).start();
+    }
+
+    /**
+     * Report a finished game, once, with how long it actually lasted. Called
+     * whenever a session ends -- by the Disconnect button or by the peer going
+     * away -- and silently does nothing if the board was never involved.
+     */
+
+    /* The peer sent a DISCONNECT before going: a normal end of session, not a
+     * connection that died. Set from the native warning, which is the only
+     * place that sees the difference. */
+    private volatile boolean peerLeftCleanly = false;
+
+    public void notePeerLeftCleanly() {
+        peerLeftCleanly = true;
+    }
+
+    /**
+     * How this session ended, as far as we can honestly tell. Whoever presses
+     * Disconnect reports "played" and the other used to report "dropped" for
+     * the same session, so a normal game logged as half failure and the drop
+     * rate meant nothing. A goodbye we received is the same outcome.
+     */
+    private String endingOutcome() {
+        return peerLeftCleanly ? "played" : "dropped";
+    }
+    synchronized void reportSessionEnded(final String outcome) {
+        /* Two paths can notice the same ending at once (the Disconnect button
+         * and the watchdog below); whoever gets here first owns it. */
+        final long started = sessionStartMs;
+        if (started == 0) return;
+        sessionStartMs = 0;
+
+        if (!LobbySession.isUsable(mm)) return;
+        final long playMs = System.currentTimeMillis() - started;
+
+        /* The sampler's last live reading, not a fresh one: whoever ended the
+         * session may well have torn the native handle down first, and then
+         * every counter reads zero. */
+        samplerRunning = false;
+        final int rtt = playedRtt;
+        final int jitter = playedJitter;
+        final int rttMin = playedRttMin;
+        final int rttMax = playedRttMax;
+        playedRtt = playedJitter = playedRttMin = playedRttMax = 0;
+
+        /* The room's own mode, delay and privacy, captured when the session
+         * started -- not this device's settings. A joiner runs whatever the
+         * host chose (JOIN_ACK is authoritative), and reading its own prefs
+         * had the two sides describing one session differently. */
+        final LobbySession board = new LobbySession(mm);
+        board.report(playedGame, playedRole, outcome, playedSelfNat, playedPeerNat,
+                playedPath, 0, playedPeerCountry, playedMode, playedDelay,
+                playMs, rtt, jitter, rttMin, rttMax, playedLocked, playedRoom, playedDropIn);
+    }
+
+    /** Remembered between the board claiming a room and this device's STUN. */
+    void setLobbyClaim(String base, String roomId, boolean playing, String game) {
+        joinIsDropIn = playing;
+        /* The room says what is being played. Our own GAME_SELECTED is what we
+         * had loaded when we tapped, and on a board join it has not caught up
+         * yet -- which is why the log showed host=kinst against client=dino
+         * for one session. */
+        joinGameName = game;
+        lobbyClaimBase = base;
+        lobbyClaimRoom = roomId;
+        /* Kept apart: lobbyClaimRoom is consumed by the tuple correction,
+         * while the report needs it until the session ends. */
+        joinRoom = roomId;
+        joinFromBoard = true;
+    }
+
+    /**
+     * Hand the board our real address once the game socket has one. Runs on
+     * the join worker, right after init; failing is silent, since the pairing
+     * can still work from the tuple the host observes on our JOIN packets.
+     */
+    private void correctLobbyTuple(int localPort) {
+        final String base = lobbyClaimBase;
+        final String room = lobbyClaimRoom;
+        lobbyClaimBase = null;
+        lobbyClaimRoom = null;
+        if (room == null) return;
+
+        String info = Emulator.netplayGetPublicAddr();
+        LobbySession.rememberNat(mm, info, UpnpHelper.isMapped());
+
+        String[] tuples = LobbySession.publicTuples(info);
+        if (tuples[0] == null) return;
+
+        java.util.List<String> lan = new java.util.ArrayList<String>();
+        for (String local : getAllLocalIPv4())
+            lan.add(local + ":" + localPort);
+
+        LobbyClient.Response result = LobbyClient.updatePeer(base, room,
+                Emulator.netplayGetProtocolVersion(), LobbySession.appVersion(mm),
+                tuples[0], tuples[1], lan,
+                LobbySession.natOf(info, UpnpHelper.isMapped()), LobbySession.country(mm));
+
+        /* If this does not land, the host punches at whatever guess we sent
+         * when we claimed the room -- worth seeing in a field trace. */
+        if (LobbyClient.DEBUG) Log.d("MAME4droid_Netplay", "lobby: corrected our tuple to " + tuples[0]
+                + " on " + room + " -> status=" + result.status);
+    }
+
+    /** Withdraw the room and report how it went. */
+    private void closeLobby(String outcome, long waitMs) {
+        LobbySession board = lobby;
+        LobbyClient.Endpoint peer = lobbyPeer;
+        lobby = null;
+        lobbyPeer = null;
+        lobbyLine = null;
+        if (board == null) return;
+
+        /* On a fast pairing the peer's JOIN arrives before our next poll does,
+         * so we would report the best case of all -- an instant LAN match --
+         * with no idea who joined or how. One last ask before withdrawing. */
+        if (peer == null && "connected".equals(outcome)) {
+            LobbyClient.Endpoint late = board.poll();
+            if (late != null) peer = late;
+        }
+
+        String roomId = board.getRoomId();
+        board.close();
+
+        /* Which route we ended up taking is the interesting half: it is what
+         * turns "punching works unless a side is symmetric" into a measurement. */
+        String path = (peer == null) ? null
+                : peer.sameSite ? "lan" : (UpnpHelper.isMapped() ? "upnp" : "punch");
+        board.report(Emulator.getValueStr(Emulator.GAME_SELECTED), "host", outcome,
+                LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped()),
+                (peer != null) ? peer.nat : null, path, waitMs,
+                (peer != null) ? peer.country : null,
+                rollbackMode ? 1 : 0, mm.getPrefsHelper().getNetplayDelayValue(), 0,
+                Emulator.getValue(Emulator.NETPLAY_RTT), Emulator.getValue(Emulator.NETPLAY_JITTER),
+                Emulator.getValue(Emulator.NETPLAY_RTT_MIN), Emulator.getValue(Emulator.NETPLAY_RTT_MAX),
+                lobbyPrivate, roomId, dropIn);
+
+        /* From here the session either plays or dies; how long it lasts is
+         * reported separately, since "connected" on its own cannot tell a real
+         * game from a pairing that fell apart in ten seconds. */
+        if ("connected".equals(outcome)) {
+            sessionStartMs = System.currentTimeMillis();
+            peerLeftCleanly = false;
+            playedGame = Emulator.getValueStr(Emulator.GAME_SELECTED);
+            playedRole = "host";
+            playedPath = path;
+            playedPeerCountry = (peer != null) ? peer.country : null;
+            playedSelfNat = LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped());
+            playedPeerNat = (peer != null) ? peer.nat : null;
+            playedMode = rollbackMode ? 1 : 0;
+            playedDelay = mm.getPrefsHelper().getNetplayDelayValue();
+            playedLocked = lobbyPrivate;
+            playedDropIn = dropIn;
+            playedRoom = roomId;
+            startLatencySampler();
+        }
     }
 
     /* Public-tuple lines for the waiting/connecting dialogs (worker thread,
@@ -930,6 +1643,12 @@ public class NetPlayHelper {
         }
         return sb.toString();
     }
+
+    Button.OnClickListener publicRoomsClick = new Button.OnClickListener() {
+        public void onClick(View v) {
+            showPublicRooms();
+        }
+    };
 
     Button.OnClickListener joinGameClick = new Button.OnClickListener() {
         public void onClick(View v) {
@@ -1020,10 +1739,24 @@ public class NetPlayHelper {
 
     Button.OnClickListener disconnectGameClick = new Button.OnClickListener() {
         public void onClick(View v) {
+            reportSessionEnded("played");
             Emulator.setValue(Emulator.NETPLAY_HAS_CONNECTION, 0);
             releaseWifiLock();
             deleteUpnpMappingAsync();
             com.seleuco.mame4droid.widgets.StatsWidget.hide(mm);
+
+            /* Drop-in: the room is what this button really ends -- there is no
+             * peer, only a game on the board. The heartbeat would withdraw it
+             * a second later, and that second is long enough for somebody to
+             * claim a room that is gone. Safe to run twice. */
+            if (dropInLive) {
+                new Thread(new Runnable() {
+                    public void run() {
+                        closeLobby("cancelled", 0);
+                    }
+                }).start();
+            }
+
             new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_disconnected_game), 3, Color.YELLOW, false);
             prepareButtons();
         }
@@ -1045,6 +1778,16 @@ public class NetPlayHelper {
     };
 
     public void createGame() {
+
+        /* Hosting is what puts our address on the board, so ask before the
+         * waiting dialog goes up. Either answer carries on hosting: declining
+         * just means doing it the manual way, exactly as before. */
+        Runnable retry = new Runnable() {
+            public void run() {
+                createGame();
+            }
+        };
+        if (!ensureLobbyConsent(retry, retry)) return;
 
         String strPort = mm.getPrefsHelper().getNetplayPort();
         int port = 0;
@@ -1076,6 +1819,10 @@ public class NetPlayHelper {
         Emulator.setValue(Emulator.NETPLAY_DELAY, mm.getPrefsHelper().getNetplayDelayValue());
 
         canceled = false;
+        /* Fresh per session: a previous drop-in must not leave the joining
+         * notice armed for a host that is sitting in the waiting dialog. */
+        dropInLive = false;
+        publishWaitingSince = 0;
         AlertDialog.Builder waitBld = new AlertDialog.Builder(mm);
         waitBld.setTitle(mm.getString(R.string.np_press_back_cancel));
         waitBld.setView(buildProgressView(mm.getString(R.string.np_waiting_peer), mm.getString(R.string.np_getting_info)));
@@ -1093,6 +1840,12 @@ public class NetPlayHelper {
         waitBld.setPositiveButton(mm.getString(R.string.np_btn_share), (DialogInterface.OnClickListener) null);
         waitBld.setNeutralButton(mm.getString(R.string.np_btn_peer_ip), (DialogInterface.OnClickListener) null);
         progressDialog = waitBld.create();
+        /* Hosting is waiting with the phone in your hand for someone to show
+         * up; a screen that blanks takes the app to the background and the
+         * room with it. */
+        if (progressDialog.getWindow() != null)
+            progressDialog.getWindow().addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         progressDialog.show();
         final Button peerBtn = progressDialog.getButton(DialogInterface.BUTTON_NEUTRAL);
         if (peerBtn != null) {
@@ -1178,6 +1931,9 @@ public class NetPlayHelper {
                     Emulator.netplaySetLocalPort(gamePort);
                     Emulator.netplaySetInternetMode(1);
                     Emulator.netplaySetIpFamily(ipProto);
+                    /* Before netplayInit: it decides whether the session begins
+                     * now or waits for somebody, and the handle reset keeps it. */
+                    Emulator.setValue(Emulator.NETPLAY_DROP_IN, dropIn ? 1 : 0);
 
                     if (Emulator.netplayInit(null, gamePort, 0) == -1) {
                         canceled = true;
@@ -1188,6 +1944,11 @@ public class NetPlayHelper {
                         });
                     } else {
                         acquireWifiLock(); /* Radio at full power for the session */
+                        /* STUN has run by now, under the family chosen just
+                         * above: stamp it here so a manual session counts too,
+                         * not only the ones that reach the board. */
+                        LobbySession.rememberNat(mm, Emulator.netplayGetPublicAddr(),
+                                UpnpHelper.isMapped());
                     }
                 }
 
@@ -1265,9 +2026,23 @@ public class NetPlayHelper {
                             if (peerBtn != null) peerBtn.setEnabled(true);
                         }
                     });
+
+                    /* Publish only now: the room advertises the tuple STUN
+                     * just produced, and the board refuses one that is not
+                     * really ours. */
+                    if (!noInternet) publishOnLobby(gamePort);
+
+                    /* Drop-in: hand the game straight back. The loop below
+                     * carries on as the room's heartbeat, but nothing of
+                     * netplay touches the machine until somebody joins -- the
+                     * native side keeps has_begun_game at 0 until then. */
+                    if (dropIn && lobby != null) goLiveForDropIn();
                     }
                 }
 
+                long waitStart = System.currentTimeMillis();
+                int sinceLastPoll = 0;
+                int sinceLastPublish = 0;
                 while (Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0 && !canceled) {
                     try {
                         Thread.sleep(1000);
@@ -1275,11 +2050,46 @@ public class NetPlayHelper {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
+                    /* The board's heartbeat rides this loop rather than a
+                     * thread of its own: while we are waiting here the room
+                     * stays alive, and it dies by itself if we stop -- which
+                     * is exactly what a trip to the background does. */
+
+                    /* Drop-in lifecycle: the host can walk out with nobody
+                     * having joined, and a room still advertising the game
+                     * sends whoever answers into a wait that cannot end.
+                     * Leaving force-disconnects natively, so has_connection is
+                     * the signal -- and it ignores open MAME menus. */
+                    if (dropInLive && !canceled
+                            && Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 0) {
+                        canceled = true;
+                        break;
+                    }
+                    LobbySession board = lobbyPaused ? null : lobby;
+                    if (board != null && board.isPublished() && !canceled
+                            && ++sinceLastPoll >= board.getPollSeconds()) {
+                        sinceLastPoll = 0;
+                        pollLobby(board, gamePort);
+                    } else if (board == null && !lobbyPaused && !canceled && publishRetrySeconds > 0
+                            && LobbySession.isUsable(mm)
+                            && ++sinceLastPublish >= publishRetrySeconds) {
+                        /* Without this the first host back after the server
+                         * went to sleep never got on the board, while this
+                         * very loop kept beating beside it. How soon to try
+                         * again is set by whoever refused us -- see below. */
+                        sinceLastPublish = 0;
+                        publishOnLobby(gamePort);
+                    }
                 }
+                hostWaitMs = System.currentTimeMillis() - waitStart;
 
                 if (progressDialog != null && progressDialog.isShowing()) {
                     progressDialog.dismiss();
                 }
+
+                /* Either way the room has served its purpose: withdraw it so
+                 * nobody joins a game that is over or never started. */
+                closeLobby(canceled ? "cancelled" : "connected", hostWaitMs);
 
                 if (canceled) {
                     Emulator.setValue(Emulator.NETPLAY_HAS_CONNECTION, 0);
@@ -1292,7 +2102,12 @@ public class NetPlayHelper {
                         if (!canceled) {
                             if (netplayDlg.isShowing())
                                 netplayDlg.hide();
-                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_connected), 3, Color.GREEN, false);
+                            /* A drop-in host is not starting anything: the game has
+                             * been running all along and the joiner is being
+                             * lifted into it. */
+                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(dropInLive
+                                    ? R.string.np_drop_in_joined : R.string.np_connected),
+                                    3, Color.GREEN, false);
                             Emulator.resume();
                         }
                     }
@@ -1303,6 +2118,15 @@ public class NetPlayHelper {
     }
 
     public void joinGame(String addr) {
+
+        /* Read before the validation returns below: leaving it armed would
+         * hand the board's shorter deadline to the next hand-typed join. */
+        final boolean fromBoard = joinFromBoard;
+        final String fromRoom = fromBoard ? joinRoom : null;
+        final boolean intoRunning = fromBoard && joinIsDropIn;
+        final long joinDeadline = fromBoard
+                ? JOIN_ANSWER_TIMEOUT_MS : JOIN_ANSWER_TIMEOUT_MANUAL_MS;
+        joinFromBoard = false;
 
        String strPort = mm.getPrefsHelper().getNetplayPort();
         int port = 0;
@@ -1348,6 +2172,15 @@ public class NetPlayHelper {
             return;
         }
 
+        /* Auto lets a v6 destination through, but only a device with v6 can
+         * dial one: without it sendto answers "network unreachable" and the
+         * dialog just sits there. The setting allowed it; the network does
+         * not, and those are different questions. */
+        if (destV6 && !hasUsableIPv6()) {
+            showNetplayError(mm.getString(R.string.np_dest_needs_v6));
+            return;
+        }
+
         final boolean inetMode = destV6 ? !isPrivateIPv6(destHost) : !isPrivateIPv4(destHost);
         final String addrShown = addr;
 
@@ -1361,6 +2194,7 @@ public class NetPlayHelper {
         canceled = false;
         shareLocalAddr = null; /* the client only shares its public tuple */
         sharingAsHost = false;
+
         AlertDialog.Builder joinBld = new AlertDialog.Builder(mm);
         joinBld.setTitle(mm.getString(R.string.np_press_back_cancel));
         joinBld.setView(buildProgressView(mm.getString(R.string.np_connecting_to, addr),
@@ -1372,8 +2206,24 @@ public class NetPlayHelper {
                 canceled = true;
             }
         });
-        if (inetMode) /* a LAN join has nothing to share */
+        /* A LAN join has nothing to share, and one that came from the board
+         * has nobody to share it with: the room carried our tuple up and the
+         * host is already punching at it. Offering it there reads as "the
+         * automatic part did not work", which is the opposite of the truth. */
+        if (inetMode && !fromBoard)
             joinBld.setPositiveButton(mm.getString(R.string.np_btn_share), (DialogInterface.OnClickListener) null);
+        else if (fromBoard)
+            /* Back already cancels, as the title says, but without a button
+             * the board's dialog sits a good deal shorter than the manual one
+             * and reads as though something is missing from it. A real
+             * listener here: the cancel listener above only fires for back,
+             * not for a button, and the worker watches this flag. */
+            joinBld.setNegativeButton(mm.getString(R.string.cancel),
+                    new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface d, int w) {
+                            canceled = true;
+                        }
+                    });
         progressDialog = joinBld.create();
         progressDialog.show();
         Button shareBtn = progressDialog.getButton(DialogInterface.BUTTON_POSITIVE);
@@ -1394,6 +2244,8 @@ public class NetPlayHelper {
                 Emulator.netplaySetLocalPort(localPort);
                 Emulator.netplaySetInternetMode(inetMode ? 1 : 0);
                 Emulator.netplaySetIpFamily(ipProto);
+                /* Joining is never a drop-in: only the host holds a game open. */
+                Emulator.setValue(Emulator.NETPLAY_DROP_IN, 0);
 
                 if (Emulator.netplayInit(destHost, destPort, 0) == -1) {
                     canceled = true;
@@ -1404,6 +2256,15 @@ public class NetPlayHelper {
                     });
                 } else {
                     acquireWifiLock(); /* Radio at full power for the session */
+                    LobbySession.rememberNat(mm, Emulator.netplayGetPublicAddr(),
+                            UpnpHelper.isMapped());
+
+                    /* Now, and only now, do we know our real tuple: the board
+                     * got a guess when we claimed the room, and over IPv6 not
+                     * even that. Correcting it is what lets the host punch back
+                     * at us, which on two mobile connections is the whole game. */
+                    correctLobbyTuple(localPort);
+
                     String pub = publicInfoLines(inetMode, inetMode);
                     if (pub.startsWith("\n")) pub = pub.substring(1);
                     /* Own public IP == join target: both devices sit behind
@@ -1423,10 +2284,24 @@ public class NetPlayHelper {
                         if (myPubIp.equalsIgnoreCase(destHost))
                             sameNet = "\n" + mm.getString(R.string.np_same_public_ip);
                     }
-                    final String msg = inetMode
-                            ? pub + sameNet
-                              + "\n\n" + mm.getString(R.string.np_share_hint_client)
-                            : lanConnectBody();
+                    /* Which room this address belongs to. The dialog title
+                     * carries the address, and on a board with several games
+                     * of the same name that is not enough to know whose room
+                     * you just walked into. */
+                    String room = (fromRoom != null && fromRoom.length() > 0)
+                            ? mm.getString(R.string.np_lobby_room_code, fromRoom) + "\n\n"
+                            : "";
+
+                    /* Same rule as the Share button above: a board join has
+                     * already handed the host our tuple, so telling the user
+                     * to send it by hand would invent a problem. It gets the
+                     * reassuring version instead -- and the dialog would look
+                     * abandoned with the address alone in it. */
+                    final String msg = room + (inetMode
+                            ? pub + sameNet + "\n\n" + mm.getString(fromBoard
+                                ? R.string.np_board_join_body
+                                : R.string.np_share_hint_client)
+                            : lanConnectBody());
                     mm.runOnUiThread(new Runnable() {
                         public void run() {
                             if (progressText != null)
@@ -1435,6 +2310,8 @@ public class NetPlayHelper {
                     });
                 }
 
+                long joinStart = System.currentTimeMillis();
+                boolean unanswered = false;
                 while (Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
                         && !canceled) {
                     try {
@@ -1445,7 +2322,22 @@ public class NetPlayHelper {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
+                    /* JOIN_ACK is one round trip away and both games are
+                     * already running, so a slow ROM cannot show up here.
+                     * Retrying for ever only froze two dialogs with nothing
+                     * on screen to say the answer was never coming back. */
+                    if (!canceled && Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
+                            && System.currentTimeMillis() - joinStart > joinDeadline) {
+                        unanswered = true;
+                        canceled = true;
+                    }
                 }
+
+                /* Both ends report, or the numbers only ever describe hosts --
+                 * and it is the joining side that feels a pairing fail. */
+                reportJoinOutcome(unanswered ? "timeout"
+                                : canceled ? "cancelled" : "connected",
+                        System.currentTimeMillis() - joinStart);
 
                 if (progressDialog != null && progressDialog.isShowing()) {
                     progressDialog.dismiss();
@@ -1456,12 +2348,24 @@ public class NetPlayHelper {
                     releaseWifiLock();
                 }
 
+                final boolean noAnswer = unanswered;
                 mm.runOnUiThread(new Runnable() {
                     public void run() {
+                        /* Say why we stopped. Silence here is what turned a
+                         * broken return path into two frozen dialogs. */
+                        if (noAnswer) {
+                            showNetplayError(mm.getString(R.string.np_no_answer));
+                            return;
+                        }
                         if (!canceled) {
                             if (netplayDlg.isShowing())
                                 netplayDlg.hide();
-                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(R.string.np_connected), 3, Color.GREEN, false);
+                            /* Walking into a game already running is not the same
+                             * event as starting one together, and the wait that
+                             * follows is a state transfer, not a boot. */
+                            new WarnWidget.WarnWidgetHelper(mm, mm.getString(intoRunning
+                                    ? R.string.np_drop_in_entered : R.string.np_connected),
+                                    3, Color.GREEN, false);
                             Emulator.resume();
                         }
                     }

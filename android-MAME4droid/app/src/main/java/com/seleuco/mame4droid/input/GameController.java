@@ -382,7 +382,7 @@ public class GameController implements IController {
 	 * first key is stored in it: gaps take the factory value and leftovers from
 	 * another pad are re-pointed. Without this, mapping a couple of keys silently
 	 * killed the defaults for the whole pad, as any entry marks it as custom. */
-	public static boolean adoptControllerBlock(int controllerIndex, int deviceId) {
+	public static boolean adoptControllerBlock(int controllerIndex, int deviceId, int androidDeviceId) {
 		final int perController = emulatorInputValues.length;
 		final int base = controllerIndex * perController;
 
@@ -395,6 +395,12 @@ public class GameController implements IController {
 				return false;   // already this pad's profile, leave it as it is
 		}
 
+		// An autodetected pad already had a working layout, so seed from that one
+		// instead of the factory defaults: everything the user does not redefine
+		// keeps doing what it did before opening this screen.
+		if (seedFromAutodetect(base, perController, deviceId, androidDeviceId))
+			return true;
+
 		for (int i = 0; i < perController; i++) {
 			int def = (base + i < defaultKeyMapping.length) ? defaultKeyMapping[base + i] : -1;
 			int kCode = (def != -1) ? getKeyCodeFromKeyCodeWithDeviceID(def) : 0;
@@ -402,6 +408,42 @@ public class GameController implements IController {
 				? makeKeyCodeWithDeviceID(deviceId, kCode) : -1;
 		}
 		return true;
+	}
+
+	/** Copies the running autodetect layout of androidDeviceId into the block.
+	 *  Slots the profile does not cover stay unassigned, which is what they did
+	 *  before too. @return false if the pad is not autodetected. */
+	private static boolean seedFromAutodetect(int base, int perController, int deviceId, int androidDeviceId) {
+		if (androidDeviceId < 0 || mm == null || genericControllers.containsKey(androidDeviceId))
+			return false;
+
+		int slot = -1;
+		for (int i = 0; i < MAX_DEVICES; i++)
+			if (deviceIDs[i] == androidDeviceId) { slot = i; break; }
+		if (slot == -1)
+			return false;
+
+		GameController gc = (mm.getInputHandler() != null) ? mm.getInputHandler().getGameController() : null;
+		if (gc == null)
+			return false;
+
+		for (int i = 0; i < perController; i++)
+			keyMapping[base + i] = -1;
+
+		boolean any = false;
+		for (int kCode = 0; kCode < MAX_KEYS; kCode++) {
+			int v = gc.deviceMappings[kCode][slot];
+			if (v == -1 || kCode == 0 || kCode == 0xFFFF)
+				continue;
+			for (int i = 0; i < perController; i++) {
+				if (emulatorInputValues[i] == v) {
+					keyMapping[base + i] = makeKeyCodeWithDeviceID(deviceId, kCode);
+					any = true;
+					break;
+				}
+			}
+		}
+		return any;
 	}
 
 

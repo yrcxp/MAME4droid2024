@@ -336,6 +336,9 @@ public class MAME4droid extends Activity {
 			scraperHelper.resume();
 		}
 
+		if (NetPlayHelper != null)
+			NetPlayHelper.resume();
+
 		if (adpfHelper != null && prefsHelper != null && prefsHelper.isFramePacingEnabled())
 			adpfHelper.startThermal();
 
@@ -361,6 +364,9 @@ public class MAME4droid extends Activity {
 		if(scraperHelper!=null){
 			scraperHelper.pause();
 		}
+
+		if (NetPlayHelper != null)
+			NetPlayHelper.pause();
 
 		if (adpfHelper != null)
 			adpfHelper.stopThermal();

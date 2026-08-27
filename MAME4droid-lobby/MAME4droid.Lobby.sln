@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E4D46C6E-65D6-4181-9341-33E8DD89A80D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mame4droid.Lobby", "src\Mame4droid.Lobby\Mame4droid.Lobby.csproj", "{FE27DA69-224C-4AF7-A743-D319887AEF9F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D83BDDF6-778A-4126-823D-21BFE2ACE339}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mame4droid.Lobby.Tests", "tests\Mame4droid.Lobby.Tests\Mame4droid.Lobby.Tests.csproj", "{02BD2455-1CBF-47B4-A718-AD59DE804E20}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FE27DA69-224C-4AF7-A743-D319887AEF9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE27DA69-224C-4AF7-A743-D319887AEF9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE27DA69-224C-4AF7-A743-D319887AEF9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE27DA69-224C-4AF7-A743-D319887AEF9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02BD2455-1CBF-47B4-A718-AD59DE804E20}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02BD2455-1CBF-47B4-A718-AD59DE804E20}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02BD2455-1CBF-47B4-A718-AD59DE804E20}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02BD2455-1CBF-47B4-A718-AD59DE804E20}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FE27DA69-224C-4AF7-A743-D319887AEF9F} = {E4D46C6E-65D6-4181-9341-33E8DD89A80D}
+		{02BD2455-1CBF-47B4-A718-AD59DE804E20} = {D83BDDF6-778A-4126-823D-21BFE2ACE339}
+	EndGlobalSection
+EndGlobal

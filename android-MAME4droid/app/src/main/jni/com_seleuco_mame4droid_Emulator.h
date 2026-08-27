@@ -154,6 +154,18 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_LIGHTGUN_DATA 4L
 #undef com_seleuco_mame4droid_Emulator_SCREEN_RECT
 #define com_seleuco_mame4droid_Emulator_SCREEN_RECT 78L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_RTT
+#define com_seleuco_mame4droid_Emulator_NETPLAY_RTT 79L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_JITTER
+#define com_seleuco_mame4droid_Emulator_NETPLAY_JITTER 80L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MIN
+#define com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MIN 81L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MAX
+#define com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MAX 82L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN
+#define com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN 83L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_KEEPS_GAME
+#define com_seleuco_mame4droid_Emulator_NETPLAY_KEEPS_GAME 84L
 
 /*
  * Class:     com_seleuco_mame4droid_Emulator
@@ -314,6 +326,22 @@ JNIEXPORT void JNICALL Java_com_seleuco_mame4droid_Emulator_netplaySetMode
  */
 JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayResync
         (JNIEnv *, jclass);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    netplayGetProtocolVersion
+ * Signature: ()I
+ */
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetProtocolVersion
+        (JNIEnv *, jclass);
+
+/*
+ * Class:     com_seleuco_mame4droid_Emulator
+ * Method:    netplayGetDriverDesc
+ * Signature: (Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetDriverDesc
+        (JNIEnv *, jclass, jstring);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>MAME4Droid Reloaded Help</title>
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="mystyle.css">
+
+</head>
+<body class="view">
+<div class="page">
+	<div class="header">
+<h1 class="title">Public Rooms (Lobby)</h1>
+  </div><!-- /header -->
+	<div class="content">
+      <p>The lobby is a public board where hosts advertise the game they are
+      waiting on, so you can find someone to play with instead of swapping
+      addresses by hand. Everything <a class="link" href="netplay.htm">NetPlay</a>
+      does still works exactly as before &mdash; the board only automates the
+      address exchange.</p>
+      <p>It is <strong>opt-in</strong>: the first time you use it you are asked
+      to agree, and it can be switched off entirely under
+      <em>Options-&gt;Settings-&gt;NetPlay-&gt;Public rooms</em>.</p>
+
+      <h3>Publishing your game</h3>
+      <p>Tap <strong>Start Game</strong> as usual. If the board is enabled your
+      room appears on it automatically, and the waiting screen tells you so
+      along with your <strong>room code</strong> &mdash; eight characters such
+      as <em>K7M2QP4A</em>. The alphabet has no I, L, O or U, so it can be read
+      aloud over the phone without confusion.</p>
+      <p>The board never shows an address. It shows the game, the country, the
+      mode, the input delay, how long the host has been waiting, and a colour
+      telling you how likely the connection is to work.</p>
+
+      <h3>Joining a game</h3>
+      <p>Tap <strong>Public Rooms</strong>, pick a room and you are connected.
+      Rooms you cannot use are still listed, greyed out, rather than hidden:
+      knowing a game exists is useful even when this build has no such driver.</p>
+      <p>Before anything is sent, MAME4droid checks you actually have the ROM,
+      looking in your ROMs folder for <em>name.zip</em>, <em>name.7z</em> or a
+      folder called <em>name</em>. If it is missing you are told which file you
+      need, and the room is left untouched for someone who can play it.</p>
+
+      <h3>What the colours mean</h3>
+      <ul>
+        <li><strong>Green &mdash; good connection expected.</strong> Neither
+            side has a router to get through: you are on the same network, or
+            both of you have working IPv6, or neither router rewrites ports
+            unpredictably.</li>
+        <li><strong>Amber &mdash; may not connect.</strong> One side is behind
+            a router that changes its public port for every destination
+            (Symmetric NAT, very common on mobile data). It often works, and
+            trying costs nothing.</li>
+        <li><strong>Red &mdash; cannot connect.</strong> Both sides are behind
+            that kind of router with no way through. The room is shown and the
+            join refused: a stated reason beats a minute of silence.</li>
+      </ul>
+      <p>The colour is a forecast, not a promise. It is worked out from what
+      each side measured about its own router the last time it played, so a
+      brand-new install shows no opinion about itself until it has hosted or
+      joined once.</p>
+
+      <h3>Private rooms</h3>
+      <p>Set a PIN under <em>Options-&gt;Settings-&gt;NetPlay</em> and tick
+      <strong>Needs a PIN</strong> when you create the game. The room still
+      appears on the board, marked as protected, but only someone who knows the
+      PIN can take it. The PIN itself never reaches the server, only a hash of
+      it, and a handful of wrong guesses closes the room to joins.</p>
+
+      <h3>Drop-in: play now, be joined later</h3>
+      <p>With <strong>Rollback</strong> selected, the game options offer
+      <strong>Start playing now, join whenever</strong>. Your game starts
+      immediately and stays on the board while you play. Whoever joins is
+      lifted into the game already in progress: your machine's state travels
+      across to them, so the picture stops for a moment as it does.</p>
+      <ul>
+        <li>If they leave, you carry on playing on your own, exactly as if
+            NetPlay had never been involved. Open NetPlay again to put the
+            room back up.</li>
+        <li>Rollback only. The state transfer that makes drop-in possible does
+            not exist in Lockstep.</li>
+        <li>Starting a drop-in while you are already playing may restart the
+            game. See below for when, and why.</li>
+      </ul>
+
+
+      <h3>Why a drop-in sometimes restarts the game</h3>
+      <p>NetPlay needs both machines to behave identically, frame by frame.
+      Several of the things that decide that are settled the moment a game
+      boots: whether your saved settings and NVRAM are loaded, whether Lua
+      plugins and cheats run, the sound rate, and the working copy of the hard
+      disk in CHD games such as Killer Instinct. NetPlay fixes all of them as it
+      launches the game, and none of them can be changed in a game already
+      running.</p>
+      <p>That is the whole rule. A drop-in started from the ROM list launches
+      the game with everything fixed. A drop-in started while you are already
+      playing keeps that game only if NetPlay was what launched it &mdash;
+      which includes carrying on alone after a previous session ended, and
+      opening the door again. Any other game has to be restarted, and you are
+      told so before you commit.</p>
+      <p>Ignoring this would not fail loudly: the two machines would drift
+      apart over the following minutes with no error to point at. That is why
+      it restarts rather than trying its luck.</p>
+      <h3>When it doesn't work</h3>
+      <ul>
+        <li><strong>Two devices on the same Wi-Fi that cannot see each
+            other.</strong> Modern routers offer several bands under one
+            network name, and some do not pass traffic between them. If a LAN
+            game refuses to connect, put both devices on the same band, or
+            check that the router is not isolating its clients.</li>
+        <li><strong>Several players on one connection.</strong> The server
+            counts by public address, not by device, so everyone in the same
+            house shares one allowance of rooms and requests. It is sized for
+            a roomful of people, but if the board says it is busy, that is
+            what happened &mdash; it clears on its own.</li>
+        <li><strong>Mobile data.</strong> Two players both on 4G/5G often
+            cannot reach each other at all: carriers frequently isolate their
+            subscribers. IPv6 sidesteps the whole problem when both sides have
+            it, which is why <em>Auto</em> is worth trying under
+            <em>Network protocol</em>.</li>
+        <li><strong>"Waking the board up".</strong> The server sleeps when
+            nobody has used it for a while and takes a few seconds to come
+            back. That is a wait, not a failure. If it says the board is not
+            available, it really is off.</li>
+        <li><strong>Both of you must be running the same game.</strong> The
+            board tells you which one a room is playing; load it before
+            joining.</li>
+      </ul>
+
+
+      <h3>Privacy, and why the board works this way</h3>
+      <p>MAME4droid is made by one person and given away. There is no
+      advertising, nothing to unlock, nothing to subscribe to, and there never
+      will be &mdash; which also means there is no budget for servers. The
+      board is a good compromise, and what makes finding a game possible at
+      all: a tiny free instance with no database, storing nothing about you,
+      forgetting a room a minute after its host stops asking to keep it
+      alive.</p>
+      <p>Your game never travels through it. The board introduces two players
+      to each other and then gets out of the way: from that moment the two
+      devices talk directly, and the server has no idea whether you ever
+      connected. That is also why there is no account and no login &mdash;
+      keeping personal data would mean protecting it, and the safest data is
+      the data nobody has.</p>
+      <p><strong>There is no chat, and there will not be one.</strong> A chat
+      inside the app would mean moderating what strangers say to each other,
+      which is a real responsibility and a set of store obligations that a
+      project this size cannot honestly meet. Use something built for it
+      &mdash; Discord, a group chat, whatever you already share with your
+      friends. The room code is the only thing you need to pass along.</p>
+
+      <h3>What is sent, and what is kept</h3>
+      <p>To introduce you to another player the board needs your public address
+      and the port NetPlay uses &mdash; there is no way around that, it is what
+      the other device dials. Along with it go the game you are playing, the
+      country your SIM or your language says you are in, and, when a session
+      ends, how it went and how fast the connection was.</p>
+      <p>What matters is what happens to it afterwards:</p>
+      <ul>
+        <li><strong>Your address is never written down.</strong> It lives in
+            memory while your room is up, is handed only to the player who
+            claims it, and disappears with the room. It appears in no log file,
+            ever. The session reports the server keeps contain no address at
+            all.</li>
+        <li><strong>The board never shows an address to anyone else.</strong>
+            When a room says it is on your network, that is a comparison of two
+            salted fingerprints, not a disclosure of either side.</li>
+        <li><strong>Nothing identifies your device.</strong> No account, no
+            login, no name, no advertising id, nothing installed on your phone
+            that another session could recognise. Two visits from you are not
+            connected to each other.</li>
+        <li><strong>Nothing survives a restart.</strong> Rooms live in memory
+            for a minute at a time, and the salt that makes the fingerprints is
+            new every time the server starts &mdash; so yesterday's records
+            could not be matched against today's even by the server itself.</li>
+        <li><strong>You choose whether any of it happens.</strong> Turn the
+            board off and MAME4droid never contacts it: NetPlay by hand works
+            exactly as it always has.</li>
+      </ul>
+
+  </div><!-- /content -->
+
+<div class="header">
+<h4 class="title"><a class="link" href="javascript:history.go(-1)" data-direction="reverse">Go Back</a></h4>
+</div>
+
+</div><!-- /page -->
+</body>
+</html>

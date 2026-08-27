@@ -61,6 +61,8 @@ void (*netplaySetLocalPort)(int port) = NULL;
 const char *(*netplayGetPublicAddr)(void) = NULL;
 const char *(*netplayGetDiagnostics)(void) = NULL;
 const char *(*netplayProbePublicIp)(void) = NULL;
+int (*netplayGetProtocolVersion)(void) = NULL;
+const char *(*netplayGetDriverDesc)(const char *name) = NULL;
 
 void  (*setMyValue)(int key,int i, int value)=NULL;
 int  (*getMyValue)(int key, int i)=NULL;
@@ -248,6 +250,12 @@ static void load_lib(const char *str)
 
     netplayProbePublicIp = dlsym(libdl, "netplayProbePublicIp");
     __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayProbePublicIp %d\n", netplayProbePublicIp != NULL);
+
+    netplayGetProtocolVersion = dlsym(libdl, "netplayGetProtocolVersion");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayGetProtocolVersion %d\n", netplayGetProtocolVersion != NULL);
+
+    netplayGetDriverDesc = dlsym(libdl, "netplayGetDriverDesc");
+    __android_log_print(ANDROID_LOG_DEBUG, "mame4droid-jni", "netplayGetDriverDesc %d\n", netplayGetDriverDesc != NULL);
 }
 
 void myJNI_dumpVideo()
@@ -1179,4 +1187,27 @@ JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_netplayProbePubli
 {
     const char *r = (netplayProbePublicIp != NULL) ? netplayProbePublicIp() : NULL;
     return (*env)->NewStringUTF(env, r != NULL ? r : "");
+}
+
+/* Wire/build version this .so speaks; 0 when the symbol is missing, which the
+ * lobby treats as "no board" rather than guessing a version. */
+JNIEXPORT jint JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetProtocolVersion
+  (JNIEnv *env, jclass c)
+{
+    if (netplayGetProtocolVersion != NULL)
+        return (jint)netplayGetProtocolVersion();
+    __android_log_print(ANDROID_LOG_WARN, "mame4droid-jni", "netplayGetProtocolVersion symbol not found!");
+    return 0;
+}
+
+/* Driver title for a rom name, "" when this build has no such driver. */
+JNIEXPORT jstring JNICALL Java_com_seleuco_mame4droid_Emulator_netplayGetDriverDesc
+  (JNIEnv *env, jclass c, jstring name)
+{
+    const char *n = (name != NULL) ? (*env)->GetStringUTFChars(env, name, NULL) : NULL;
+    const char *r = (netplayGetDriverDesc != NULL) ? netplayGetDriverDesc(n) : NULL;
+    jstring out = (*env)->NewStringUTF(env, r != NULL ? r : "");
+    if (n != NULL)
+        (*env)->ReleaseStringUTFChars(env, name, n);
+    return out;
 }

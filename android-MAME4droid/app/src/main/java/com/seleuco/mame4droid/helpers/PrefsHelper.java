@@ -199,6 +199,13 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_UPNP = "PREF_NETPLAY_UPNP";
 	final static public String PREF_NETPLAY_IP_PROTOCOL = "PREF_NETPLAY_IP_PROTOCOL";
 	final static public String PREF_NETPLAY_ALLOW_PLUGINS = "PREF_NETPLAY_ALLOW_PLUGINS";
+	final static public String PREF_NETPLAY_LOBBY = "PREF_NETPLAY_LOBBY";
+	final static public String PREF_NETPLAY_LOBBY_CONSENT = "PREF_NETPLAY_LOBBY_CONSENT";
+	final static public String PREF_NETPLAY_LOBBY_URL = "PREF_NETPLAY_LOBBY_URL";
+	final static public String PREF_NETPLAY_LAST_NAT = "PREF_NETPLAY_LAST_NAT";
+	final static public String PREF_NETPLAY_LAST_ROOM = "PREF_NETPLAY_LAST_ROOM";
+	final static public String PREF_NETPLAY_LOBBY_PIN = "PREF_NETPLAY_LOBBY_PIN";
+	final static public String PREF_NETPLAY_LOBBY_PRIVATE = "PREF_NETPLAY_LOBBY_PRIVATE";
 
 	final static public int LOW = 1;
 	final static public int NORMAL = 2;
@@ -875,6 +882,79 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	 *  Off by default -- may desync, especially in rollback (safe-ish in lockstep). */
 	public boolean isNetplayAllowPluginsEnabled() {
 		return getSharedPreferences().getBoolean(PREF_NETPLAY_ALLOW_PLUGINS, false);
+	}
+
+	/** Public board: advertise a hosted game and browse other people's.
+	 *  Additive -- with it off, sharing an IP by hand works exactly as before. */
+	public boolean isNetplayLobbyEnabled() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_LOBBY, true);
+	}
+
+	/** Whether the user was told their IP is shared with the other player and
+	 *  held on the server for a minute. Asked once, before the first use. */
+	public boolean isNetplayLobbyConsentGiven() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_LOBBY_CONSENT, false);
+	}
+
+	public void setNetplayLobbyConsentGiven(boolean given) {
+		getSharedPreferences().edit().putBoolean(PREF_NETPLAY_LOBBY_CONSENT, given).commit();
+	}
+
+	/** Turning it off is also how a declined consent is remembered, so nobody
+	 *  gets asked again every time they host. */
+	public void setNetplayLobbyEnabled(boolean enabled) {
+		getSharedPreferences().edit().putBoolean(PREF_NETPLAY_LOBBY, enabled).commit();
+	}
+
+	/** Board to talk to. Empty means the public one; the server is in the repo,
+	 *  so a club or a LAN party can point this at their own. */
+	public String getNetplayLobbyUrl() {
+		String url = getSharedPreferences().getString(PREF_NETPLAY_LOBBY_URL, "");
+		return (url == null || url.trim().length() == 0) ? LobbyClient.DEFAULT_URL : url.trim();
+	}
+
+	/** PIN for private rooms: 4 to 8 digits, or empty if never set. Numeric so
+	 *  it can be read out to a friend without spelling anything, and it never
+	 *  leaves the device except as the room's own salted hash. */
+	public String getNetplayLobbyPin() {
+		String pin = getSharedPreferences().getString(PREF_NETPLAY_LOBBY_PIN, "");
+		return (pin == null) ? "" : pin.trim();
+	}
+
+	public boolean hasNetplayLobbyPin() {
+		String pin = getNetplayLobbyPin();
+		return pin.length() >= 4 && pin.length() <= 8 && pin.matches("[0-9]+");
+	}
+
+	/** Whether the next hosted game goes on the board as private. Remembered
+	 *  so a group that always plays among friends sets it once. */
+	public boolean isNetplayLobbyPrivate() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_LOBBY_PRIVATE, false);
+	}
+
+	public void setNetplayLobbyPrivate(boolean isPrivate) {
+		getSharedPreferences().edit().putBoolean(PREF_NETPLAY_LOBBY_PRIVATE, isPrivate).commit();
+	}
+
+	/** What STUN said about this connection last time, as "sym,pp,upnp", or
+	 *  empty before the first session. The board needs it to judge a room:
+	 *  our own NAT is otherwise unknown until we have already joined. */
+	public String getNetplayLastNat() {
+		return getSharedPreferences().getString(PREF_NETPLAY_LAST_NAT, "");
+	}
+
+	public void setNetplayLastNat(String flags) {
+		getSharedPreferences().edit().putString(PREF_NETPLAY_LAST_NAT, flags).commit();
+	}
+
+	/** The room this device published last, as "id,token", so a session that
+	 *  ended badly can be cleaned up instead of haunting the board. */
+	public String getNetplayLastRoom() {
+		return getSharedPreferences().getString(PREF_NETPLAY_LAST_ROOM, "");
+	}
+
+	public void setNetplayLastRoom(String room) {
+		getSharedPreferences().edit().putString(PREF_NETPLAY_LAST_ROOM, room).commit();
 	}
 
 	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */

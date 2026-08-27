@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Ayuda de MAME4Droid Reloaded</title>
+
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="mystyle.css">
+
+</head>
+<body class="view">
+<div class="page">
+	<div class="header">
+<h1 class="title">Salas públicas (tablón)</h1>
+  </div><!-- /header -->
+	<div class="content">
+      <p>El tablón es una lista pública donde los anfitriones anuncian la
+      partida que están esperando, para que encuentres con quién jugar sin
+      tener que intercambiar direcciones a mano. Todo lo del
+      <a class="link" href="netplay.htm">NetPlay</a> sigue funcionando igual
+      que antes: el tablón solo automatiza ese intercambio.</p>
+      <p>Hay que <strong>aceptarlo</strong>: la primera vez que lo usas se te
+      pide permiso, y se puede desactivar del todo en
+      <em>Opciones-&gt;Ajustes-&gt;NetPlay-&gt;Salas públicas</em>.</p>
+
+      <h3>Publicar tu partida</h3>
+      <p>Dale a <strong>Iniciar partida</strong> como siempre. Si el tablón
+      está activado, tu sala aparece en él sola, y la pantalla de espera te lo
+      dice junto a tu <strong>código de sala</strong>: ocho caracteres, por
+      ejemplo <em>K7M2QP4A</em>. El alfabeto no lleva I, L, O ni U, así que se
+      puede dictar por teléfono sin confusiones.</p>
+      <p>El tablón no enseña ninguna dirección. Enseña el juego, el país, el
+      modo, el retardo de entrada, cuánto lleva esperando el anfitrión y un
+      color que te dice qué probabilidades hay de que la conexión funcione.</p>
+
+      <h3>Unirse a una partida</h3>
+      <p>Pulsa <strong>Salas públicas</strong>, elige una y te conecta. Las
+      salas que no puedes usar salen igualmente, en gris, en vez de ocultarse:
+      saber que esa partida existe es útil aunque tu versión no tenga ese
+      juego.</p>
+      <p>Antes de mandar nada, MAME4droid comprueba que tienes la ROM, buscando
+      en tu carpeta de ROMs <em>nombre.zip</em>, <em>nombre.7z</em> o una
+      carpeta llamada <em>nombre</em>. Si falta te dice qué fichero necesitas y
+      deja la sala intacta para alguien que sí pueda jugarla.</p>
+
+      <h3>Qué significan los colores</h3>
+      <ul>
+        <li><strong>Verde: se espera buena conexión.</strong> Ninguno de los
+            dos tiene un router que atravesar: estáis en la misma red, o los
+            dos tenéis IPv6 funcionando, o ninguno de los routers cambia de
+            puerto de forma imprevisible.</li>
+        <li><strong>Ámbar: puede que no conecte.</strong> Uno de los dos está
+            detrás de un router que cambia su puerto público para cada
+            destino (NAT simétrico, muy habitual con datos móviles). Suele
+            funcionar, y probar no cuesta nada.</li>
+        <li><strong>Rojo: no puede conectar.</strong> Los dos estáis detrás de
+            ese tipo de router y no hay por dónde. La sala se enseña y se
+            rechaza la entrada: mejor decirte el motivo que dejarte un minuto
+            en silencio.</li>
+      </ul>
+      <p>El color es un pronóstico, no una promesa. Sale de lo que cada lado
+      midió sobre su propio router la última vez que jugó, así que una
+      instalación recién puesta no opina sobre sí misma hasta que haya creado
+      o entrado en una partida al menos una vez.</p>
+
+      <h3>Salas con PIN</h3>
+      <p>Pon un PIN en <em>Opciones-&gt;Ajustes-&gt;NetPlay</em> y marca
+      <strong>Necesita PIN</strong> al crear la partida. La sala sigue
+      apareciendo en el tablón, marcada como protegida, pero solo entra quien
+      sepa el PIN. El PIN nunca llega al servidor, solo un hash suyo, y unos
+      pocos intentos fallidos cierran la sala a nuevas entradas.</p>
+
+      <h3>Drop-in: juega ya, que se unan luego</h3>
+      <p>Con <strong>Rollback</strong> seleccionado, las opciones de la partida
+      ofrecen <strong>Empezar ya, que se unan cuando quieran</strong>. Tu
+      partida arranca al momento y se queda publicada mientras juegas. A quien
+      entre se le mete dentro de la partida en marcha: el estado de tu máquina
+      viaja hasta él, así que la imagen se para un instante mientras lo hace.</p>
+      <ul>
+        <li>Si se va, tú sigues jugando por tu cuenta, exactamente como si el
+            NetPlay nunca hubiera estado ahí. Vuelve a abrir NetPlay para
+            publicar la sala otra vez.</li>
+        <li>Solo con rollback. La transferencia de estado que hace posible el
+            drop-in no existe en lockstep.</li>
+        <li>Empezar un drop-in estando ya jugando puede reiniciar la partida.
+            Más abajo tienes cuándo, y por qué.</li>
+      </ul>
+
+
+      <h3>Por qué a veces el drop-in reinicia la partida</h3>
+      <p>El NetPlay necesita que las dos máquinas se comporten igual, frame a
+      frame. Varias de las cosas que deciden eso quedan fijadas en el momento
+      en que arranca el juego: si se cargan tus ajustes guardados y la NVRAM,
+      si corren los plugins de Lua y los trucos, la frecuencia de sonido, y la
+      copia de trabajo del disco duro en los juegos con CHD como Killer
+      Instinct. El NetPlay las fija todas al lanzar el juego, y ninguna se
+      puede cambiar en una partida que ya está corriendo.</p>
+      <p>Esa es toda la regla. Un drop-in creado desde la lista de ROMs lanza
+      el juego con todo fijado. Un drop-in creado estando ya jugando conserva
+      esa partida solo si fue el NetPlay quien la lanzó, lo que incluye seguir
+      jugando solo después de que termine una sesión y volver a abrir la puerta.
+      Cualquier otra partida hay que reiniciarla, y se te avisa antes de que te
+      comprometas.</p>
+      <p>Saltarse esto no fallaría de forma ruidosa: las dos máquinas se irían
+      separando durante los minutos siguientes sin ningún error al que señalar.
+      Por eso reinicia en vez de probar suerte.</p>
+      <h3>Cuando no funciona</h3>
+      <ul>
+        <li><strong>Dos aparatos en la misma wifi que no se ven.</strong> Los
+            routers modernos ofrecen varias bandas bajo un mismo nombre de red,
+            y algunos no pasan el tráfico entre ellas. Si una partida por LAN
+            no conecta, pon los dos aparatos en la misma banda, o comprueba que
+            el router no esté aislando a sus clientes.</li>
+        <li><strong>Varios jugadores en una misma conexión.</strong> El
+            servidor cuenta por dirección pública, no por aparato, así que
+            todos los de una misma casa comparten un cupo de salas y de
+            peticiones. Está calculado para que quepa una casa entera, pero si
+            el tablón te dice que está ocupado, es eso: se despeja solo.</li>
+        <li><strong>Datos móviles.</strong> Dos jugadores en 4G/5G a menudo no
+            se alcanzan: los operadores suelen aislar a sus abonados entre sí.
+            IPv6 se salta el problema entero cuando los dos la tienen, y por
+            eso merece la pena probar <em>Auto</em> en
+            <em>Protocolo de red</em>.</li>
+        <li><strong>"Despertando el tablón".</strong> El servidor se duerme
+            cuando nadie lo usa un rato y tarda unos segundos en volver. Eso es
+            una espera, no un fallo. Si te dice que el tablón no está
+            disponible, es que de verdad está apagado.</li>
+        <li><strong>Los dos tenéis que estar en el mismo juego.</strong> El
+            tablón te dice a cuál está jugando cada sala; cárgalo antes de
+            entrar.</li>
+      </ul>
+
+
+      <h3>Privacidad, y por qué el tablón es así</h3>
+      <p>MAME4droid lo hace una sola persona y se regala. No hay publicidad, no
+      hay nada que desbloquear, no hay nada a lo que suscribirse, y no lo habrá
+      &mdash; lo que también quiere decir que no hay presupuesto para
+      servidores. El tablón es una buena solución de compromiso, la que hace posible
+      encontrar partida igualmente: una instancia gratuita y minúscula, sin
+      base de datos, que no guarda nada tuyo y que olvida una sala al minuto
+      de que su anfitrión deje de pedir que siga viva.</p>
+      <p>Tu partida no pasa por ahí. El tablón presenta a dos jugadores y se
+      quita de en medio: a partir de ese momento los dos aparatos hablan
+      directamente, y el servidor ni siquiera sabe si llegasteis a conectar. Por
+      eso tampoco hay cuenta ni registro: guardar datos personales obligaría a
+      protegerlos, y el dato más seguro es el que nadie tiene.</p>
+      <p><strong>No hay chat, y no lo va a haber.</strong> Un chat dentro de la
+      aplicación significaría moderar lo que desconocidos se dicen entre sí, y
+      eso es una responsabilidad seria y un montón de obligaciones de tienda que
+      un proyecto de este tamaño no puede cumplir honestamente. Usa algo hecho
+      para eso &mdash; Discord, un grupo, lo que ya uses con tus amigos. El
+      código de sala es lo único que hay que pasarse.</p>
+
+      <h3>Qué se envía, y qué se guarda</h3>
+      <p>Para presentarte a otro jugador, el tablón necesita tu dirección
+      pública y el puerto que usa el NetPlay &mdash; no hay forma de evitarlo,
+      es lo que marca el otro aparato. Con eso van el juego al que juegas, el
+      país que dicen tu SIM o tu idioma, y, al terminar una partida, cómo fue y
+      a qué velocidad iba la conexión.</p>
+      <p>Lo importante es qué pasa después con todo eso:</p>
+      <ul>
+        <li><strong>Tu dirección no se escribe en ningún sitio.</strong> Vive
+            en memoria mientras tu sala está publicada, se le entrega solo al
+            jugador que la reclama, y desaparece con la sala. No aparece en
+            ningún fichero de registro, nunca. Los informes de partida que
+            guarda el servidor no llevan ninguna dirección.</li>
+        <li><strong>El tablón no le enseña una dirección a nadie.</strong>
+            Cuando una sala dice que está en tu red, eso es la comparación de
+            dos huellas con sal, no la revelación de ninguna de las dos.</li>
+        <li><strong>Nada identifica tu aparato.</strong> Sin cuenta, sin
+            registro, sin nombre, sin identificador de publicidad, sin nada
+            instalado en tu móvil que otra sesión pueda reconocer. Dos visitas
+            tuyas no se relacionan entre sí.</li>
+        <li><strong>Nada sobrevive a un reinicio.</strong> Las salas viven en
+            memoria de minuto en minuto, y la sal con la que se hacen las
+            huellas es nueva cada vez que arranca el servidor &mdash; así que
+            los registros de ayer no se podrían cruzar con los de hoy ni
+            siquiera desde dentro.</li>
+        <li><strong>Tú decides si algo de esto pasa.</strong> Apaga el tablón y
+            MAME4droid no lo contacta jamás: el NetPlay a mano funciona
+            exactamente igual que siempre.</li>
+      </ul>
+
+  </div><!-- /content -->
+
+<div class="header">
+<h4 class="title"><a class="link" href="javascript:history.go(-1)" data-direction="reverse">Volver</a></h4>
+</div>
+
+</div><!-- /page -->
+</body>
+</html>
