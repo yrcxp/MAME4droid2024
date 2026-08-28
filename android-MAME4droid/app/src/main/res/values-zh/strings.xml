@@ -96,6 +96,8 @@
     <string name="np_drop_in_joined">联机对战：另一位玩家加入了！正在让他跟上你的进度…</string>
     <string name="np_drop_in_entered">联机对战：你已加入！正在让你跟上进行中的对战…</string>
     <string name="np_drop_in_again">你的游戏照常继续。如果想让别人加入，打开联机对战并再次开启随时加入。</string>
+    <string name="np_drop_in_no_rollback">这个游戏对回滚来说太大了，无法使用中途加入。房间已从列表中撤下；你可以继续游戏，或用锁步模式开始一局普通联机。</string>
+    <string name="np_drop_in_too_big">这个游戏对回滚来说太大了（存档 %1$s MB），中途加入无法把游戏交接过去。没有发布房间，联机已关闭；你可以继续游戏，或用锁步模式开始一局普通联机。</string>
     <string name="np_private_room_no_pin">带PIN码的房间：只有知道PIN码的人才能加入 — 请在联机设置中设置</string>
     <string name="pref_netplay_lobby_pin_title">房间PIN码</string>
     <string name="pref_netplay_lobby_pin_summary">4到8位数字。告诉你想一起玩的人：你的房间会在列表中显示需要PIN码，只有他们能进入。服务器只会收到它的哈希值</string>
@@ -176,6 +178,7 @@
     <string name="np_msg_connection_lost">联机对战：连接已断开。正在恢复离线游戏……</string>
     <string name="np_msg_no_ack">联机对战：对方仍在请求加入，说明我们的回应没有送达。通信只能单向通过。</string>
     <string name="np_no_answer">主机没有响应。\n\n可能是它没有收到，也可能是它的回应回不到你这里。如果你们连的是同一个 Wi-Fi，请检查两台设备是否在同一频段，以及路由器是否隔离了客户端。</string>
+    <string name="np_lan_silent_fallback">局域网没有响应：路由器可能启用了无线客户端隔离。\n\n正在通过公网地址重试…</string>
     <string name="np_msg_peer_disconnected">联机对战：对方已断开连接。正在恢复离线游戏……</string>
     <string name="np_msg_send_failed">联机对战：发送数据失败。\n错误：%1$s</string>
     <string name="np_msg_bind_failed">联机对战：绑定套接字失败。\n错误：%1$s</string>

@@ -125,6 +125,53 @@ bool load_matcher_api()
 
 
 //============================================================
+//  glyf_tables_fit - vet a font before stb rasterizes from it
+//
+//  stbtt_InitFont takes no buffer length, so nothing inside stb ever checks
+//  an offset against the file: one bad loca entry sends it reading arbitrarily
+//  far past the mapping. Walk the table once here and reject the font instead.
+//============================================================
+
+static bool glyf_tables_fit(stbtt_fontinfo const &info, size_t size)
+{
+	if (info.cff.size)
+		return true;    // CFF outlines go through stb's own bounds-checked buffers
+
+	if ((info.glyf <= 0) || (info.loca <= 0) || (info.numGlyphs <= 0))
+		return false;
+	if ((info.indexToLocFormat != 0) && (info.indexToLocFormat != 1))
+		return false;
+
+	size_t const entry = info.indexToLocFormat ? 4 : 2;
+	size_t const count = size_t(info.numGlyphs) + 1;
+	if (((size_t(info.loca) + (count * entry)) > size) || (size_t(info.glyf) >= size))
+		return false;
+
+	unsigned char const *const loca = info.data + info.loca;
+	size_t const room = size - size_t(info.glyf);
+	size_t prev = 0;
+	for (size_t i = 0; count > i; i++)
+	{
+		unsigned char const *const p = loca + (i * entry);
+		size_t const off = (entry == 2)
+				? (((size_t(p[0]) << 8) | size_t(p[1])) * 2)
+				: ((size_t(p[0]) << 24) | (size_t(p[1]) << 16) | (size_t(p[2]) << 8) | size_t(p[3]));
+
+		if (off > room)
+			return false;
+
+		// entries are start/end pairs: a glyph that is not empty must also
+		// have room for the ten-byte header GetGlyphBox reads
+		if ((i > 0) && (prev != off) && ((prev + 10) > room))
+			return false;
+
+		prev = off;
+	}
+	return true;
+}
+
+
+//============================================================
 //  loaded_font - one font file mapped in memory
 //============================================================
 
@@ -166,6 +213,13 @@ struct loaded_font
 		{
 			// not stb-parseable (e.g. color emoji fonts without outlines)
 			__android_log_print(ANDROID_LOG_DEBUG, "MAME4droid.so", "font: cannot parse %s#%d (offset %d)", filepath.c_str(), int(index), offset);
+			munmap(m, size_t(st.st_size));
+			return false;
+		}
+
+		if (!glyf_tables_fit(info, size_t(st.st_size)))
+		{
+			__android_log_print(ANDROID_LOG_DEBUG, "MAME4droid.so", "font: bad glyf/loca in %s#%d, leaving it to Java", filepath.c_str(), int(index));
 			munmap(m, size_t(st.st_size));
 			return false;
 		}

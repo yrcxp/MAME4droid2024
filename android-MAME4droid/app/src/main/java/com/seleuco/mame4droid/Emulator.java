@@ -169,6 +169,15 @@ public class Emulator {
 	 *  would relaunch it to apply the netplay pinning. Read-only. */
 	final static public int NETPLAY_KEEPS_GAME = 84;
 
+	/** Whether this game can hand over to a drop-in joiner: 0 not measured
+	 *  yet, 1 the savestate fits the rollback ring, 2 too big to ever do it.
+	 *  The room waits for the 1 before going on the board. Read-only. */
+	final static public int NETPLAY_DROP_IN_STATE = 85;
+
+	/** Size in KB behind that verdict, so the host is told how big the
+	 *  savestate actually was instead of just being refused. Read-only. */
+	final static public int NETPLAY_DROP_IN_STATE_KB = 86;
+
 	//set str
 	final static public int SAF_PATH = 1;
 	final static public int ROM_NAME = 2;
@@ -1269,19 +1278,48 @@ public class Emulator {
 		 * warning like @peer_disconnected ends up. */
 		String hint = "";
 		if (msg != null && msg.contains("@peer_disconnected") && mm.getNetPlay() != null) {
-			mm.getNetPlay().notePeerLeftCleanly();
+			mm.getNetPlay().noteCleanEnding();
 			hint = mm.getNetPlay().dropInAgainHint();
 		}
+		/* Our own goodbye, on the way out of the game. The same ending, and it
+		 * was missing: whoever left never got a DISCONNECT of their own, so a
+		 * normal game was filed as a drop by one of the two sides. After the
+		 * peer key, which contains this one as a substring. */
+		else if (msg != null && msg.contains("@disconnected") && mm.getNetPlay() != null)
+			mm.getNetPlay().noteCleanEnding();
+
 		final String tail = hint;
+
+		/* The session just gave up on rollback. Drop-in is built on the state
+		 * transfer that only rollback has, so a room advertising one is now
+		 * impossible to join and has to come off the board. */
+		if (msg != null && mm.getNetPlay() != null
+				&& (msg.contains("@state_too_large") || msg.contains("@not_rollback_compatible")))
+			mm.getNetPlay().onRollbackUnavailable();
+
+		/* A drop-in hands the game over with a resync, so the joiner heard it
+		 * was resyncing right after hearing it was being caught up. This
+		 * notice belongs to a resync somebody asked for. */
+		if (msg != null && msg.contains("@peer_resync") && mm.getNetPlay() != null
+				&& mm.getNetPlay().isDropInHandover())
+			return;
+
+		/* These describe the screen RIGHT NOW: frozen while a state travels,
+		 * or while the other player sits in a menu. Each is emitted just
+		 * before the loop that freezes it, and behind a queue they arrived
+		 * once it was over -- so the freeze read as a hang. */
+		final boolean now = msg != null
+				&& (msg.contains("@resyncing") || msg.contains("@peer_resync")
+				 || msg.contains("@peer_paused"));
 
 		mm.runOnUiThread(new Runnable() {
 			public void run() {
 				if (msg != null && msg.startsWith("TOASTERR:")) {
-					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(9)), 4, android.graphics.Color.RED, false);
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(9)), 4, android.graphics.Color.RED, false, now);
 				} else if (msg != null && msg.startsWith("TOASTOK:")) {
-					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(8)), 3, android.graphics.Color.GREEN, false);
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(8)), 3, android.graphics.Color.GREEN, false, now);
 				} else if (msg != null && msg.startsWith("TOAST:")) {
-					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(6)), 3, android.graphics.Color.YELLOW, false);
+					new com.seleuco.mame4droid.widgets.WarnWidget.WarnWidgetHelper(mm, resolveNpMsg(msg.substring(6)), 3, android.graphics.Color.YELLOW, false, now);
 				} else if (msg != null && msg.startsWith("STATS:")) {
 					/* Re-check the connection live (not just at push time): a
 					 * STATS push and the disconnect notification can both be

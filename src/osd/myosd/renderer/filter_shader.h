@@ -40,9 +40,14 @@ public:
 
     static std::vector<std::pair<std::string, filter_data>> load_filters(const std::string &root_path);
 
+	/* Drop the program without touching GL.  The owner calls this when no
+	 * context of ours is current: there it is the call itself that crashes,
+	 * not the id we would pass to it. */
+	void abandon() { m_program = 0; }
+
 	~filter_shader()
 	{
-		glDeleteProgram(m_program);
+		if (m_program) glDeleteProgram(m_program);
 	}
 
 private:

@@ -46,6 +46,11 @@ public sealed class SiteHash
 
         /* IPv6 is keyed per /64: one subscriber gets a whole prefix, and two
          * devices in a house rarely share the exact address. */
+        /* Memoisation only: without a lid a horde of distinct callers could
+         * grow this for as long as the instance stays up. Recomputing after
+         * a clear costs one HMAC, so the lid can be generous. */
+        if (_cache.Count >= 65536) _cache.Clear();
+
         var key = ClientAddress.PartitionKey(ip);
 
         return _cache.GetOrAdd(key, static (k, salt) =>

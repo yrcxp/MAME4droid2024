@@ -197,7 +197,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_DESYNC_DETECTOR_ENABLED = "PREF_NETPLAY_DESYNC_DETECTOR_ENABLED";
 	final static public String PREF_NETPLAY_PUNCHADDR = "PREF_NETPLAY_PUNCHADDR";
 	final static public String PREF_NETPLAY_UPNP = "PREF_NETPLAY_UPNP";
-	final static public String PREF_NETPLAY_IP_PROTOCOL = "PREF_NETPLAY_IP_PROTOCOL";
+	/* _2: the default moved from IPv4-only to Auto, and a stored value always
+	 * wins over a default. Renaming the key is what makes everybody who has
+	 * already opened the settings get the new one. */
+	final static public String PREF_NETPLAY_IP_PROTOCOL = "PREF_NETPLAY_IP_PROTOCOL_2";
 	final static public String PREF_NETPLAY_ALLOW_PLUGINS = "PREF_NETPLAY_ALLOW_PLUGINS";
 	final static public String PREF_NETPLAY_LOBBY = "PREF_NETPLAY_LOBBY";
 	final static public String PREF_NETPLAY_LOBBY_CONSENT = "PREF_NETPLAY_LOBBY_CONSENT";
@@ -980,12 +983,14 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 		getSharedPreferences().edit().putBoolean(PREF_NETPLAY_DROP_IN, on).commit();
 	}
 
-	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */
+	/** 0 = IPv4, 1 = IPv6, 2 = Auto (default; matches netplaySetIpFamily).
+	 *  Auto because IPv6 is a route with no NAT on it, and every session in
+	 *  the field was on v4 only because v4-only never looks for v6. */
 	public int getNetplayIpProtocol() {
 		try {
-			return Integer.parseInt(getSharedPreferences().getString(PREF_NETPLAY_IP_PROTOCOL, "0"));
+			return Integer.parseInt(getSharedPreferences().getString(PREF_NETPLAY_IP_PROTOCOL, "2"));
 		} catch (Exception e) {
-			return 0;
+			return 2;
 		}
 	}
 

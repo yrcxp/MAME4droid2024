@@ -146,8 +146,12 @@ public class LobbyBoardDialog {
 
         ScrollView scroll = new ScrollView(mm);
         scroll.addView(listBox);
+        /* A floor and not a fixed height: in landscape the dialog is shorter
+         * than this, and a scroll view taller than the window it sits in gets
+         * clipped with nothing left for it to scroll. */
+        scroll.setMinimumHeight((int) (320 * density));
         root.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, (int) (320 * density)));
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         AlertDialog.Builder builder = new AlertDialog.Builder(mm);
         builder.setTitle(mm.getString(R.string.np_lobby_title));
@@ -669,6 +673,13 @@ public class LobbyBoardDialog {
                         LobbySession.country(mm), pin);
 
                 final String target = (result.host != null) ? pickAddress(result.host) : null;
+                /* When the LAN side is the pick, keep the public tuple at
+                 * hand: a router that isolates its wireless clients drops LAN
+                 * frames between them, and the join then falls back to going
+                 * out and back in through the router. */
+                final String fallback = (result.host != null && result.host.sameSite
+                        && result.host.lan.length > 0)
+                        ? pickPublicAddress(result.host) : null;
                 final int status = result.status;
 
                 /* The other half of the same diagnosis: what we claimed, what
@@ -684,6 +695,7 @@ public class LobbyBoardDialog {
                             /* The join path corrects our tuple once STUN has
                              * run, so it needs to know which room we claimed. */
                             netplay.setLobbyClaim(base, room.id, room.playing, room.game);
+                            netplay.setLobbyLanFallback(fallback);
                             netplay.setLobbyPeerInfo(room.country, room.mode, room.delay,
                                     result.host != null && result.host.sameSite,
                                     room.locked,
@@ -711,8 +723,13 @@ public class LobbyBoardDialog {
      */
     private String pickAddress(LobbyClient.Endpoint host) {
         if (host.sameSite && host.lan.length > 0)
-            return host.lan[0];
+            return netplay.pickLan(host.lan);
 
+        return pickPublicAddress(host);
+    }
+
+    /** The host's dialable public tuple: same v6-reachability rule, no LAN. */
+    private String pickPublicAddress(LobbyClient.Endpoint host) {
         boolean primaryIsV6 = host.publicAddr != null && host.publicAddr.startsWith("[");
 
         /* What we can reach, not what we asked for. On Auto a phone with no

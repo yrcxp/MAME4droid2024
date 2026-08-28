@@ -288,7 +288,12 @@ public class LobbySession {
         else if (peer.publicAlt != null)
             target = peer.publicAlt;
 
-        if (target == null) return false;
+        return aimAtAddress(target, fallbackPort);
+    }
+
+    /** Arm the punch at one specific tuple the caller already chose. */
+    public static boolean aimAtAddress(String target, int fallbackPort) {
+        if (target == null || target.length() == 0) return false;
 
         String[] hostPort = splitHostPort(target);
         int port = fallbackPort;
@@ -307,7 +312,7 @@ public class LobbySession {
         s_aimedV6 = hostPort[0].indexOf(':') >= 0;
 
         Emulator.netplaySetPunchAddr(hostPort[0], port);
-        if (LobbyClient.DEBUG) Log.d(TAG, "lobby: aiming at peer (" + (peer.sameSite ? "same site" : "internet") + ")");
+        if (LobbyClient.DEBUG) Log.d(TAG, "lobby: aiming at " + target);
         return true;
     }
 

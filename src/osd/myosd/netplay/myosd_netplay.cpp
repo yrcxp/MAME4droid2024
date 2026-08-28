@@ -50,6 +50,7 @@ extern my_osd_interface *osdInterface;
 /* Droid bridge (myosd_droid.cpp) - netplay restart / pause helpers.  Plain C++
  * linkage, same as the declarations netplay.cpp uses for this family.        */
 int  myosd_droid_netplay_restart_pending(void);
+int  myosd_droid_netplay_game_settled(void);
 void myosd_droid_netplay_set_exitPause(int val);
 extern unsigned long myosd_droid_netplay_joystick_read(int i);
 
@@ -365,15 +366,58 @@ static void apply_netplay_input_state(bool is_new_mame_frame, int local_player, 
     g_input.lightgun_y[peer_player]  = peer_state.lightgun_y;
 }
 
+/* Can this game hand over to a drop-in joiner?  The handover IS the rollback
+ * state transfer, so a savestate too big for the ring leaves the joiner at
+ * frame zero against a host minutes in.  Measured once per game. */
+static void netplay_drop_in_probe(netplay_t *handle)
+{
+    size_t state_sz = myosd_netplay_get_state_size();
+
+    /* Machine not up yet: leave it unmeasured and ask again next frame
+     * rather than latch a guess. */
+    if (state_sz == 0)
+        return;
+
+    uint32_t ring = ROLLBACK_MAX_FRAMES;
+    uint64_t by_budget = (uint64_t)ROLLBACK_RING_RAM_BUDGET / (uint64_t)state_sz;
+    if (by_budget < ring) ring = (uint32_t)by_budget;
+
+    handle->drop_in_state_kb = (int)(state_sz / 1024);
+
+    if (state_sz > ROLLBACK_STATE_SIZE_LIMIT || ring < ROLLBACK_MIN_FRAMES) {
+        /* No warning from here: this is a verdict to be read, not a
+         * fallback that has already happened. */
+        handle->drop_in_state = 2;
+        NLOG("DROP-IN unavailable: state %zu bytes (limit %d, ring %u frames)",
+             state_sz, ROLLBACK_STATE_SIZE_LIMIT, ring);
+    } else {
+        handle->drop_in_state = 1;
+        NLOG("DROP-IN available: state %zu bytes, ring %u frames", state_sz, ring);
+    }
+}
+
 /* Netplay must NOT "begin" on a machine the autostart did not launch:
- * has_connection is set at socket creation, before JOIN, so connecting
- * inside a running ROM would otherwise freeze the pre-restart machine
- * on the sync barriers.  restart_pending() stays 1 until the fresh
- * autostart-scheduled machine is the one running. */
+ * has_connection is set at socket creation, before JOIN, so connecting inside
+ * a running ROM would freeze the pre-restart machine on the sync barriers.
+ *
+ * Drop-in holds off too: with nobody joined there is no session yet, and
+ * leaving has_begun_game at 0 keeps that game on the single-player path --
+ * every netplay hook is gated on it, so none of this code runs at all. */
 static void netplay_iu_on_game_start(netplay_t *handle, bool is_java_paused)
 {
+    /* Outside the guard below: restart_pending() stays 1 while nobody has
+     * joined, which is the whole life of a drop-in host waiting alone.
+     * Read-only -- summing the save entries touches nothing rollback owns. */
+    if (handle && handle->drop_in && handle->player1 && handle->drop_in_state == 0 &&
+        handle->has_connection && !handle->has_joined &&
+        myosd_droid_netplay_game_settled())
+        netplay_drop_in_probe(handle);
+
     if (!(handle && handle->has_connection && !handle->has_begun_game && !is_java_paused &&
           !myosd_droid_netplay_restart_pending()))
+        return;
+
+    if (handle->drop_in && !handle->has_joined)
         return;
 
     handle->has_begun_game = 1;

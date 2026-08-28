@@ -835,6 +835,32 @@ void my_osd_interface::osd_exit()
 }
 
 //============================================================
+//  netplayGetDriverDesc - rom name -> full title, for the
+//  lobby board.  Lives here (not in the droid OSD) because
+//  only this file pulls in the driver list.
+//============================================================
+
+/* "mslug" -> "Metal Slug - Super Vehicle-001", or "" when this build has no
+ * such driver, which also tells the board a room is unplayable here.  Reads
+ * static driver data, so any thread; Java copies the result at once. */
+extern "C" const char *netplayGetDriverDesc(const char *name)
+{
+    static char desc[256];
+    desc[0] = 0;
+
+    if (name == nullptr || *name == 0)
+        return desc;
+
+    int const index = driver_list::find(name);
+    if (index >= 0)
+    {
+        strncpy(desc, driver_list::driver(index).type.fullname(), sizeof(desc) - 1);
+        desc[sizeof(desc) - 1] = 0;
+    }
+    return desc;
+}
+
+//============================================================
 //  target - the single window's render target (nullable
 //  between sessions, myosd_pushEvent relies on that)
 //============================================================

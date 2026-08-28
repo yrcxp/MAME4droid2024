@@ -96,6 +96,8 @@
     <string name="np_drop_in_joined">NetPlay: entrou outro jogador! A pô-lo a par da tua partida…</string>
     <string name="np_drop_in_entered">NetPlay: já estás dentro! A pôr-te a par da partida em curso…</string>
     <string name="np_drop_in_again">A tua partida continua como estava. Se quiseres que entre outro jogador, abre o NetPlay e inicia o drop-in outra vez.</string>
+    <string name="np_drop_in_no_rollback">Este jogo é demasiado grande para o Rollback, por isso o drop-in não funciona com ele. A tua sala foi retirada do quadro; continua a jogar, ou começa um jogo normal de NetPlay em Lockstep.</string>
+    <string name="np_drop_in_too_big">Este jogo é demasiado grande para o Rollback (estado de %1$s MB), por isso o drop-in não pode passar a partida. Não foi publicada nenhuma sala e o NetPlay foi desligado; continua a jogar, ou começa um jogo normal de NetPlay em Lockstep.</string>
     <string name="np_private_room_no_pin">Sala com PIN: só entra quem o tiver — defina um nas configurações de netplay</string>
     <string name="pref_netplay_lobby_pin_title">PIN da sala</string>
     <string name="pref_netplay_lobby_pin_summary">De 4 a 8 dígitos. Passe para quem você quer jogar: suas salas aparecem no quadro indicando que precisam de PIN e só essas pessoas entram. Ao servidor só chega o hash</string>
@@ -176,6 +178,7 @@
     <string name="np_msg_connection_lost">NetPlay: conexão perdida. Retornando ao jogo offline...</string>
     <string name="np_msg_no_ack">NetPlay: o outro jogador continua a pedir para entrar, ou seja, a nossa resposta não lhe chega. O tráfego só passa num sentido.</string>
     <string name="np_no_answer">O anfitrião não responde.\n\nOu não lhe chegou nada, ou as respostas dele não voltam até ti. Se estão na mesma wi-fi, verifica se os dois aparelhos estão na mesma banda e se o router não está a isolar os clientes.</string>
+    <string name="np_lan_silent_fallback">A rede local não responde: o roteador pode estar isolando os clientes sem fio.\n\nTentando novamente através do endereço público…</string>
     <string name="np_msg_peer_disconnected">NetPlay: o outro jogador se desconectou. Retornando ao jogo offline...</string>
     <string name="np_msg_send_failed">NetPlay: falha ao enviar dados.\nErro: %1$s</string>
     <string name="np_msg_bind_failed">NetPlay: falha ao vincular o socket.\nErro: %1$s</string>

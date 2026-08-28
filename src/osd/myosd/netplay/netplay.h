@@ -307,6 +307,20 @@
 
         volatile int has_connection;  /* a session is up (see myosd_netplay_is_active) */
         int has_joined;               /* JOIN/JOIN_ACK handshake completed  */
+        /* Host only: start and last of the current run of JOINs, to spot a
+         * JOIN_ACK that never lands.  A gap starts a new run, so a peer that
+         * cancels and tries again is never judged on the old one. */
+        uint32_t join_first_ms;
+        uint32_t join_last_ms;
+        /* Drop-in (host, rollback): the game runs on its own with the room
+         * published, and nothing of netplay touches it until someone joins.
+         * Set from the UI before netplayInit; 0 is every existing session. */
+        int drop_in;
+        /* Whether this game can hand over to a drop-in joiner: 0 not measured
+         * yet, 1 the savestate fits the rollback ring, 2 too big ever to. */
+        volatile int drop_in_state;
+        /* The size behind that verdict, in KB, so a refusal can name it. */
+        volatile int drop_in_state_kb;
         volatile int has_begun_game;  /* gameplay frames may advance        */
         volatile int is_peer_paused;  /* peer reported itself paused        */
         int is_auto_frameskip;        /* frame_skip is adaptive, not fixed  */
@@ -361,6 +375,12 @@
         uint32_t rtt_mdev;       /* EMA of |rtt - smoothed_rtt| = jitter (RFC6298 mdev); overlay readout, both paths */
         uint32_t max_rtt_interval; /* decaying peak RTT (jitter envelope)   */
         uint32_t min_rtt_window;   /* decaying minimum RTT (jitter envelope) */
+        /* Read-only floor/ceiling for the lobby report, kept in BOTH paths.
+         * Deliberately not the envelope above: that one feeds the auto delay
+         * and the frame-advantage stall, and is left at 0 by the rollback
+         * path on purpose, so filling it would move both.                  */
+        uint32_t tel_rtt_min;
+        uint32_t tel_rtt_max;
         uint32_t rtt_update_time;  /* last lockstep auto-frameskip evaluation, ms */
 
         /* N-1 history: the most recently transmitted frame number and its

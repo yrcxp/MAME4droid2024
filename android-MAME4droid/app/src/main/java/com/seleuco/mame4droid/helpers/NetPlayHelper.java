@@ -161,6 +161,12 @@ public class NetPlayHelper {
      * is already several times the worst punch. */
     private static final long JOIN_ANSWER_TIMEOUT_MANUAL_MS = 90000;
 
+    /* How long a same-site pairing may stay silent before both sides stop
+     * trusting the LAN and go through the router instead: long enough for a
+     * couple of JOIN retries, short enough to leave the punch a fair go
+     * within the board's own deadline. */
+    private static final long LAN_SILENCE_MS = 10000;
+
     private volatile boolean canceled = false;
 
     /* Host waiting-dialog text is composed by two racing workers (netplayInit
@@ -181,6 +187,10 @@ public class NetPlayHelper {
     private volatile String lobbyClaimBase = null;
     private volatile String lobbyClaimRoom = null;
     private volatile String lobbyAimedAt = null;
+    /* When the armed target was a LAN tuple, and whether the silence
+     * fallback to the public one has already fired for this wait. */
+    private volatile long lobbyAimedLanAt = 0;
+    private volatile boolean lobbyAimFellBack = false;
 
     /* Kept from the moment a session connects until it ends, so the length of
      * the game can be reported: it is what separates a pairing that worked
@@ -204,6 +214,10 @@ public class NetPlayHelper {
     private volatile boolean joinIsDropIn = false;
     private volatile String joinGameName = null;
     private volatile LobbyClient.Nat joinPeerNat = null;
+    /* Public tuple to fall back to when a same-site LAN join goes silent:
+     * some routers isolate their wireless clients, so the LAN address the
+     * board chose never answers although both devices sit on it. */
+    private volatile String joinLanFallbackAddr = null;
     /* Drop-in: the host plays on with the room published and whoever joins is
      * lifted into the running game. Off until the rollback screen offers it,
      * so every existing flow behaves exactly as before. */
@@ -1142,7 +1156,10 @@ public class NetPlayHelper {
      * @return the extra line, or "" when it does not apply.
      */
     public String dropInAgainHint() {
-        if (!playedDropIn || !"host".equals(playedRole)) return "";
+        /* Only while the drop-in session it describes is still the live one:
+         * these fields are not cleared between sessions, and a later manual
+         * game must not inherit the advice. */
+        if (sessionStartMs == 0 || !playedDropIn || !"host".equals(playedRole)) return "";
         /* Blank line, not a line break: it is a separate thought, and it is
          * the one the reader has to act on. */
         return "\n\n" + mm.getString(R.string.np_drop_in_again);
@@ -1282,6 +1299,20 @@ public class NetPlayHelper {
         return getAllLocalIPv4();
     }
 
+
+    /** The peer LAN address most likely reachable: the one on our own /24. */
+    String pickLan(String[] lan) {
+        if (lan == null || lan.length == 0) return null;
+        for (String t : lan)
+            if (sameSubnet24(t)) return t;
+        return lan[0];
+    }
+
+    /** Where to re-aim if the LAN address of a board join never answers. */
+    void setLobbyLanFallback(String addr) {
+        joinLanFallbackAddr = addr;
+    }
+
     /** Spinner while the board claims a room; the join dialog takes over. */
     void showBoardProgress(String message) {
         canceled = false;
@@ -1378,27 +1409,126 @@ public class NetPlayHelper {
 
     /* Drop-in has gone live: the room is up and the game is the user's again. */
     private volatile boolean dropInLive = false;
+    /** Fires the joining notice once per session, not once per poll. */
+    private volatile boolean dropInAnnounced = false;
 
     /**
-     * Close the waiting dialogs and let the host play. Nothing about the
-     * session is torn down -- the worker thread stays in its loop keeping the
-     * room alive, and the native side simply has not begun a netplay session
-     * yet, so the machine runs the way it does with netplay switched off.
+     * Does this game's savestate fit the rollback ring? Waits for the native
+     * verdict so the room is only published when the handover is possible.
+     * Generous, since drop-in may have just relaunched the game. No answer
+     * counts as a yes: the join barrier still refuses what cannot work.
+     */
+    private boolean dropInFitsRollback() {
+        for (int i = 0; i < 600 && !canceled; i++) {
+            int verdict = Emulator.getValue(Emulator.NETPLAY_DROP_IN_STATE);
+            if (verdict == 1) return true;
+            if (verdict == 2) {
+                final String size = dropInStateSize();
+                /* Modal, not a passing notice: it ends the drop-in, and the
+                 * host is owed the reason and the size it was measured at. */
+                mm.runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (progressDialog != null && progressDialog.isShowing())
+                            progressDialog.dismiss();
+                        showNetplayError(mm.getString(R.string.np_drop_in_too_big, size));
+                    }
+                });
+                return false;
+            }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return true;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Close the waiting dialogs and let the host play. Nothing is torn down:
+     * the worker thread keeps the room alive and no session has begun, so the
+     * machine runs as it does with netplay off. Before publishing, because
+     * the size check needs a running machine and the dialog leaves it paused.
      */
     private void goLiveForDropIn() {
         dropInLive = true;
-        final String code = (lobby != null) ? lobby.getRoomId() : "";
         mm.runOnUiThread(new Runnable() {
             public void run() {
                 if (progressDialog != null && progressDialog.isShowing())
                     progressDialog.dismiss();
                 if (netplayDlg != null && netplayDlg.isShowing())
                     netplayDlg.hide();
-                new WarnWidget.WarnWidgetHelper(mm,
-                        mm.getString(R.string.np_drop_in_live, code), 4, Color.GREEN, false);
                 Emulator.resume();
             }
         });
+    }
+
+    /** The room made it onto the board: tell the host its code. Separate from
+     *  going live, which now happens first so the game can be measured. */
+    private void announceDropInRoom() {
+        final String code = (lobby != null) ? lobby.getRoomId() : "";
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                new WarnWidget.WarnWidgetHelper(mm,
+                        mm.getString(R.string.np_drop_in_live, code), 4, Color.GREEN, false);
+            }
+        });
+    }
+
+    /**
+     * The session dropped to lockstep. Only drop-in cares: it is built on the
+     * state transfer lockstep has none of, so the room on the board can never
+     * be joined and has to come off it. A no-op without one.
+     */
+    public void onRollbackUnavailable() {
+        withdrawDropInRoom(mm.getString(R.string.np_drop_in_no_rollback));
+    }
+
+    /** Take the drop-in room off the board and say why. Each caller brings its
+     *  own reason, so the message itself tells which one fired. */
+    private void withdrawDropInRoom(final String reason) {
+        if (!dropInLive) return;
+
+        dropInLive = false;
+        /* closeLobby leaves the session null, which the wait loop reads as
+         * "the server dropped us" and republishes what we just withdrew. */
+        publishRetrySeconds = 0;
+        /* And end the wait with it: dropInLive down disarms its other way
+         * out, so it would spin on behind a game still being played. */
+        canceled = true;
+
+        new Thread(new Runnable() {
+            public void run() {
+                closeLobby("cancelled", 0);
+            }
+        }).start();
+
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                /* The whole budget: three sentences on why the room the host
+                 * just saw go up is gone again is not read at a glance. */
+                new WarnWidget.WarnWidgetHelper(mm, reason, 8, Color.YELLOW, false);
+            }
+        });
+    }
+
+    /* A drop-in handover IS a resync, so its notice landed on top of the two
+     * that already explain the freeze, and last of the three. Held back over
+     * this window; past it, a resync is one somebody asked for. */
+    private volatile long dropInHandoverAt = 0;
+    private static final long DropInHandoverMs = 30000L;
+
+    /** Whether a drop-in handover is what is resyncing right now. */
+    public boolean isDropInHandover() {
+        return dropInHandoverAt != 0
+                && android.os.SystemClock.elapsedRealtime() - dropInHandoverAt < DropInHandoverMs;
+    }
+
+    /** How big the savestate measured, for the messages that refuse over it. */
+    private String dropInStateSize() {
+        int kb = Emulator.getValue(Emulator.NETPLAY_DROP_IN_STATE_KB);
+        return String.format(java.util.Locale.US, "%.1f", kb / 1024f);
     }
 
     /** Somebody claimed the room: warn before the state transfer stops the
@@ -1407,8 +1537,10 @@ public class NetPlayHelper {
         if (!dropInLive) return;
         mm.runOnUiThread(new Runnable() {
             public void run() {
+                /* Urgent: it is the warning that the picture is about to stop,
+                 * and it is worth nothing once the picture has come back. */
                 new WarnWidget.WarnWidgetHelper(mm,
-                        mm.getString(R.string.np_drop_in_joining), 3, Color.YELLOW, false);
+                        mm.getString(R.string.np_drop_in_joining), 3, Color.YELLOW, false, true);
             }
         });
     }
@@ -1436,16 +1568,22 @@ public class NetPlayHelper {
 
         /* The peer comes back on every poll by design, but re-arming an
          * unchanged target only makes the network thread resolve it again. */
-        String aim = (peer.sameSite && peer.lan.length > 0) ? peer.lan[0]
+        String lan = (peer.sameSite && !lobbyAimFellBack) ? pickLan(peer.lan) : null;
+        String aim = (lan != null) ? lan
                 : (peer.publicAddr != null) ? peer.publicAddr : peer.publicAlt;
+        /* Refreshed on every poll, not only on an aim change: the silence
+         * fallback reads the corrected public tuple from here. */
+        lobbyPeer = peer;
         if (aim != null && aim.equals(lobbyAimedAt)) return;
 
-        lobbyPeer = peer;
-        if (LobbySession.aimAt(peer, gamePort)) {
+        if (aim != null && LobbySession.aimAtAddress(aim, gamePort)) {
             lobbyAimedAt = aim;
+            /* Remember when a LAN tuple was armed: if it stays silent the
+             * wait loop re-aims at the public one (client isolation). */
+            lobbyAimedLanAt = (lan != null)
+                    ? android.os.SystemClock.elapsedRealtime() : 0;
             lobbyLine = mm.getString(R.string.np_lobby_peer_found);
             postHostMessage();
-            warnDropInJoining();
         }
     }
 
@@ -1482,7 +1620,8 @@ public class NetPlayHelper {
 
         if ("connected".equals(outcome)) {
             sessionStartMs = System.currentTimeMillis();
-            peerLeftCleanly = false;
+            endedCleanly = false;
+            dropInHandoverAt = 0;
             playedGame = game;
             playedRole = "client";
             playedPath = joinSameSite ? "lan" : "punch";
@@ -1531,6 +1670,15 @@ public class NetPlayHelper {
                     }
                 }
 
+                /* The connection is already down here, and the warning that
+                 * says whether it went down politely is on its way from
+                 * another thread. A moment, before calling this a drop. */
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
                 /* Still armed means we are not the ones who stopped: the
                  * session ended on its own. This is the only hook that catches
                  * every way out -- exiting the game, the peer hanging up, a
@@ -1548,23 +1696,23 @@ public class NetPlayHelper {
      * away -- and silently does nothing if the board was never involved.
      */
 
-    /* The peer sent a DISCONNECT before going: a normal end of session, not a
-     * connection that died. Set from the native warning, which is the only
-     * place that sees the difference. */
-    private volatile boolean peerLeftCleanly = false;
+    /* A DISCONNECT was exchanged before anybody went: a normal end of session,
+     * not a connection that died. Set from the native warnings, which are the
+     * only place that sees the difference -- both the peer's goodbye and our
+     * own on the way out. */
+    private volatile boolean endedCleanly = false;
 
-    public void notePeerLeftCleanly() {
-        peerLeftCleanly = true;
+    public void noteCleanEnding() {
+        endedCleanly = true;
     }
 
     /**
-     * How this session ended, as far as we can honestly tell. Whoever presses
-     * Disconnect reports "played" and the other used to report "dropped" for
-     * the same session, so a normal game logged as half failure and the drop
-     * rate meant nothing. A goodbye we received is the same outcome.
+     * How this session ended, as far as we can honestly tell. Both sides of a
+     * normal game say goodbye, so both report "played"; only one that really
+     * went quiet is a drop. Read after the grace above, never before.
      */
     private String endingOutcome() {
-        return peerLeftCleanly ? "played" : "dropped";
+        return endedCleanly ? "played" : "dropped";
     }
     synchronized void reportSessionEnded(final String outcome) {
         /* Two paths can notice the same ending at once (the Disconnect button
@@ -1622,6 +1770,12 @@ public class NetPlayHelper {
         final String room = lobbyClaimRoom;
         lobbyClaimBase = null;
         lobbyClaimRoom = null;
+        correctLobbyTuple(base, room, localPort);
+    }
+
+    /** Same correction, addressed explicitly: the LAN-silence fallback runs
+     *  after the claim fields above were consumed by the first pass. */
+    private void correctLobbyTuple(String base, String room, int localPort) {
         if (room == null) return;
 
         String info = Emulator.netplayGetPublicAddr();
@@ -1647,11 +1801,17 @@ public class NetPlayHelper {
 
     /** Withdraw the room and report how it went. */
     private void closeLobby(String outcome, long waitMs) {
-        LobbySession board = lobby;
-        LobbyClient.Endpoint peer = lobbyPeer;
-        lobby = null;
-        lobbyPeer = null;
-        lobbyLine = null;
+        LobbySession board;
+        LobbyClient.Endpoint peer;
+        /* Claimed atomically: the wait loop and a drop-in withdrawal can both
+         * end the same room at once, and it must be closed and reported once. */
+        synchronized (this) {
+            board = lobby;
+            peer = lobbyPeer;
+            lobby = null;
+            lobbyPeer = null;
+            lobbyLine = null;
+        }
         if (board == null) return;
 
         /* On a fast pairing the peer's JOIN arrives before our next poll does,
@@ -1683,7 +1843,8 @@ public class NetPlayHelper {
          * game from a pairing that fell apart in ten seconds. */
         if ("connected".equals(outcome)) {
             sessionStartMs = System.currentTimeMillis();
-            peerLeftCleanly = false;
+            endedCleanly = false;
+            dropInHandoverAt = 0;
             playedGame = Emulator.getValueStr(Emulator.GAME_SELECTED);
             playedRole = "host";
             playedPath = path;
@@ -1924,7 +2085,14 @@ public class NetPlayHelper {
         /* Fresh per session: a previous drop-in must not leave the joining
          * notice armed for a host that is sitting in the waiting dialog. */
         dropInLive = false;
+        dropInAnnounced = false;
         publishWaitingSince = 0;
+        /* And the punch dedupe with them: a peer coming back for a second
+         * session would otherwise match the previous aim and never be armed. */
+        lobbyAimedAt = null;
+        lobbyPeer = null;
+        lobbyAimedLanAt = 0;
+        lobbyAimFellBack = false;
         AlertDialog.Builder waitBld = new AlertDialog.Builder(mm);
         waitBld.setTitle(mm.getString(R.string.np_press_back_cancel));
         waitBld.setView(buildProgressView(mm.getString(R.string.np_waiting_peer), mm.getString(R.string.np_getting_info)));
@@ -2129,16 +2297,28 @@ public class NetPlayHelper {
                         }
                     });
 
+                    /* Drop-in: hand the game straight back. The loop below is
+                     * the room's heartbeat, but netplay does not touch the
+                     * machine until somebody joins.
+                     *
+                     * Before publishing, because some games cannot keep the
+                     * promise: their savestate does not fit the rollback ring.
+                     * Measuring needs a running machine -- so play, ask, and
+                     * put the room up only on a yes. */
+                    if (dropIn && !canceled) {
+                        goLiveForDropIn();
+                        if (!dropInFitsRollback()) {
+                            dropInLive = false;
+                            canceled = true;
+                        }
+                    }
+
                     /* Publish only now: the room advertises the tuple STUN
                      * just produced, and the board refuses one that is not
                      * really ours. */
-                    if (!noInternet) publishOnLobby(gamePort);
+                    if (!noInternet && !canceled) publishOnLobby(gamePort);
 
-                    /* Drop-in: hand the game straight back. The loop below
-                     * carries on as the room's heartbeat, but nothing of
-                     * netplay touches the machine until somebody joins -- the
-                     * native side keeps has_begun_game at 0 until then. */
-                    if (dropIn && lobby != null) goLiveForDropIn();
+                    if (dropIn && !canceled && lobby != null) announceDropInRoom();
                     }
                 }
 
@@ -2162,10 +2342,46 @@ public class NetPlayHelper {
                      * sends whoever answers into a wait that cannot end.
                      * Leaving force-disconnects natively, so has_connection is
                      * the signal -- and it ignores open MAME menus. */
+                    /* Announce the joiner only once a packet of theirs has
+                     * arrived. The board handing us a peer is a claim, not a
+                     * connection, and it warned of a freeze that never came. */
+                    if (dropInLive && !canceled && !dropInAnnounced
+                            && Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 1) {
+                        dropInAnnounced = true;
+                        warnDropInJoining();
+                    }
+
+                    /* The verdict normally lands before the room goes up, but
+                     * a slow-booting game can answer after. Take the room
+                     * down then, rather than leave an unjoinable one up. */
+                    if (dropInLive && !canceled
+                            && Emulator.getValue(Emulator.NETPLAY_DROP_IN_STATE) == 2) {
+                        withdrawDropInRoom(mm.getString(R.string.np_drop_in_too_big,
+                                dropInStateSize()));
+                        continue;
+                    }
+
                     if (dropInLive && !canceled
                             && Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 0) {
                         canceled = true;
                         break;
+                    }
+                    /* A LAN aim that stays silent this long is a router
+                     * isolating its wireless clients: nothing between them is
+                     * delivered, in either direction. Re-aim at the peer's
+                     * public tuple -- out through the router is the one path
+                     * isolation leaves open, and the joiner flips the same
+                     * way on its own timer. */
+                    LobbyClient.Endpoint quiet = lobbyPeer;
+                    if (!lobbyAimFellBack && lobbyAimedLanAt != 0 && quiet != null
+                            && Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
+                            && android.os.SystemClock.elapsedRealtime() - lobbyAimedLanAt
+                                    > LAN_SILENCE_MS) {
+                        lobbyAimFellBack = true;
+                        String pub = (quiet.publicAddr != null)
+                                ? quiet.publicAddr : quiet.publicAlt;
+                        if (pub != null && LobbySession.aimAtAddress(pub, gamePort))
+                            lobbyAimedAt = pub;
                     }
                     LobbySession board = lobbyPaused ? null : lobby;
                     if (board != null && board.isPublished() && !canceled
@@ -2181,6 +2397,10 @@ public class NetPlayHelper {
                          * again is set by whoever refused us -- see below. */
                         sinceLastPublish = 0;
                         publishOnLobby(gamePort);
+                        /* A drop-in host is back in the game with the dialog
+                         * gone, so a room that only made it up on a retry
+                         * would go up in silence, its code never seen. */
+                        if (dropInLive && lobby != null) announceDropInRoom();
                     }
                 }
                 hostWaitMs = System.currentTimeMillis() - waitStart;
@@ -2233,6 +2453,13 @@ public class NetPlayHelper {
         final long joinDeadline = fromBoard
                 ? JOIN_ANSWER_TIMEOUT_MS : JOIN_ANSWER_TIMEOUT_MANUAL_MS;
         joinFromBoard = false;
+        /* Same-site fallback data, taken now whether or not it gets used: the
+         * claim fields die in correctLobbyTuple's first pass, and the LAN
+         * silence fallback needs them again for the re-correction. */
+        final String lanFallback = fromBoard ? joinLanFallbackAddr : null;
+        joinLanFallbackAddr = null;
+        final String claimBase = lobbyClaimBase;
+        final String claimRoom = lobbyClaimRoom;
 
        String strPort = mm.getPrefsHelper().getNetplayPort();
         int port = 0;
@@ -2417,6 +2644,8 @@ public class NetPlayHelper {
                 }
 
                 long joinStart = System.currentTimeMillis();
+                long deadlineStart = joinStart;
+                boolean fellBack = false;
                 boolean unanswered = false;
                 while (Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
                         && !canceled) {
@@ -2428,17 +2657,75 @@ public class NetPlayHelper {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
+                    /* A same-site join gone this long without an answer is a
+                     * router isolating its wireless clients: LAN frames
+                     * between them are dropped in both directions. Tear this
+                     * attempt down and dial the host's public tuple instead
+                     * -- out and back in through the router is the one path
+                     * isolation leaves open. The host re-aims the same way. */
+                    if (!canceled && !fellBack && lanFallback != null
+                            && Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
+                            && System.currentTimeMillis() - deadlineStart > LAN_SILENCE_MS) {
+                        fellBack = true;
+                        String[] fb = splitHostPort(lanFallback);
+                        boolean fbV6 = isIPv6Address(fb[0]);
+                        if ((fbV6 && (ipProto == 0 || !hasUsableIPv6()))
+                                || (!fbV6 && ipProto == 1)) {
+                            /* Not dialable from here; the timeout will say so. */
+                        } else {
+                            Emulator.setValue(Emulator.NETPLAY_HAS_CONNECTION, 0);
+                            try {
+                                /* The network thread checks the flag once per
+                                 * select() pass; give it time to exit before
+                                 * the socket is rebuilt under it. */
+                                Thread.sleep(1200);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                            int fbPort = destPort;
+                            if (fb[1] != null) {
+                                try { fbPort = Integer.parseInt(fb[1]); } catch (Exception e) {}
+                            }
+                            Emulator.netplaySetPunchAddr(null, 0);
+                            Emulator.netplaySetLocalPort(localPort);
+                            Emulator.netplaySetInternetMode(1);
+                            Emulator.netplaySetIpFamily(ipProto);
+                            Emulator.setValue(Emulator.NETPLAY_DROP_IN, 0);
+                            if (Emulator.netplayInit(fb[0], fbPort, 0) == -1) {
+                                canceled = true;
+                            } else {
+                                /* STUN has run again on the new socket: hand
+                                 * the board our real tuple so the host can
+                                 * re-aim its punch at it. */
+                                correctLobbyTuple(claimBase, claimRoom, localPort);
+                                joinSameSite = false;
+                                deadlineStart = System.currentTimeMillis();
+                                mm.runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        if (progressText != null)
+                                            progressText.setText(mm.getString(
+                                                    R.string.np_lan_silent_fallback));
+                                    }
+                                });
+                            }
+                        }
+                        continue;
+                    }
                     /* JOIN_ACK is one round trip away and both games are
                      * already running, so a slow ROM cannot show up here.
                      * Retrying for ever only froze two dialogs with nothing
                      * on screen to say the answer was never coming back. */
                     if (!canceled && Emulator.getValue(Emulator.NETPLAY_HAS_JOINED) == 0
-                            && System.currentTimeMillis() - joinStart > joinDeadline) {
+                            && System.currentTimeMillis() - deadlineStart > joinDeadline) {
                         unanswered = true;
                         canceled = true;
                     }
                 }
 
+                /* Read before the report clears them: the connected notice
+                 * below still has to say where the other player is. */
+                final String originCountry = joinPeerCountry;
+                final String originPath = LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped());
                 /* Both ends report, or the numbers only ever describe hosts --
                  * and it is the joining side that feels a pairing fail. */
                 reportJoinOutcome(unanswered ? "timeout"
@@ -2455,6 +2742,10 @@ public class NetPlayHelper {
                 }
 
                 final boolean noAnswer = unanswered;
+                /* Stamped before the message goes up: the host's handover
+                 * RESYNC lands within a breath of this. */
+                if (!canceled && !noAnswer && intoRunning)
+                    dropInHandoverAt = android.os.SystemClock.elapsedRealtime();
                 mm.runOnUiThread(new Runnable() {
                     public void run() {
                         /* Say why we stopped. Silence here is what turned a
@@ -2468,12 +2759,13 @@ public class NetPlayHelper {
                                 netplayDlg.hide();
                             /* Walking into a game already running is not the same
                              * event as starting one together, and the wait that
-                             * follows is a state transfer, not a boot. */
+                             * follows is a state transfer, not a boot. Urgent
+                             * for that reason: it is what explains the freeze
+                             * about to happen, so it cannot wait its turn. */
                             new WarnWidget.WarnWidgetHelper(mm, mm.getString(intoRunning
                                     ? R.string.np_drop_in_entered : R.string.np_connected)
-                                    + peerOriginSuffix(joinPeerCountry,
-                                        LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped())),
-                                    intoRunning ? 5 : 3, Color.GREEN, false);
+                                    + peerOriginSuffix(originCountry, originPath),
+                                    intoRunning ? 5 : 3, Color.GREEN, false, intoRunning);
                             Emulator.resume();
                         }
                     }

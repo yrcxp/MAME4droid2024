@@ -106,6 +106,8 @@
     <string name="np_drop_in_joined">NetPlay: another player is in! Bringing them up to your game…</string>
     <string name="np_drop_in_entered">NetPlay: you are in! Catching you up to the game already running…</string>
     <string name="np_drop_in_again">Your game carries on as it was. If you want someone else to join, open NetPlay and start drop-in again.</string>
+    <string name="np_drop_in_no_rollback">This game is too big for Rollback, so drop-in cannot work with it. Your room has been taken off the board; keep playing, or start a normal NetPlay game in Lockstep.</string>
+    <string name="np_drop_in_too_big">This game is too big for Rollback (savestate %1$s MB), so drop-in cannot hand it over. No room was published and NetPlay has been switched off; keep playing, or start a normal NetPlay game in Lockstep.</string>
     <string name="np_private_room_no_pin">Room with PIN: only players who have it get in — set one in the netplay settings</string>
     <string name="pref_netplay_lobby_pin_title">Room PIN</string>
     <string name="pref_netplay_lobby_pin_summary">4 to 8 digits. Tell it to whoever you want to play with: your rooms then show on the board as needing a PIN, and only they can get in. The server only ever sees its hash</string>
@@ -188,6 +190,7 @@
     <string name="np_msg_connection_lost">NetPlay: Connection lost. Resuming offline play...</string>
     <string name="np_msg_no_ack">NetPlay: the other player keeps asking to join, so our answer is not reaching them. Traffic is only getting through one way.</string>
     <string name="np_no_answer">No answer from the host.\n\nIt received nothing, or its replies are not getting back to you. If you are both on the same Wi-Fi, check that the two devices are on the same band and that the router is not isolating clients.</string>
+    <string name="np_lan_silent_fallback">No answer on the local network — the router may be isolating its wireless clients.\n\nRetrying through the public address…</string>
     <string name="np_msg_peer_disconnected">NetPlay: Peer disconnected. Resuming offline play...</string>
     <string name="np_msg_send_failed">NetPlay: Failed to send data.\nError: %1$s</string>
     <string name="np_msg_bind_failed">NetPlay: Failed to bind socket.\nError: %1$s</string>

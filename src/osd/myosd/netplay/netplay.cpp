@@ -137,6 +137,11 @@
 #define NLOG(...) do { if(NETPLAY_LOG_ENABLED) __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay", __VA_ARGS__); } while(0)
 #define NLOG_VERBOSE(...) do { if(0) __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay", __VA_ARGS__); } while(0)
 
+/* How long the host keeps answering the same unanswered JOIN before calling
+ * the return path broken.  Deliberately short next to the 60s sync/barrier
+ * ceilings: nothing is loading here, it is one round trip. */
+#define JOIN_ACK_TIMEOUT_MS 30000
+
 // Netplay C++ helper functions imported from myosd_droid.cpp
 extern void myosd_droid_netplay_set_exitPause(int val);
 extern void myosd_droid_netplay_force_pause();
@@ -182,6 +187,25 @@ static uint32_t netplay_get_ticks_ms() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint32_t)((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+}
+
+/* Floor and ceiling of the RTT, for the lobby report only.  Kept apart from
+ * max_rtt_interval/min_rtt_window on purpose: those drive the auto delay and
+ * the rollback stall and are left at zero by the rollback path by design, so
+ * writing to them here would change how sessions are timed.  Same decay as
+ * the envelope (peak 1/64, floor 1/32) so both read alike.
+ * Callers already hold sync_mutex.                                         */
+static void netplay_track_rtt_range(netplay_t *handle, uint32_t rtt)
+{
+    if (handle->tel_rtt_max == 0 || rtt > handle->tel_rtt_max)
+        handle->tel_rtt_max = rtt;
+    else
+        handle->tel_rtt_max = (handle->tel_rtt_max * 63 + rtt) / 64;
+
+    if (handle->tel_rtt_min == 0 || rtt < handle->tel_rtt_min)
+        handle->tel_rtt_min = rtt;
+    else
+        handle->tel_rtt_min = (handle->tel_rtt_min * 31 + rtt) / 32;
 }
 
 /* Byte-order helpers
@@ -1039,6 +1063,7 @@ int netplay_read_data(netplay_t *handle)
                     }
                     handle->smoothed_rtt = (handle->smoothed_rtt == 0)
                         ? rtt : (handle->smoothed_rtt * 7 + rtt) / 8;
+                    netplay_track_rtt_range(handle, rtt);
                 }
             }
             handle->is_peer_paused = msg.u.data.is_peer_paused;
@@ -1342,6 +1367,7 @@ int netplay_read_data(netplay_t *handle)
                     handle->rtt_mdev = (handle->rtt_mdev * 3 + dev) / 4;
                 }
                 handle->smoothed_rtt = slow_rtt;
+                netplay_track_rtt_range(handle, rtt);
 
                 if (handle->max_rtt_interval == 0 || rtt > handle->max_rtt_interval) {
                     handle->max_rtt_interval = rtt;
@@ -1662,29 +1688,62 @@ int netplay_read_data(netplay_t *handle)
         /* Refuse mixed builds before adopting anything.                   */
         if (!netplay_check_build_compat(handle, &msg, "JOIN"))
             break;
+
+        /* A client that got our JOIN_ACK stops asking.  Half a minute of
+         * unbroken retries means our answer is not reaching it -- a one-way
+         * path, which resending cannot fix.  A gap restarts the run, and a
+         * live peer never gets here, so a slow CHD boot is never judged. */
+        if (handle->player1) {
+            uint32_t now_ms = netplay_get_ticks_ms();
+            if (handle->join_first_ms == 0 || (now_ms - handle->join_last_ms) > 5000)
+                handle->join_first_ms = now_ms;
+            handle->join_last_ms = now_ms;
+
+            if (!handle->peer_ready && !handle->has_received_data &&
+                (now_ms - handle->join_first_ms) > JOIN_ACK_TIMEOUT_MS) {
+                NLOG("JOIN: peer still retrying after %u ms - our JOIN_ACK never arrives",
+                     (unsigned)(now_ms - handle->join_first_ms));
+                if (handle->netplay_warn) {
+                    char m[] = "TOASTERR:@no_ack";
+                    handle->netplay_warn(m);
+                }
+                netplay_send_disconnect(handle);
+                handle->has_connection = 0;
+                break;
+            }
+        }
         /* Always answer JOIN with JOIN_ACK.  UDP packets can be dropped,
          * and if the Server starts the game before the Client receives the
          * ACK, we must not ignore the Client's retries.                   */
         handle->has_joined = 1;
-        handle->frame = 0;
-        handle->target_frame = 0;
-        handle->peer_frame = 0;
-        memset(handle->frame_history, 0, sizeof(handle->frame_history));
 
-        handle->has_received_data = 0;
-        for (int i = 0; i < EARLY_BUFFER_SIZE; i++) {
-            handle->early_peer_frame[i] = 0xFFFFFFFF;
-        }
-        handle->last_crc_match_frame = 0;
-        handle->consecutive_desyncs  = 0;
-        handle->confirmed_watermark  = 0;
-        handle->local_ready = 0;
-        handle->peer_ready  = 0;
-        handle->last_received_peer_frame = 0;
-        handle->sync_state_received = 0;
-        if (handle->sync_pending_buffer) {
-            free(handle->sync_pending_buffer);
-            handle->sync_pending_buffer = NULL;
+        /* The bookkeeping below goes back to zero so both sides start from
+         * the same frame, which is right while the handshake settles and a
+         * no-op once it has.  Guarded because nothing filters the sender:
+         * a late duplicate, or a packet from a stranger who knows the
+         * address, would otherwise rewind a host that is already playing.
+         * The ACK above goes out either way, so retries still work. */
+        if (!handle->has_received_data && handle->frame == 0) {
+            handle->frame = 0;
+            handle->target_frame = 0;
+            handle->peer_frame = 0;
+            memset(handle->frame_history, 0, sizeof(handle->frame_history));
+
+            handle->has_received_data = 0;
+            for (int i = 0; i < EARLY_BUFFER_SIZE; i++) {
+                handle->early_peer_frame[i] = 0xFFFFFFFF;
+            }
+            handle->last_crc_match_frame = 0;
+            handle->consecutive_desyncs  = 0;
+            handle->confirmed_watermark  = 0;
+            handle->local_ready = 0;
+            handle->peer_ready  = 0;
+            handle->last_received_peer_frame = 0;
+            handle->sync_state_received = 0;
+            if (handle->sync_pending_buffer) {
+                free(handle->sync_pending_buffer);
+                handle->sync_pending_buffer = NULL;
+            }
         }
 
 
@@ -1702,21 +1761,28 @@ int netplay_read_data(netplay_t *handle)
         if (!netplay_check_build_compat(handle, &msg, "JOIN_ACK"))
             break;
         handle->has_joined  = 1;
-        handle->frame = 0;
-        handle->target_frame = 0;
-        handle->peer_frame = 0;
-        memset(handle->frame_history, 0, sizeof(handle->frame_history));
 
-        handle->has_received_data = 0;
-        for (int i = 0; i < EARLY_BUFFER_SIZE; i++) {
-            handle->early_peer_frame[i] = 0xFFFFFFFF;
+        /* Same guard as the JOIN case above, and the likelier of the two:
+         * the host answers every retry, so an ACK we already acted on can
+         * still turn up afterwards.  Adopting the host's mode and clock
+         * below is idempotent; rewinding a running frame counter is not. */
+        if (!handle->has_received_data && handle->frame == 0) {
+            handle->frame = 0;
+            handle->target_frame = 0;
+            handle->peer_frame = 0;
+            memset(handle->frame_history, 0, sizeof(handle->frame_history));
+
+            handle->has_received_data = 0;
+            for (int i = 0; i < EARLY_BUFFER_SIZE; i++) {
+                handle->early_peer_frame[i] = 0xFFFFFFFF;
+            }
+            handle->last_crc_match_frame = 0;
+            handle->consecutive_desyncs  = 0;
+            handle->confirmed_watermark  = 0;
+            handle->local_ready = 0;
+            handle->peer_ready  = 0;
+            handle->last_received_peer_frame = 0;
         }
-        handle->last_crc_match_frame = 0;
-        handle->consecutive_desyncs  = 0;
-        handle->confirmed_watermark  = 0;
-        handle->local_ready = 0;
-        handle->peer_ready  = 0;
-        handle->last_received_peer_frame = 0;
 
         handle->frame_skip  = msg.u.join.frame_skip;
         handle->mode        = (netplay_mode_type)msg.u.join.mode;
@@ -2246,6 +2312,9 @@ int netplay_init_handle(netplay_t *handle){
      * before netplayInit was called. Default to 2 if never set.           */
     int saved_frame_skip = (handle->frame_skip > 0) ? handle->frame_skip : 2;
     int saved_auto = handle->is_auto_frameskip;
+    /* Same reason as the two above: the UI chooses drop-in before the socket
+     * exists, so the reset must not forget it. */
+    int saved_drop_in = handle->drop_in;
 
     /* Wake any game thread that may be sleeping on the cond before we
      * destroy the primitives.  Harmless if not yet initialised (zero-init
@@ -2280,6 +2349,7 @@ int netplay_init_handle(netplay_t *handle){
 
     handle->frame_skip        = saved_frame_skip;
     handle->is_auto_frameskip = saved_auto;
+    handle->drop_in          = saved_drop_in;
     handle->mode              = preserved_mode;
     if (handle->mode == 0) handle->mode = NETPLAY_MODE_LOCKSTEP; // default
     
@@ -2627,6 +2697,31 @@ void netplay_start_barrier(netplay_t *handle)
         std::chrono::steady_clock::now() - barrier_start).count();
     NLOG("TELEM start_barrier_done role=%s waited_ms=%lld peer_ready=%d",
          handle->player1 ? "HOST" : "CLIENT", (long long)waited, handle->peer_ready);
+
+    /* Drop-in: the joiner has booted and sits at frame 0 while we are mid
+     * game.  Hand it the machine with the mid-game RESYNC, which is why this
+     * needs no new message.  Here and not in the READY handler: on the game
+     * thread initial_sync_complete is already set, so begin() cannot be
+     * refused for arriving too early. */
+    if (handle->player1 && handle->drop_in && handle->peer_ready) {
+        /* The handover IS the state transfer, and lockstep has none: the
+         * joiner would sit at frame 0 while we are minutes in.  Checked here
+         * because this is the moment of handing the machine over. */
+        if (handle->mode != NETPLAY_MODE_ROLLBACK || !handle->rollback_enabled) {
+            NLOG("DROP-IN refused at barrier: mode=%d rollback_enabled=%d - joiner cannot be caught up",
+                 (int)handle->mode, handle->rollback_enabled);
+            /* The savestate size is gated before the game is ever offered, so
+             * what is left here is the layout mismatch: say that, and not a
+             * size we would have to invent. */
+            if (handle->netplay_warn)
+                handle->netplay_warn((char*)"TOAST:@not_rollback_compatible");
+            netplay_send_disconnect(handle);
+            handle->has_joined     = 0;
+            handle->has_begun_game = 0;
+            return;
+        }
+        netplay_resync_begin(handle, "drop-in");
+    }
 }
 
 /* Set the session mode (LOCKSTEP/ROLLBACK).                               */

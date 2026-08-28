@@ -598,6 +598,9 @@ gles3_renderer::~gles3_renderer()
         m_textures_to_delete.clear();
         m_render_textures_to_delete.clear();
         m_texlist.clear();
+        // Member destructors run after us on this path too, and the filter
+        // deletes its program unconditionally.  Take it away from it.
+        m_filter.abandon();
         return;
     }
 		

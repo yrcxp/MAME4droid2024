@@ -902,7 +902,7 @@
 		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_NETPLAY_ALLOW_PLUGINS"
 			android:title="@string/pref_netplay_allow_plugins_title" android:summary="@string/pref_netplay_allow_plugins_summary"
 			android:defaultValue="false" />
-		<ListPreference android:entries="@array/pref_netplay_ip_protocol_options" android:title="@string/pref_netplay_ipproto_title" android:summary="@string/pref_netplay_ipproto_summary" android:key="PREF_NETPLAY_IP_PROTOCOL" android:entryValues="@array/pref_netplay_ip_protocol_values" android:defaultValue="0" />
+		<ListPreference android:entries="@array/pref_netplay_ip_protocol_options" android:title="@string/pref_netplay_ipproto_title" android:summary="@string/pref_netplay_ipproto_summary" android:key="PREF_NETPLAY_IP_PROTOCOL_2" android:entryValues="@array/pref_netplay_ip_protocol_values" android:defaultValue="2" />
 		<CheckBoxPreference android:title="@string/pref_netplay_lobby_title" android:summary="@string/pref_netplay_lobby_summary" android:key="PREF_NETPLAY_LOBBY" android:defaultValue="true" />
 		<EditTextPreference android:title="@string/pref_netplay_lobby_pin_title" android:summary="@string/pref_netplay_lobby_pin_summary" android:key="PREF_NETPLAY_LOBBY_PIN" android:defaultValue="" android:inputType="number" android:dependency="PREF_NETPLAY_LOBBY" />
 		<EditTextPreference android:title="@string/pref_netplay_lobby_url_title" android:summary="@string/pref_netplay_lobby_url_summary" android:key="PREF_NETPLAY_LOBBY_URL" android:defaultValue="" android:dependency="PREF_NETPLAY_LOBBY" />

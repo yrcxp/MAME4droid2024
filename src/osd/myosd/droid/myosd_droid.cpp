@@ -47,6 +47,13 @@ static int myosd_droid_inMenu = 1;
 static int myosd_droid_inGame = 0;
 static int myosd_droid_running = 0;
 
+/* 1 while the machine now running is one WE scheduled, so ui.cpp's autostart
+ * block pinned it: nvram and cfg redirected, plugins and cheats off, the CHD
+ * overlay wiped, samplerate fixed. All of that is decided at boot and cannot
+ * be applied to a machine already running, which is what decides whether a
+ * drop-in may keep the game on screen or has to relaunch it. */
+static int s_netplay_pinned_game = 0;
+
 //video
 static int myosd_droid_video_width = 1;
 static int myosd_droid_video_height = 1;
@@ -512,6 +519,11 @@ void myosd_droid_setMyValue(int key, int i, int value) {
         case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION:
             netplay_ui_set_connection(netplay_get_handle(), value);
             break;
+        case com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN:
+            /* Preserved across netplay_init_handle's memset, like mode and
+             * frame_skip: the UI sets it before netplayInit runs. */
+            if (netplay_get_handle()) netplay_get_handle()->drop_in = value;
+            break;
         case com_seleuco_mame4droid_Emulator_NETPLAY_DELAY:
             netplay_ui_set_delay(netplay_get_handle(), value);
             break;
@@ -533,6 +545,10 @@ int myosd_droid_getMyValue(int key, int i) {
             return myosd_droid_inMenu;
         case com_seleuco_mame4droid_Emulator_IN_GAME:
             return myosd_droid_inGame;
+        case com_seleuco_mame4droid_Emulator_NETPLAY_KEEPS_GAME:
+            /* 1 = a drop-in started now would carry on with the game on
+             * screen; 0 = it would relaunch it to get the pinning. */
+            return (myosd_droid_inGame && s_netplay_pinned_game) ? 1 : 0;
         case com_seleuco_mame4droid_Emulator_NUMBTNS:
             return myosd_droid_num_buttons;
         case com_seleuco_mame4droid_Emulator_NUMWAYS:
@@ -545,6 +561,17 @@ int myosd_droid_getMyValue(int key, int i) {
             return myosd_is_paused() ? 1 : 0;
         case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_CONNECTION:
             return netplay_get_handle() ? netplay_get_handle()->has_connection : 0;
+        case com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE: {
+            /* Verdict of the one-shot savestate size probe: the room waits on
+             * it before going up. 0 not measured, 1 fits, 2 too big. */
+            netplay_t *h = netplay_get_handle();
+            return h ? h->drop_in_state : 0;
+        }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE_KB: {
+            /* The size behind that verdict, so the refusal can name it. */
+            netplay_t *h = netplay_get_handle();
+            return h ? h->drop_in_state_kb : 0;
+        }
         case com_seleuco_mame4droid_Emulator_NETPLAY_HAS_JOINED:
             return netplay_get_handle() ? netplay_get_handle()->has_joined : 0;
         case com_seleuco_mame4droid_Emulator_NETPLAY_IN_ROLLBACK: {
@@ -556,12 +583,42 @@ int myosd_droid_getMyValue(int key, int i) {
             return (h && h->has_connection && h->has_begun_game &&
                     h->mode == NETPLAY_MODE_ROLLBACK && h->rollback_enabled) ? 1 : 0;
         }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_RTT: {
+            /* Smoothed round trip in ms, the same EMA that drives the auto
+             * input delay.  0 before a game is running: nothing has been
+             * measured yet and a made-up number would poison the stats. */
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->smoothed_rtt : 0;
+        }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_JITTER: {
+            /* Mean deviation of the RTT (RFC6298 mdev): what actually decides
+             * whether a link feels steady, since a high average with no jitter
+             * plays better than a low one that swings. */
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->rtt_mdev : 0;
+        }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MIN: {
+            /* Decaying floor and ceiling of the RTT.  The smoothed average
+             * weights recent samples, so on its own it hides a link that was
+             * fine for ten minutes and fell apart at the end: these two turn
+             * one number into a range. */
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->tel_rtt_min : 0;
+        }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_RTT_MAX: {
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->tel_rtt_max : 0;
+        }
         default :
             return -1;
     }
 }
 
 void myosd_droid_setMyValueStr(int key, int i, const char *value) {
+    // Belt and braces: the JNI already screens nulls, but every case below
+    // builds a std::string and would run strlen off a null pointer.
+    if (value == nullptr) value = "";
+
     //__android_log_print(ANDROID_LOG_DEBUG, "libMAME4droid.so", "setMyValueStr  %d,%d:%s",key,i,value);
     switch (key) {
         case com_seleuco_mame4droid_Emulator_SAF_PATH: {
@@ -1222,7 +1279,12 @@ static void droid_video_change_cb(int width, int height,int vis_width, int vis_h
 static void myosd_droid_netplay_force_disconnect(const char* context_msg) {
     netplay_t *handle = netplay_get_handle();
     if (handle && handle->has_connection) {
-        bool failed_to_start = !handle->has_begun_game;
+        /* has_begun_game == 0 normally means the ROM never got going, which is
+         * worth telling the user about.  A drop-in host is the exception by
+         * design: it plays with no session begun until somebody joins, so
+         * walking out of a game that ran perfectly well is an ordinary
+         * disconnect, not a ROM that failed to load. */
+        bool failed_to_start = !handle->has_begun_game && !handle->drop_in;
         if (failed_to_start) {
             __android_log_print(ANDROID_LOG_DEBUG, "MAME4droid_Netplay",
                 "%s - Game failed to start, forcing netplay disconnection", context_msg);
@@ -1270,6 +1332,9 @@ static void droid_video_draw_cb(int skip_redraw, int in_game, int in_menu, int r
         if (myosd_droid_netplay_restarting) {
             myosd_droid_netplay_restarting = 0;
         } else {
+            /* A real exit, not the hand-off into a game we scheduled: whatever
+             * pinning the old machine had leaves with it. */
+            s_netplay_pinned_game = 0;
             myosd_droid_netplay_force_disconnect("Game exited");
         }
     }
@@ -1873,6 +1938,13 @@ extern "C" const char *netplayProbePublicIp(void) {
     return s_probe_ip;
 }
 
+/* Wire/build handshake version this .so speaks.  The lobby filters the board
+ * by it, and a duplicated constant on the Java side would silently drift out
+ * of step the first time it gets bumped here. */
+extern "C" int netplayGetProtocolVersion(void) {
+    return NETPLAY_PROTOCOL_VERSION;
+}
+
 /* User-triggered mid-game state resync (rollback only), from the Java
  * netplay dialog's Resync button.  Any thread: idempotent + mutex-protected. */
 extern "C" int netplayResync(void) {
@@ -1890,7 +1962,6 @@ extern "C" int netplayResync(void) {
  * ============================================================ */
 
 static int s_already_scheduled = 0;   /* guards get_netplay_force_game so ui.cpp only claims the reload once per join */
-
 /* Reset the bootstrap latches (disconnect / audit-failure abort path). */
 void myosd_droid_clear_netplay_force_game(void) {
     s_already_scheduled = 0;
@@ -1907,13 +1978,24 @@ void myosd_droid_clear_netplay_force_game(void) {
 }
 
 /* Polled by ui.cpp's autostart; returns the game to load exactly once per
- * join (NULL otherwise), latching s_already_scheduled/restarting. */
+ * join (NULL otherwise), latching s_already_scheduled/restarting.
+ *
+ * Drop-in also arms with nobody joined: from the ROM list it schedules the
+ * game as usual, and inside a game WE launched it schedules nothing and keeps
+ * the machine. Any other running game is relaunched -- cfg, plugins, cheats
+ * and the CHD overlay are settled at boot and cannot be applied later. */
 const char* myosd_droid_get_netplay_force_game(void) {
     netplay_t *handle = netplay_get_handle();
-    if(handle && handle->has_connection && handle->has_joined) {
+    int drop_in_host = handle && handle->drop_in && handle->player1;
+    int launch = handle && handle->has_connection &&
+                 (handle->has_joined || drop_in_host);
+    if (launch) {
         if (!s_already_scheduled) {
             s_already_scheduled = 1;
+            if (drop_in_host && myosd_droid_inGame && s_netplay_pinned_game)
+                return NULL;
             myosd_droid_netplay_restarting = 1;
+            s_netplay_pinned_game = 1;
             return handle->game_name;
         }
     } else {
@@ -1933,6 +2015,13 @@ int myosd_droid_netplay_restart_pending(void) {
         (!handle->has_joined || !s_already_scheduled))
         return 1;
     return 0;
+}
+
+/* 1 once the netplay game is up: the autostart has settled the launch and no
+ * reload is in flight.  restart_pending cannot answer this -- it reads "nobody
+ * has joined yet" as pending, which is a drop-in host waiting alone. */
+int myosd_droid_netplay_game_settled(void) {
+    return s_already_scheduled && !myosd_droid_netplay_restarting && myosd_droid_inGame;
 }
 
 /* Forward a toast/warning to Java, if a callback is registered. */

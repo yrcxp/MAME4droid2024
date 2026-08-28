@@ -166,6 +166,10 @@ extern "C" {
 #define com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN 83L
 #undef com_seleuco_mame4droid_Emulator_NETPLAY_KEEPS_GAME
 #define com_seleuco_mame4droid_Emulator_NETPLAY_KEEPS_GAME 84L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE
+#define com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE 85L
+#undef com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE_KB
+#define com_seleuco_mame4droid_Emulator_NETPLAY_DROP_IN_STATE_KB 86L
 
 /*
  * Class:     com_seleuco_mame4droid_Emulator
