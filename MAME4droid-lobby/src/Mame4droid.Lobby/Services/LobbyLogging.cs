@@ -34,10 +34,10 @@ namespace Mame4droid.Lobby.Services;
 public static class LobbyLogging
 {
     private const int OperationalDaysKept = 7;
-    /* Three months: enough to compare one release against the previous two,
-     * and short enough that the country pair a session carries is not sitting
-     * on disk for a year to answer a question nobody is asking any more. */
-    private const int TelemetryMonthsKept = 3;
+    /* Two files, not three: three months of a month each can leave a line on
+     * disk for 92 days, and the Play data-safety answer says everything is
+     * gone inside 90. Two caps it at 62 and still covers the last release. */
+    private const int TelemetryMonthsKept = 2;
 
     /* Serilog defaults to a gigabyte per file, and the endpoint that feeds the
      * telemetry log is anonymous: a flood would fill the disk long before the
