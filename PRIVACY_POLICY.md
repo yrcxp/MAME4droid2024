@@ -1,5 +1,7 @@
 ## MAME4droid (Current): Privacy policy
 
+*Last updated: 28 August 2026*
+
 Welcome to the MAME4droid (Current)  Emulator app for Android!
 
 This is an open source Android app developed by Seleuco (D.Valdeita). The source code is available on GitHub; the app is also available on Google Play.
@@ -47,7 +49,7 @@ And this is what happens to it afterwards:
 * **Your address is never written to a log.** It is held in memory only while your room is on the board, handed only to the player who joins you, and gone with the room. The session records the server keeps contain no address at all.
 * **The board never shows an address to anyone.** When a room is marked as being on your own network, that is a comparison of two salted fingerprints, not a disclosure of either side.
 * **Nothing identifies your device.** No account, no login, no name, no advertising identifier, and nothing stored on your phone that another session could recognise. Two visits from you are not linked to each other.
-* **Nothing survives a restart.** Rooms live in memory for about a minute at a time, and the salt used for those fingerprints is generated afresh every time the server starts, so old records cannot be matched against new ones even from the inside.
+* **Almost nothing survives a restart.** Rooms live in memory for about a minute at a time, and the salt used for those fingerprints is generated afresh every time the server starts, so old records cannot be matched against new ones even from the inside. The one thing written down is a line per finished game &mdash; which game, the two countries, how it went and how fast it was, with no address and nothing naming a device &mdash; kept for three months so I can tell whether the service is working.
 * There is **no chat and no user-to-user messaging** of any kind.
 
 An IP address can be considered personal data in some jurisdictions, which is why it is spelled out here rather than buried: it is used to introduce two players and for nothing else, it is never stored, and you decide whether any of it happens.
