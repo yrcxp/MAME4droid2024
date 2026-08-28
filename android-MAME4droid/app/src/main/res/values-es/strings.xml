@@ -86,6 +86,7 @@
     <string name="np_lobby_watching">Publicada en el tablón público · %1$d jugador(es) mirando</string>
     <string name="np_lobby_peer_found">Un jugador se está uniendo desde el tablón: conectando…</string>
     <string name="np_public_rooms">Salas públicas</string>
+    <string name="np_lobby_patience">Las salas suelen tardar unos minutos en encontrar pareja.</string>
     <string name="np_private_room">Sala con PIN</string>
     <string name="np_drop_in">Empezar ya, que se unan cuando quieran</string>
     <string name="np_drop_in_summary">Tu partida arranca al momento y se queda publicada. A quien entre se le mete dentro de ella, así que la imagen se queda quieta un instante mientras viaja tu estado.</string>
@@ -94,6 +95,7 @@
     <string name="np_drop_in_joining">Alguien se está uniendo · la imagen se para un instante</string>
     <string name="np_drop_in_joined">NetPlay: ¡ha entrado otro jugador! Poniéndole al día de tu partida…</string>
     <string name="np_drop_in_entered">NetPlay: ¡ya estás dentro! Poniéndote al día de la partida en curso…</string>
+    <string name="np_drop_in_again">Tu partida sigue como estaba. Si quieres que entre otro jugador, abre NetPlay y vuelve a iniciar el drop-in.</string>
     <string name="np_private_room_no_pin">Sala con PIN: solo entra quien lo tenga — defínelo en los ajustes de netplay</string>
     <string name="pref_netplay_lobby_pin_title">PIN de sala</string>
     <string name="pref_netplay_lobby_pin_summary">De 4 a 8 dígitos. Dáselo a quien quieras jugar: tus salas aparecen en el tablón indicando que necesitan PIN y solo entra esa gente. Al servidor solo llega su hash</string>

@@ -205,6 +205,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_LAST_NAT = "PREF_NETPLAY_LAST_NAT";
 	final static public String PREF_NETPLAY_LAST_ROOM = "PREF_NETPLAY_LAST_ROOM";
 	final static public String PREF_NETPLAY_LAST_WAKE = "PREF_NETPLAY_LAST_WAKE";
+	final static public String PREF_NETPLAY_DROP_IN = "PREF_NETPLAY_DROP_IN";
 	final static public String PREF_NETPLAY_LOBBY_PIN = "PREF_NETPLAY_LOBBY_PIN";
 	final static public String PREF_NETPLAY_LOBBY_PRIVATE = "PREF_NETPLAY_LOBBY_PRIVATE";
 
@@ -966,6 +967,17 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	public void setNetplayLastWake(long millis) {
 		getSharedPreferences().edit().putLong(PREF_NETPLAY_LAST_WAKE, millis).commit();
+	}
+
+	/* Whether the last game was started with drop-in. Off until somebody ticks
+	 * it once: a drop-in host never sees the waiting dialog, which is where the
+	 * addresses and the Share button live. */
+	public boolean isNetplayDropIn() {
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_DROP_IN, false);
+	}
+
+	public void setNetplayDropIn(boolean on) {
+		getSharedPreferences().edit().putBoolean(PREF_NETPLAY_DROP_IN, on).commit();
 	}
 
 	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */

@@ -86,6 +86,7 @@
     <string name="np_lobby_watching">已发布到公共列表 · %1$d 名玩家正在浏览</string>
     <string name="np_lobby_peer_found">有玩家正从列表加入：连接中…</string>
     <string name="np_public_rooms">公共房间</string>
+    <string name="np_lobby_patience">房间通常需要几分钟才能找到对手。</string>
     <string name="np_private_room">带PIN码的房间</string>
     <string name="np_drop_in">立即开始，随时有人加入</string>
     <string name="np_drop_in_summary">你的游戏会立刻开始并留在列表上。加入的人会被带进这局游戏，因此在传送状态的一瞬间画面会静止。</string>
@@ -94,6 +95,7 @@
     <string name="np_drop_in_joining">有人正在加入 · 画面会短暂静止</string>
     <string name="np_drop_in_joined">联机对战：另一位玩家加入了！正在让他跟上你的进度…</string>
     <string name="np_drop_in_entered">联机对战：你已加入！正在让你跟上进行中的对战…</string>
+    <string name="np_drop_in_again">你的游戏照常继续。如果想让别人加入，打开联机对战并再次开启随时加入。</string>
     <string name="np_private_room_no_pin">带PIN码的房间：只有知道PIN码的人才能加入 — 请在联机设置中设置</string>
     <string name="pref_netplay_lobby_pin_title">房间PIN码</string>
     <string name="pref_netplay_lobby_pin_summary">4到8位数字。告诉你想一起玩的人：你的房间会在列表中显示需要PIN码，只有他们能进入。服务器只会收到它的哈希值</string>

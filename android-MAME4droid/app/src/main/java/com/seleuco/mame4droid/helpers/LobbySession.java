@@ -301,9 +301,47 @@ public class LobbySession {
         }
         if (hostPort[0] == null || hostPort[0].length() == 0) return false;
 
+        /* An IPv6 literal is the only thing here that carries colons, and the
+         * address we actually dialled is the only honest answer to "did this
+         * go over v6": the peer's flags on the board are from publish time. */
+        s_aimedV6 = hostPort[0].indexOf(':') >= 0;
+
         Emulator.netplaySetPunchAddr(hostPort[0], port);
         if (LobbyClient.DEBUG) Log.d(TAG, "lobby: aiming at peer (" + (peer.sameSite ? "same site" : "internet") + ")");
         return true;
+    }
+
+    private static volatile boolean s_aimedV6 = false;
+
+    /**
+     * How the two of us actually reached each other. "punch" stays the
+     * catch-all, so anything this cannot name lands there and the old numbers
+     * remain comparable.
+     */
+    public static String pathOf(boolean sameSite, boolean upnpMapped) {
+        if (sameSite) return "lan";
+        if (s_aimedV6) return "v6";
+        return upnpMapped ? "upnp" : "punch";
+    }
+
+    /** The pair of regional indicators Android draws as a flag, or "" if the
+     *  code is not two letters. */
+    public static String flagOf(String iso) {
+        if (iso == null || iso.length() != 2) return "";
+        int a = Character.toUpperCase(iso.charAt(0)) - 'A';
+        int b = Character.toUpperCase(iso.charAt(1)) - 'A';
+        if (a < 0 || a > 25 || b < 0 || b > 25) return "";
+        return new String(Character.toChars(0x1F1E6 + a))
+                + new String(Character.toChars(0x1F1E6 + b));
+    }
+
+    /** Short label for the connection route, for showing a person rather than
+     *  logging. Deliberately all tokens that read the same in any language. */
+    public static String pathLabel(String path) {
+        if ("lan".equals(path)) return "LAN";
+        if ("v6".equals(path)) return "IPv6";
+        if ("upnp".equals(path)) return "UPnP";
+        return "P2P";
     }
 
     /** Take the room off the board. Safe to call more than once. */

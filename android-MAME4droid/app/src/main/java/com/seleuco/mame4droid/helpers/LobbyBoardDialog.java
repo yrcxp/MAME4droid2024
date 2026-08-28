@@ -345,6 +345,11 @@ public class LobbyBoardDialog {
         final List<LobbyClient.Room> fresh = board.rooms;
         sortByPromise(fresh);
 
+        /* The NetPlay dialog underneath shows this count on its button, and
+         * this is the freshest it will ever be. Costs nothing: we already
+         * asked. */
+        netplay.noteRoomsOnBoard(fresh.size());
+
         /* Trust the server's clock over the device's, which may be minutes
          * out; elapsedRealtime is what advances it from here. */
         if (board.serverTimeSeconds > 0) {

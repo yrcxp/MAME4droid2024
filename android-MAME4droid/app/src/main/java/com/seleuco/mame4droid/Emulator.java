@@ -1264,8 +1264,15 @@ public class Emulator {
 		 * only sends this after a DISCONNECT actually arrived, so it is the one
 		 * place that can tell the two apart -- and without it every normal exit
 		 * was logged as a drop by whichever side did not press the button. */
-		if (msg != null && msg.contains("@peer_disconnected") && mm.getNetPlay() != null)
+		/* Only ever non-empty for the drop-in host being left alone. It rides
+		 * on the modal branch below, which is where an unprefixed native
+		 * warning like @peer_disconnected ends up. */
+		String hint = "";
+		if (msg != null && msg.contains("@peer_disconnected") && mm.getNetPlay() != null) {
 			mm.getNetPlay().notePeerLeftCleanly();
+			hint = mm.getNetPlay().dropInAgainHint();
+		}
+		final String tail = hint;
 
 		mm.runOnUiThread(new Runnable() {
 			public void run() {
@@ -1289,7 +1296,7 @@ public class Emulator {
 					 * errors) that are shown as a MODAL dialog.  Still resolve a
 					 * leading "@key" so the modal text is localized; plain text
 					 * passes through unchanged.                                  */
-					mm.getDialogHelper().setInfoMsg(resolveNpMsg(msg));
+					mm.getDialogHelper().setInfoMsg(resolveNpMsg(msg) + tail);
 					mm.showDialog(DialogHelper.DIALOG_INFO);
 				}
 				/* Native netplay notifications (hangup, peer timeout,

@@ -36,7 +36,9 @@ public sealed class TelemetrySink
     private static readonly string[] Outcomes =
         { "connected", "played", "dropped", "timeout", "rom_missing", "build_mismatch", "cancelled" };
 
-    private static readonly string[] Paths = { "lan", "punch", "forward", "upnp" };
+    /* "v6" is its own path: a pair that dialled an IPv6 literal never punched
+     * through anything, and counting those as punches flatters the rate. */
+    private static readonly string[] Paths = { "lan", "punch", "forward", "upnp", "v6" };
 
     private static readonly string[] Roles = { "host", "client" };
 

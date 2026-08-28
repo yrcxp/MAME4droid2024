@@ -93,6 +93,10 @@
     <string name="np_lobby_watching">Published on the public board · %1$d player(s) browsing</string>
     <string name="np_lobby_peer_found">A player is joining from the board: connecting…</string>
     <string name="np_public_rooms">Public rooms</string>
+    <!-- Button label plus how many rooms are on the board. Tokens only, so it
+         needs no translating. -->
+    <string name="np_public_rooms_count" translatable="false">%1$s (%2$d)</string>
+    <string name="np_lobby_patience">Rooms usually take a few minutes to find a partner.</string>
     <string name="np_private_room">Room with PIN</string>
     <string name="np_drop_in">Start playing now, join whenever</string>
     <string name="np_drop_in_summary">Your game starts at once and stays on the board. Whoever joins is brought into it, so the picture freezes for a moment while your state travels across.</string>
@@ -101,6 +105,7 @@
     <string name="np_drop_in_joining">Someone is joining · the picture stops for a moment</string>
     <string name="np_drop_in_joined">NetPlay: another player is in! Bringing them up to your game…</string>
     <string name="np_drop_in_entered">NetPlay: you are in! Catching you up to the game already running…</string>
+    <string name="np_drop_in_again">Your game carries on as it was. If you want someone else to join, open NetPlay and start drop-in again.</string>
     <string name="np_private_room_no_pin">Room with PIN: only players who have it get in — set one in the netplay settings</string>
     <string name="pref_netplay_lobby_pin_title">Room PIN</string>
     <string name="pref_netplay_lobby_pin_summary">4 to 8 digits. Tell it to whoever you want to play with: your rooms then show on the board as needing a PIN, and only they can get in. The server only ever sees its hash</string>
@@ -572,8 +577,8 @@
     <string name="pref_netplay_lobby_summary">Show your hosted game on the public board and browse other people\'s. Your IP is shared with the player who joins and held on the server for a minute. Sharing an IP by hand keeps working either way</string>
     <string name="pref_netplay_lobby_url_title">Board server</string>
     <string name="pref_netplay_lobby_url_summary">Leave empty for the public board. The server code ships with MAME4droid, so a club or a LAN party can run their own</string>
-    <string name="np_ipproto_v4">IPv4</string>
-    <string name="np_ipproto_v6">IPv6</string>
+    <string name="np_ipproto_v4" translatable="false">IPv4</string>
+    <string name="np_ipproto_v6" translatable="false">IPv6</string>
     <string name="np_ipproto_auto">Auto (IPv6 + IPv4)</string>
 
     <string name="prefscr_advanced_title">Advanced</string>

@@ -86,6 +86,7 @@
     <string name="np_lobby_watching">公開ボードに掲載中 · %1$d 人が閲覧中</string>
     <string name="np_lobby_peer_found">ボードからプレイヤーが参加します：接続中…</string>
     <string name="np_public_rooms">公開ルーム</string>
+    <string name="np_lobby_patience">ルームが相手を見つけるまでには、たいてい数分かかります。</string>
     <string name="np_private_room">PIN付きルーム</string>
     <string name="np_drop_in">すぐ始めて、あとから参加してもらう</string>
     <string name="np_drop_in_summary">すぐにゲームが始まり、ボードに載ったままになります。参加した人はその試合に引き入れられるため、状態を送る間だけ画面が一瞬止まります。</string>
@@ -94,6 +95,7 @@
     <string name="np_drop_in_joining">参加者が来ました・画面が一瞬止まります</string>
     <string name="np_drop_in_joined">ネットプレイ：もう一人が参加しました。あなたの試合に追いつかせています…</string>
     <string name="np_drop_in_entered">ネットプレイ：参加しました。進行中の試合に追いつかせています…</string>
+    <string name="np_drop_in_again">ゲームはそのまま続きます。別の人に入ってほしいときは、ネットプレイを開いて途中参加をもう一度始めてください。</string>
     <string name="np_private_room_no_pin">PIN付きルーム：PINを知っている人だけが参加できます — ネットプレイ設定で決めてください</string>
     <string name="pref_netplay_lobby_pin_title">ルームのPIN</string>
     <string name="pref_netplay_lobby_pin_summary">4〜8桁。一緒に遊びたい相手に伝えてください。あなたのルームはPINが必要と表示され、その人だけが参加できます。サーバーに届くのはハッシュだけです</string>

@@ -86,6 +86,7 @@
     <string name="np_lobby_watching">공개 게시판에 등록됨 · %1$d명이 보는 중</string>
     <string name="np_lobby_peer_found">게시판에서 플레이어가 참가합니다: 연결 중…</string>
     <string name="np_public_rooms">공개 방</string>
+    <string name="np_lobby_patience">방이 상대를 찾기까지는 보통 몇 분 걸립니다.</string>
     <string name="np_private_room">PIN 방</string>
     <string name="np_drop_in">지금 시작하고, 나중에 합류하게 하기</string>
     <string name="np_drop_in_summary">게임이 바로 시작되고 게시판에도 계속 올라가 있습니다. 합류하는 사람은 진행 중인 게임 안으로 들어오므로, 상태가 전송되는 잠깐 동안 화면이 멈춥니다.</string>
@@ -94,6 +95,7 @@
     <string name="np_drop_in_joining">누군가 합류하는 중 · 화면이 잠시 멈춥니다</string>
     <string name="np_drop_in_joined">넷플레이: 다른 플레이어가 들어왔습니다. 당신의 게임에 맞추는 중…</string>
     <string name="np_drop_in_entered">넷플레이: 입장했습니다! 진행 중인 게임에 맞추는 중…</string>
+    <string name="np_drop_in_again">게임은 그대로 이어집니다. 다른 사람이 들어오길 원하면 넷플레이를 열고 도중 참가를 다시 시작하세요.</string>
     <string name="np_private_room_no_pin">PIN 방: PIN을 아는 사람만 참가할 수 있습니다 — 넷플레이 설정에서 정하세요</string>
     <string name="pref_netplay_lobby_pin_title">방 PIN</string>
     <string name="pref_netplay_lobby_pin_summary">4~8자리. 같이 하고 싶은 사람에게 알려 주세요. 내 방은 게시판에 PIN 필요로 표시되고 그 사람만 들어올 수 있습니다. 서버에는 해시만 전달됩니다</string>

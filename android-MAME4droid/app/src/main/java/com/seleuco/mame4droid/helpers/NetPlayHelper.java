@@ -364,7 +364,7 @@ public class NetPlayHelper {
         final Button joinButton = (Button) netplayDlg.findViewById(R.id.JoinPeerGameBtn);
         joinButton.setOnClickListener(joinGameClick);
 
-        final Button publicRoomsButton = (Button) netplayDlg.findViewById(R.id.PublicRoomsBtn);
+        publicRoomsButton = (Button) netplayDlg.findViewById(R.id.PublicRoomsBtn);
         publicRoomsButton.setOnClickListener(publicRoomsClick);
 
         final Button disconnectButton = (Button) netplayDlg.findViewById(R.id.DisconnectBtn);
@@ -377,7 +377,62 @@ public class NetPlayHelper {
 
         netplayDlg.show();
         wakeLobbyServer();
+        /* Paint whatever the board last told us straight away, then go and
+         * ask: coming back from the board is then instant and free. */
+        repaintRoomsButton();
+        showRoomsWaiting();
     }
+
+    /**
+     * Put the number of rooms on the button that opens the board.
+     *
+     * Every single room published from outside so far was somebody hosting;
+     * not one person opened the board to look first. So two hosts can sit
+     * three taps apart and never see each other. A number on the button is
+     * the cheapest way to say "there is something in there".
+     */
+    private void showRoomsWaiting() {
+        if (!LobbySession.isUsable(mm)) return;
+
+        final String base = mm.getPrefsHelper().getNetplayLobbyUrl();
+        final int proto = Emulator.netplayGetProtocolVersion();
+        new Thread(new Runnable() {
+            public void run() {
+                LobbyClient.Board list = LobbyClient.list(base, proto, null);
+                if (list.ok()) noteRoomsOnBoard(list.rooms.size());
+            }
+        }).start();
+    }
+
+    /**
+     * How many rooms the board holds right now.
+     *
+     * The board itself calls this on every refresh while it is open, so
+     * coming back from it repaints the button for free -- the one request is
+     * the one made when this dialog opens, and only when it opens.
+     */
+    public void noteRoomsOnBoard(final int rooms) {
+        roomsOnBoard = rooms;
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                repaintRoomsButton();
+            }
+        });
+    }
+
+    /** UI thread. Silent when the dialog is gone or the board was empty. */
+    private void repaintRoomsButton() {
+        Button button = publicRoomsButton;
+        if (button == null || netplayDlg == null || !netplayDlg.isShowing()) return;
+
+        String label = mm.getString(R.string.np_public_rooms);
+        button.setText(roomsOnBoard > 0
+                ? mm.getString(R.string.np_public_rooms_count, label, roomsOnBoard)
+                : label);
+    }
+
+    private volatile int roomsOnBoard = 0;
+    private Button publicRoomsButton = null;
 
     /**
      * Second chance for the wake ping, in case the one at app start was
@@ -659,15 +714,23 @@ public class NetPlayHelper {
                                     ? View.VISIBLE : View.GONE);
                         }
                     });
+            /* Whatever was chosen last time. Not a default we picked: a host
+             * who shares addresses by hand needs the waiting dialog this hides,
+             * so nobody gets drop-in without having asked for it once. Set
+             * after the listener so the restart warning appears with it. */
+            dropInBox.setChecked(mm.getPrefsHelper().isNetplayDropIn());
             dropInBox.setEnabled(rollbackMode);
             dropInWhy.setEnabled(rollbackMode);
             modes.setOnCheckedChangeListener(
                     new android.widget.RadioGroup.OnCheckedChangeListener() {
                         public void onCheckedChanged(android.widget.RadioGroup g, int id) {
+                            /* Greyed out under lockstep, never unticked: coming
+                             * back to rollback should find the choice where it
+                             * was left, and starting is already gated on the
+                             * mode, so a ticked-but-disabled box does nothing. */
                             boolean roll = (id == 2);
                             dropInBox.setEnabled(roll);
                             dropInWhy.setEnabled(roll);
-                            if (!roll) dropInBox.setChecked(false);
                             dropInRestart.setVisibility(roll && dropInBox.isChecked()
                                     && wouldRestart ? View.VISIBLE : View.GONE);
                         }
@@ -684,6 +747,10 @@ public class NetPlayHelper {
                     SharedPreferences sp = mm.getPrefsHelper().getSharedPreferences();
                     sp.edit().putBoolean(PREF_NETPLAY_ROLLBACK_MODE, rollbackMode).apply();
                     mm.getPrefsHelper().setNetplayLobbyPrivate(hasPin && privateRoom.isChecked());
+                    /* Remember the tick, not the outcome: under lockstep the box
+                     * is disabled and dropIn ends up false, and forgetting the
+                     * choice for that reason would lose it on every mode switch. */
+                    mm.getPrefsHelper().setNetplayDropIn(dropInBox.isChecked());
                     dropIn = rollbackMode && dropInBox.isChecked() && LobbySession.isUsable(mm);
                     // Apply mode to native layer BEFORE netplayInit()
                     Emulator.netplaySetMode(rollbackMode ? 1 : 0);
@@ -1041,6 +1108,46 @@ public class NetPlayHelper {
         deleteUpnpMappingAsync();
     }
 
+    /**
+     * "\nCN flag CN . IPv6", or "" when neither half is known. Built from
+     * tokens only, so it reads the same in every language the app ships in,
+     * and it tells nobody anything the board did not already show publicly.
+     */
+    private String peerOriginSuffix(String country, String path) {
+        /* A flag is only interesting when the other player is somewhere else.
+         * On your own network you already know where they are, and telling
+         * somebody their flatmate is in Spain reads as a bug. */
+        boolean local = "lan".equals(path);
+
+        String where = "";
+        if (!local && country != null && country.length() == 2) {
+            String flag = LobbySession.flagOf(country);
+            where = flag.length() == 0 ? country : flag + " " + country;
+        }
+        String how = (path != null) ? LobbySession.pathLabel(path) : "";
+
+        if (where.length() == 0 && how.length() == 0) return "";
+        if (where.length() == 0) return "\n" + how;
+        if (how.length() == 0) return "\n" + where;
+        return "\n" + where + " · " + how;
+    }
+
+    /**
+     * Second paragraph for the "peer disconnected" notice, host side only.
+     *
+     * A drop-in host whose guest leaves is left playing alone with the room
+     * gone, and nothing on screen says the game survived or that putting it
+     * back on the board costs nothing. Both are worth saying, once.
+     *
+     * @return the extra line, or "" when it does not apply.
+     */
+    public String dropInAgainHint() {
+        if (!playedDropIn || !"host".equals(playedRole)) return "";
+        /* Blank line, not a line break: it is a separate thought, and it is
+         * the one the reader has to act on. */
+        return "\n\n" + mm.getString(R.string.np_drop_in_again);
+    }
+
     /** Repaint the host waiting dialog from hostBaseMsg + upnpLine. */
     private void postHostMessage() {
         final String base = hostBaseMsg;
@@ -1320,6 +1427,9 @@ public class NetPlayHelper {
             lobbyLine = (viewers > 0)
                     ? mm.getString(R.string.np_lobby_watching, viewers)
                     : mm.getString(R.string.np_lobby_published);
+            /* Field data: people were giving up after six seconds. Saying how
+             * long this usually takes turns some of them into players. */
+            lobbyLine += "\n" + mm.getString(R.string.np_lobby_patience);
             postHostMessage();
             return;
         }
@@ -1366,7 +1476,7 @@ public class NetPlayHelper {
                 ? joinGameName : Emulator.getValueStr(Emulator.GAME_SELECTED);
 
         new LobbySession(mm).report(game, "client",
-                outcome, self, joinPeerNat, joinSameSite ? "lan" : "punch", waitMs,
+                outcome, self, joinPeerNat, LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped()), waitMs,
                 joinPeerCountry, joinMode, joinDelay, 0, 0, 0, 0, 0, joinLocked, joinRoom,
                 joinIsDropIn);
 
@@ -1558,7 +1668,7 @@ public class NetPlayHelper {
         /* Which route we ended up taking is the interesting half: it is what
          * turns "punching works unless a side is symmetric" into a measurement. */
         String path = (peer == null) ? null
-                : peer.sameSite ? "lan" : (UpnpHelper.isMapped() ? "upnp" : "punch");
+                : LobbySession.pathOf(peer.sameSite, UpnpHelper.isMapped());
         board.report(Emulator.getValueStr(Emulator.GAME_SELECTED), "host", outcome,
                 LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped()),
                 (peer != null) ? peer.nat : null, path, waitMs,
@@ -2097,9 +2207,13 @@ public class NetPlayHelper {
                             /* A drop-in host is not starting anything: the game has
                              * been running all along and the joiner is being
                              * lifted into it. */
+                            /* Drop-in gets a second longer: whoever reads this
+                             * was playing, not waiting for it, and there is now
+                             * a second line with where the other player is. */
                             new WarnWidget.WarnWidgetHelper(mm, mm.getString(dropInLive
-                                    ? R.string.np_drop_in_joined : R.string.np_connected),
-                                    3, Color.GREEN, false);
+                                    ? R.string.np_drop_in_joined : R.string.np_connected)
+                                    + peerOriginSuffix(playedPeerCountry, playedPath),
+                                    dropInLive ? 5 : 3, Color.GREEN, false);
                             Emulator.resume();
                         }
                     }
@@ -2356,8 +2470,10 @@ public class NetPlayHelper {
                              * event as starting one together, and the wait that
                              * follows is a state transfer, not a boot. */
                             new WarnWidget.WarnWidgetHelper(mm, mm.getString(intoRunning
-                                    ? R.string.np_drop_in_entered : R.string.np_connected),
-                                    3, Color.GREEN, false);
+                                    ? R.string.np_drop_in_entered : R.string.np_connected)
+                                    + peerOriginSuffix(joinPeerCountry,
+                                        LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped())),
+                                    intoRunning ? 5 : 3, Color.GREEN, false);
                             Emulator.resume();
                         }
                     }
