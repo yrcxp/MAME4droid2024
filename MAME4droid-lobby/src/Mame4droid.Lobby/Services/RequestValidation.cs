@@ -50,6 +50,15 @@ public static partial class RequestValidation
     [GeneratedRegex("^[0-9]{4,8}$")]
     private static partial Regex PinRegex();
 
+    [GeneratedRegex("^[A-Za-z0-9_-]{8,64}$")]
+    private static partial Regex ClaimRegex();
+
+    /// Opaque to us: the client picks it and we only ever compare it with
+    /// itself. Bounded and charset-checked because it is attacker-controlled
+    /// and we keep it in memory for the life of a claim.
+    public static bool IsValidClaim(string? claim)
+        => !string.IsNullOrEmpty(claim) && ClaimRegex().IsMatch(claim);
+
     /// Digits only, four to eight. Numeric so it can be typed on a phone and
     /// read out loud without spelling anything, and long enough that guessing
     /// costs more than the room's own lifetime.

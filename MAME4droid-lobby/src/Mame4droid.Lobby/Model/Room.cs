@@ -85,6 +85,11 @@ public sealed class Room
      * the board has to say which kind of room this is before anyone taps. */
     public required bool Playing { get; init; }
 
+    /* Whatever the claimant called this attempt, or null when it was an older
+     * build that sends none. Dies with the claim, so a lapsed one cannot be
+     * used to take a room somebody else has since claimed. */
+    public string? ClaimToken { get; set; }
+
     public bool IsLocked => PinHash is not null;
 
     public readonly object Sync = new();

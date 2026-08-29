@@ -421,12 +421,19 @@ public class LobbySession {
      * see both sides.
      */
     public static LobbyClient.Nat natOf(String info, boolean upnpMapped) {
-        if (info == null) return new LobbyClient.Nat(false, false, upnpMapped, false);
+        if (info == null) return new LobbyClient.Nat(false, false, upnpMapped, false, false);
 
         /* "[2001:db8::1]:2080|..." is a v6 primary; "1.2.3.4:2080|..." is v4. */
         boolean v6 = info.startsWith("[");
+
+        /* The symmetric test is a second v4 query, so it only ran if a v4 leg
+         * ran: our own tuple is v4, or a v6 primary brought one along in
+         * "alt=". Joining a v6 host asks over v6 alone, and the sym=0 that
+         * comes back then is the initialised value, not a measurement. */
+        boolean symKnown = !v6 || info.contains("|alt=");
+
         return new LobbyClient.Nat(info.contains("sym=1"), info.contains("pp=1"),
-                upnpMapped, v6);
+                upnpMapped, v6, symKnown);
     }
 
     /**
@@ -441,7 +448,8 @@ public class LobbySession {
         mm.getPrefsHelper().setNetplayLastNat(
                 (nat.sym ? "1" : "0") + "," + (nat.pp ? "1" : "0") + ","
                         + (nat.upnp ? "1" : "0") + "," + (nat.v6 ? "1" : "0") + ","
-                        + mm.getPrefsHelper().getNetplayIpProtocol());
+                        + mm.getPrefsHelper().getNetplayIpProtocol() + ","
+                        + (nat.symKnown ? "1" : "0"));
     }
 
     /**
@@ -468,16 +476,20 @@ public class LobbySession {
         boolean v6applies = measured != 0 && family != 0;
         if (!v4applies && !v6applies) return null;
 
+        /* Older stamps have no sixth field. They were written when IPv4 was the
+         * default and the v4 leg always ran, so their sym is a real reading. */
+        boolean symKnown = flags.length < 6 || "1".equals(flags[5]);
+
         /* The native string is that same measurement, fresher: it survives
          * until the next netplayInit, beside the stamp read above. */
         String info = Emulator.netplayGetPublicAddr();
         LobbyClient.Nat nat = (info != null && info.length() > 0)
                 ? natOf(info, UpnpHelper.isMapped())
                 : new LobbyClient.Nat("1".equals(flags[0]), "1".equals(flags[1]),
-                        "1".equals(flags[2]), "1".equals(flags[3]));
+                        "1".equals(flags[2]), "1".equals(flags[3]), symKnown);
 
         return new LobbyClient.Nat(v4applies && nat.sym, v4applies && nat.pp,
-                nat.upnp, v6applies && nat.v6);
+                nat.upnp, v6applies && nat.v6, nat.symKnown);
     }
 
     /**
@@ -506,8 +518,10 @@ public class LobbySession {
 
         /* Neither side has a NAT to defeat: this is the one case we can
          * promise, because it needs nothing to be true that we have not
-         * measured ourselves. */
-        if (!self.sym && !other.sym) return 2;
+         * measured ourselves -- which is the point of symKnown. A device that
+         * joined over IPv6 never ran the v4 test, and its sym=0 would
+         * otherwise promise green on a road nobody looked down. */
+        if (!self.sym && !other.sym && self.symKnown) return 2;
 
         /* Past here a side is symmetric, so the pairing hangs on the other
          * being reachable from outside -- and a UPnP mapping is a claim, not

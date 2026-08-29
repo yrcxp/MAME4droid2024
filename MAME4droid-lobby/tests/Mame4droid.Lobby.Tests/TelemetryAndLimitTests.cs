@@ -18,6 +18,8 @@
  */
 
 using System.Net;
+using Mame4droid.Lobby.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Mame4droid.Lobby.Tests;
@@ -45,6 +47,30 @@ public class TelemetryAndLimitTests
             natSelf = (object?)null, natPeer = (object?)null, path = "carrier-pigeon", waitMs = -5
         });
         Assert.Equal(HttpStatusCode.NoContent, junk.StatusCode);
+    }
+
+    /// A withdrawn room and a cancelled one look the same over HTTP -- both
+    /// answer 204 -- so this reads the counters instead. It matters because an
+    /// outcome missing from the whitelist does not fail: the whole report is
+    /// dropped in silence, and we would be measuring nothing without knowing.
+    [Fact]
+    public async Task A_room_that_withdraws_itself_is_counted_apart_from_one_a_person_cancelled()
+    {
+        using var factory = new LobbyFactory();
+        var client = factory.CallerFrom("88.1.2.3");
+
+        foreach (var outcome in new[] { "withdrawn", "cancelled" })
+            await client.PostJson("/api/v1/telemetry", new
+            {
+                proto = 11, app = "1.40.3", game = "sfiii3nr1", role = "host", outcome,
+                natSelf = new { sym = false, pp = true, upnp = true },
+                natPeer = (object?)null, path = "lan", waitMs = 0, dropIn = true
+            });
+
+        var counters = factory.Services.GetRequiredService<TelemetrySink>().Counters;
+
+        Assert.Equal(1, counters["dropin|withdrawn"]);
+        Assert.Equal(1, counters["dropin|cancelled"]);
     }
 
     [Fact]

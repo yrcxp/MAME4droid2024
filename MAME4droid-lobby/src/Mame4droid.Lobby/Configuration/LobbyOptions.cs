@@ -41,9 +41,12 @@ public sealed class LobbyOptions
     public double ListBackoff { get; set; } = 1.5;
     public int ListMaxSeconds { get; set; } = 20;
 
-    /* Room lifetime. */
+    /* Room lifetime. A claim has to outlive at least one host heartbeat (three
+     * seconds waiting, ten in drop-in) so the host learns who joined, and die
+     * well before the joiner's own 30s patience runs out -- at equal values the
+     * two raced, and a joiner's lapsed claim locked it out of its own retry. */
     public int OpenTtlSeconds { get; set; } = 60;
-    public int ClaimedTtlSeconds { get; set; } = 30;
+    public int ClaimedTtlSeconds { get; set; } = 20;
 
     /* Abuse limits. */
 

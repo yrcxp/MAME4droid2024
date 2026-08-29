@@ -178,6 +178,8 @@
     <string name="np_msg_connection_lost">ネットプレイ：接続が切断されました。オフラインプレイに戻ります…</string>
     <string name="np_msg_no_ack">ネットプレイ：相手が参加要求を送り続けています。こちらの応答が届いていません。通信が一方向しか通っていません。</string>
     <string name="np_no_answer">ホストから応答がありません。\n\n届いていないか、応答が戻ってきていません。同じWi-Fiにいる場合は、2台が同じ帯域につながっているか、ルーターが端末同士の通信を遮断していないか確認してください。</string>
+    <string name="np_lobby_lockstep_far">遠距離でのロックステップ: 毎フレーム相手を待つため、遅延ではなくカクつきになります。ロールバックの方が適しています。</string>
+    <string name="np_lockstep_slow">この接続は %1$d ms です。\n\nロックステップは毎フレーム相手を待つため、遅延ではなくカクつきが出ます。距離があるときはロールバックの方がはるかに快適です。</string>
     <string name="np_lan_silent_fallback">ローカルネットワークの応答がありません。ルーターが無線クライアントを分離している可能性があります。\n\nパブリックアドレス経由で再試行しています…</string>
     <string name="np_msg_peer_disconnected">ネットプレイ：相手が切断しました。オフラインプレイに戻ります…</string>
     <string name="np_msg_send_failed">ネットプレイ：データの送信に失敗しました。\nエラー：%1$s</string>

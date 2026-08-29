@@ -178,6 +178,8 @@
     <string name="np_msg_connection_lost">联机对战：连接已断开。正在恢复离线游戏……</string>
     <string name="np_msg_no_ack">联机对战：对方仍在请求加入，说明我们的回应没有送达。通信只能单向通过。</string>
     <string name="np_no_answer">主机没有响应。\n\n可能是它没有收到，也可能是它的回应回不到你这里。如果你们连的是同一个 Wi-Fi，请检查两台设备是否在同一频段，以及路由器是否隔离了客户端。</string>
+    <string name="np_lobby_lockstep_far">远距离锁步：游戏每一帧都要等待对方，所以会卡顿而不是延迟。回滚模式更合适。</string>
+    <string name="np_lockstep_slow">此连接为 %1$d 毫秒。\n\n锁步模式每一帧都要等待对方，所以表现为卡顿而不是延迟。距离较远时回滚模式要好得多。</string>
     <string name="np_lan_silent_fallback">局域网没有响应：路由器可能启用了无线客户端隔离。\n\n正在通过公网地址重试…</string>
     <string name="np_msg_peer_disconnected">联机对战：对方已断开连接。正在恢复离线游戏……</string>
     <string name="np_msg_send_failed">联机对战：发送数据失败。\n错误：%1$s</string>

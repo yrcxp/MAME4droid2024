@@ -149,6 +149,11 @@ public static class RoomEndpoints
         var o = options.CurrentValue;
         if (!RequestValidation.IsValidProto(request.Proto)) return Fail("bad_proto");
 
+        /* Optional, but garbage is refused rather than quietly ignored: a
+         * client that believes it holds a token must not be told it does. */
+        if (request.Claim is not null && !RequestValidation.IsValidClaim(request.Claim))
+            return Fail("bad_claim");
+
         var observed = ClientAddress.Resolve(ctx);
 
         /* The client may not have run STUN yet, so its tuple is optional here;
@@ -159,7 +164,8 @@ public static class RoomEndpoints
 
         if (!validation.Ok) return Fail(validation.Error!);
 
-        var result = store.TryJoin(id, request.Proto, validation.Peer!, request.Pin, out var room);
+        var result = store.TryJoin(id, request.Proto, validation.Peer!, request.Pin,
+            request.Claim, out var room);
         switch (result)
         {
             case StoreResult.BadPin:
@@ -211,6 +217,11 @@ public static class RoomEndpoints
         var o = options.CurrentValue;
         if (!RequestValidation.IsValidProto(request.Proto)) return Fail("bad_proto");
 
+        /* Optional, but garbage is refused rather than quietly ignored: a
+         * client that believes it holds a token must not be told it does. */
+        if (request.Claim is not null && !RequestValidation.IsValidClaim(request.Claim))
+            return Fail("bad_claim");
+
         var observed = ClientAddress.Resolve(ctx);
         var validation = RequestValidation.ValidatePeer(
             request.Public, request.PublicAlt, request.Lan, request.Nat, request.Country,
@@ -218,7 +229,7 @@ public static class RoomEndpoints
 
         if (!validation.Ok) return Fail(validation.Error!);
 
-        var result = store.TryUpdatePeer(id, request.Proto, observed, validation.Peer!);
+        var result = store.TryUpdatePeer(id, request.Proto, request.Claim, validation.Peer!);
         return result switch
         {
             StoreResult.NotFound => Results.Json(new ErrorResponse("not_found"),

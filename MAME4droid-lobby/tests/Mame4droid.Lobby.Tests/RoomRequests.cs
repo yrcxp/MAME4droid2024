@@ -58,7 +58,8 @@ public static class RoomRequests
         bool sym = true,
         bool pp = false,
         string? country = "AR",
-        string? pin = null) => new
+        string? pin = null,
+        string? claim = null) => new
         {
             proto,
             app = "1.39.0",
@@ -67,7 +68,8 @@ public static class RoomRequests
             lan = lan ?? new[] { "192.168.1.50:2080" },
             nat = new { sym, pp, upnp = false },
             country,
-            pin
+            pin,
+            claim
         };
 }
 

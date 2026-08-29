@@ -124,14 +124,25 @@ public class LobbyClient {
         public boolean upnp;
         public boolean v6;
 
+        /* Whether sym was measured at all. The symmetric test is a second v4
+         * STUN query, so a device that only ever asked over IPv6 reports the
+         * initialised false and not a finding. Ours only: it never goes on the
+         * wire, and a peer's flags arrive with nothing to judge them by. */
+        public boolean symKnown = true;
+
         public Nat() {
         }
 
         public Nat(boolean sym, boolean pp, boolean upnp, boolean v6) {
+            this(sym, pp, upnp, v6, true);
+        }
+
+        public Nat(boolean sym, boolean pp, boolean upnp, boolean v6, boolean symKnown) {
             this.sym = sym;
             this.pp = pp;
             this.upnp = upnp;
             this.v6 = v6;
+            this.symKnown = symKnown;
         }
     }
 
@@ -391,7 +402,7 @@ public class LobbyClient {
      */
     public static JoinResult join(String base, String id, int proto, String app,
                                   String publicAddr, String publicAlt, List<String> lan,
-                                  Nat nat, String country, String pin) {
+                                  Nat nat, String country, String pin, String claim) {
         JoinResult out = new JoinResult();
         try {
             JSONObject body = new JSONObject();
@@ -403,6 +414,7 @@ public class LobbyClient {
             body.put("nat", writeNat(nat));
             if (country != null) body.put("country", country);
             if (pin != null) body.put("pin", pin);
+            if (claim != null) body.put("claim", claim);
 
             Http http = send(base, "/api/v1/rooms/" + enc(id) + "/join", "POST", body);
             out.status = http.status;
@@ -423,7 +435,7 @@ public class LobbyClient {
      */
     public static Response updatePeer(String base, String id, int proto, String app,
                                       String publicAddr, String publicAlt, List<String> lan,
-                                      Nat nat, String country) {
+                                      Nat nat, String country, String claim) {
         Response out = new Response();
         try {
             JSONObject body = new JSONObject();
@@ -434,6 +446,7 @@ public class LobbyClient {
             body.put("lan", new JSONArray(lan));
             body.put("nat", writeNat(nat));
             if (country != null) body.put("country", country);
+            if (claim != null) body.put("claim", claim);
 
             out.status = send(base, "/api/v1/rooms/" + enc(id) + "/peer", "POST", body).status;
         } catch (Exception e) {

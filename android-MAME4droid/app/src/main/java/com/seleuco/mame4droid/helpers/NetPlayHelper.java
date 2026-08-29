@@ -167,6 +167,17 @@ public class NetPlayHelper {
      * within the board's own deadline. */
     private static final long LAN_SILENCE_MS = 10000;
 
+    /* Lockstep's automatic delay stops at ten internal ticks -- five frames,
+     * about 83ms -- so past this the buffer is spent and the emulation waits
+     * on packets instead of lagging behind them. */
+    private static final int LOCKSTEP_CEILING_MS = 200;
+    /* Ten seconds of it, so a Wi-Fi spike never passes for a verdict. */
+    private static final int LOCKSTEP_SLOW_SAMPLES = 10;
+
+    /* Said once per session: the mode is fixed before the session begins, so
+     * repeating it would only take the screen away from the game. */
+    private volatile boolean advisedRollback = false;
+
     private volatile boolean canceled = false;
 
     /* Host waiting-dialog text is composed by two racing workers (netplayInit
@@ -1299,6 +1310,27 @@ public class NetPlayHelper {
         return getAllLocalIPv4();
     }
 
+    /* Names the joining attempt rather than the address it came from: two
+     * phones on one router look like one caller to the server, and a retry
+     * must not be mistaken for the other one barging in. Kept here and not in
+     * the board dialog because a retry is a fresh trip through the board. */
+    private String claimRoom = null;
+    private String claimToken = null;
+
+    /** The token for this room, minted once and reused while we keep trying it. */
+    synchronized String claimTokenFor(String roomId) {
+        if (roomId == null) return null;
+        if (!roomId.equals(claimRoom) || claimToken == null) {
+            claimRoom = roomId;
+            claimToken = java.util.UUID.randomUUID().toString().replace("-", "");
+        }
+        return claimToken;
+    }
+
+    /** The token this room was claimed with, or null if it was another room. */
+    private synchronized String heldClaimToken(String roomId) {
+        return (roomId != null && roomId.equals(claimRoom)) ? claimToken : null;
+    }
 
     /** The peer LAN address most likely reachable: the one on our own /24. */
     String pickLan(String[] lan) {
@@ -1446,6 +1478,26 @@ public class NetPlayHelper {
     }
 
     /**
+     * The gate said no before the room ever went up. There is nothing to
+     * withdraw and closeLobby has no session to report through, so without
+     * this the commonest refusal of all leaves no trace at all -- which is
+     * every game whose savestate cannot fit the ring.
+     *
+     * Same outcome as a room that retires itself: the question both answer is
+     * which games cannot keep the drop-in promise, and one counter beats two.
+     */
+    private void reportDropInRefused() {
+        if (!LobbySession.isUsable(mm)) return;
+
+        String info = Emulator.netplayGetPublicAddr();
+        new LobbySession(mm).report(Emulator.getValueStr(Emulator.GAME_SELECTED),
+                "host", "withdrawn", LobbySession.natOf(info, UpnpHelper.isMapped()),
+                null, null, 0, null, rollbackMode ? 1 : 0,
+                mm.getPrefsHelper().getNetplayDelayValue(), 0, 0, 0, 0, 0,
+                false, null, true);
+    }
+
+    /**
      * Close the waiting dialogs and let the host play. Nothing is torn down:
      * the worker thread keeps the room alive and no session has begun, so the
      * machine runs as it does with netplay off. Before publishing, because
@@ -1500,7 +1552,10 @@ public class NetPlayHelper {
 
         new Thread(new Runnable() {
             public void run() {
-                closeLobby("cancelled", 0);
+                /* Not "cancelled": nobody cancelled anything. This is the room
+                 * refusing itself, and counting it with the taps of a person
+                 * hid how often a game cannot keep the drop-in promise. */
+                closeLobby("withdrawn", 0);
             }
         }).start();
 
@@ -1622,6 +1677,7 @@ public class NetPlayHelper {
             sessionStartMs = System.currentTimeMillis();
             endedCleanly = false;
             dropInHandoverAt = 0;
+            advisedRollback = false;
             playedGame = game;
             playedRole = "client";
             playedPath = joinSameSite ? "lan" : "punch";
@@ -1643,6 +1699,18 @@ public class NetPlayHelper {
     }
 
     /**
+    /** Why a lockstep game at this distance stutters. Not urgent: it explains
+     *  what is already happening, so it can wait its turn behind live status. */
+    private void warnLockstepTooSlow(final int rtt) {
+        mm.runOnUiThread(new Runnable() {
+            public void run() {
+                new WarnWidget.WarnWidgetHelper(mm,
+                        mm.getString(R.string.np_lockstep_slow, rtt), 6, Color.YELLOW, false);
+            }
+        });
+    }
+
+    /**
      * Keeps the last live latency reading of a running session. Reading it at
      * the end is too late: the native handle is already torn down and every
      * counter reads zero, which is why the joining side reported nothing at
@@ -1654,6 +1722,7 @@ public class NetPlayHelper {
 
         new Thread(new Runnable() {
             public void run() {
+                int slowSamples = 0;
                 while (samplerRunning && Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 1) {
                     int rtt = Emulator.getValue(Emulator.NETPLAY_RTT);
                     if (rtt > 0) {
@@ -1661,6 +1730,20 @@ public class NetPlayHelper {
                         playedJitter = Emulator.getValue(Emulator.NETPLAY_JITTER);
                         playedRttMin = Emulator.getValue(Emulator.NETPLAY_RTT_MIN);
                         playedRttMax = Emulator.getValue(Emulator.NETPLAY_RTT_MAX);
+
+                        /* A stuttering lockstep game reads as a broken app.
+                         * Naming the cause is worth one notice, even though
+                         * acting on it means picking rollback next time. */
+                        if (playedMode == 0 && !advisedRollback) {
+                            if (rtt > LOCKSTEP_CEILING_MS) {
+                                if (++slowSamples >= LOCKSTEP_SLOW_SAMPLES) {
+                                    advisedRollback = true;
+                                    warnLockstepTooSlow(rtt);
+                                }
+                            } else {
+                                slowSamples = 0;
+                            }
+                        }
                     }
                     try {
                         Thread.sleep(1000);
@@ -1791,7 +1874,8 @@ public class NetPlayHelper {
         LobbyClient.Response result = LobbyClient.updatePeer(base, room,
                 Emulator.netplayGetProtocolVersion(), LobbySession.appVersion(mm),
                 tuples[0], tuples[1], lan,
-                LobbySession.natOf(info, UpnpHelper.isMapped()), LobbySession.country(mm));
+                LobbySession.natOf(info, UpnpHelper.isMapped()), LobbySession.country(mm),
+                heldClaimToken(room));
 
         /* If this does not land, the host punches at whatever guess we sent
          * when we claimed the room -- worth seeing in a field trace. */
@@ -1814,15 +1898,20 @@ public class NetPlayHelper {
         }
         if (board == null) return;
 
-        /* On a fast pairing the peer's JOIN arrives before our next poll does,
-         * so we would report the best case of all -- an instant LAN match --
-         * with no idea who joined or how. One last ask before withdrawing. */
-        if (peer == null && "connected".equals(outcome)) {
+        /* Read before the poll below can lose it: a recycled room answers 404
+         * and clears the id, and that id is what ties this report to the other
+         * player's. */
+        String roomId = board.getRoomId();
+
+        /* Always, not only when we hold nobody: a JOIN can land between two
+         * heartbeats, and what we hold is then whoever claimed the room before
+         * and walked away -- one host played with the phone next door and was
+         * told its opponent was in China. The server knows who holds it now. */
+        if ("connected".equals(outcome)) {
             LobbyClient.Endpoint late = board.poll();
             if (late != null) peer = late;
         }
 
-        String roomId = board.getRoomId();
         board.close();
 
         /* Which route we ended up taking is the interesting half: it is what
@@ -1845,6 +1934,7 @@ public class NetPlayHelper {
             sessionStartMs = System.currentTimeMillis();
             endedCleanly = false;
             dropInHandoverAt = 0;
+            advisedRollback = false;
             playedGame = Emulator.getValueStr(Emulator.GAME_SELECTED);
             playedRole = "host";
             playedPath = path;
@@ -2310,6 +2400,7 @@ public class NetPlayHelper {
                         if (!dropInFitsRollback()) {
                             dropInLive = false;
                             canceled = true;
+                            reportDropInRefused();
                         }
                     }
 

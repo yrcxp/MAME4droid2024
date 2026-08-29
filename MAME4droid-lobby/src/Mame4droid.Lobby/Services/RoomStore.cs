@@ -18,7 +18,6 @@
  */
 
 using System.Collections.Concurrent;
-using System.Net;
 using Mame4droid.Lobby.Configuration;
 using Mame4droid.Lobby.Model;
 using Microsoft.Extensions.Caching.Memory;
@@ -85,7 +84,8 @@ public sealed class RoomStore
     /// Claim transition. The state test and the write happen under the room's
     /// own lock, so of two clients racing for the same room exactly one gets Ok
     /// and the other a clean AlreadyClaimed.
-    public StoreResult TryJoin(string id, int proto, PeerEntry peer, string? pin, out Room? room)
+    public StoreResult TryJoin(string id, int proto, PeerEntry peer, string? pin,
+                               string? claim, out Room? room)
     {
         room = Get(id);
         if (room is null) return StoreResult.NotFound;
@@ -113,10 +113,17 @@ public sealed class RoomStore
                 }
             }
 
-            if (room.State != RoomState.Open) return StoreResult.AlreadyClaimed;
+            /* Re-claiming what we already hold is a retry, not a race: the
+             * joiner gave up waiting and tapped again while its own claim was
+             * still standing, and answering "someone got there first" named a
+             * stranger for its own reservation. Falling through refreshes the
+             * claim and hands the host back, the way poll repeats its answer. */
+            if (room.State != RoomState.Open && !SameClaimant(room, claim, peer))
+                return StoreResult.AlreadyClaimed;
 
             room.State = RoomState.Claimed;
             room.Peer = peer;
+            room.ClaimToken = claim;
             room.ClaimedUntil = now.AddSeconds(o.ClaimedTtlSeconds);
 
             /* Keep the room alive at least as long as the claim: the host must
@@ -130,10 +137,18 @@ public sealed class RoomStore
         return StoreResult.Ok;
     }
 
+    /// Is this the caller that already holds the room? A token names the
+    /// attempt, which is the only thing that separates two phones behind one
+    /// router; a claimant that sent none is an older build, and for those the
+    /// address it came from is still the best answer available.
+    private static bool SameClaimant(Room room, string? claim, PeerEntry peer)
+        => string.IsNullOrEmpty(room.ClaimToken)
+            ? ClientAddress.SameSite(room.Peer?.ObservedIp, peer.ObservedIp)
+            : !string.IsNullOrEmpty(claim) && Ids.TokenEquals(room.ClaimToken, claim);
+
     /// Replaces the claimant's tuple with the one it learned after its own STUN
-    /// pass. Only the address that claimed the room may do this, and only while
-    /// the claim stands.
-    public StoreResult TryUpdatePeer(string id, int proto, IPAddress caller, PeerEntry peer)
+    /// pass. Only whoever holds the claim may do this, and only while it stands.
+    public StoreResult TryUpdatePeer(string id, int proto, string? claim, PeerEntry peer)
     {
         var room = Get(id);
         if (room is null) return StoreResult.NotFound;
@@ -142,7 +157,7 @@ public sealed class RoomStore
         lock (room.Sync)
         {
             if (room.State != RoomState.Claimed || room.Peer is null) return StoreResult.NotFound;
-            if (!ClientAddress.SameSite(room.Peer.ObservedIp, caller)) return StoreResult.Forbidden;
+            if (!SameClaimant(room, claim, peer)) return StoreResult.Forbidden;
 
             room.Peer = peer;
         }
@@ -218,6 +233,9 @@ public sealed class RoomStore
             {
                 room.State = RoomState.Open;
                 room.Peer = null;
+                /* With the claim, or a token from a lapsed attempt could take a
+                 * room somebody else has claimed since. */
+                room.ClaimToken = null;
                 reverted = true;
             }
         }

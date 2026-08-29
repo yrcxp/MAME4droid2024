@@ -294,6 +294,87 @@ public class PairingTests
     }
 
     [Fact]
+    public async Task A_claim_token_lets_the_same_attempt_retry_from_a_new_address()
+    {
+        using var factory = new LobbyFactory();
+        var created = await (await factory.CallerFrom("88.1.2.3")
+            .PostJson("/api/v1/rooms", RoomRequests.Create("88.1.2.3:2080"))).Read<CreateResult>();
+
+        await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join",
+                RoomRequests.Join("77.4.5.6:41320", claim: "abcdef0123456789"));
+
+        /* A mobile that changed address mid-attempt is still the same attempt:
+         * the token says so where the address no longer can. */
+        var retry = await factory.CallerFrom("77.9.9.9")
+            .PostJson($"/api/v1/rooms/{created.Id}/join",
+                RoomRequests.Join("77.9.9.9:41320", claim: "abcdef0123456789"));
+
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_token_keeps_the_phone_next_door_from_taking_the_claim()
+    {
+        using var factory = new LobbyFactory();
+        var created = await (await factory.CallerFrom("88.1.2.3")
+            .PostJson("/api/v1/rooms", RoomRequests.Create("88.1.2.3:2080"))).Read<CreateResult>();
+
+        await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join",
+                RoomRequests.Join("77.4.5.6:41320", claim: "abcdef0123456789"));
+
+        /* Two phones in one house share a public address, so the site test
+         * cannot separate them. The second holds no token and must be told the
+         * room is taken rather than quietly stealing it. */
+        var neighbour = await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join",
+                RoomRequests.Join("77.4.5.6:41999", claim: "999999999999beef"));
+
+        Assert.Equal(HttpStatusCode.Conflict, neighbour.StatusCode);
+        Assert.Equal("already_claimed", (await neighbour.Read<ErrorResult>()).Error);
+    }
+
+    [Fact]
+    public async Task A_malformed_claim_is_refused()
+    {
+        using var factory = new LobbyFactory();
+        var created = await (await factory.CallerFrom("88.1.2.3")
+            .PostJson("/api/v1/rooms", RoomRequests.Create("88.1.2.3:2080"))).Read<CreateResult>();
+
+        var response = await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join",
+                RoomRequests.Join("77.4.5.6:41320", claim: "no"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("bad_claim", (await response.Read<ErrorResult>()).Error);
+    }
+
+    [Fact]
+    public async Task The_same_client_may_claim_a_room_it_already_holds()
+    {
+        using var factory = new LobbyFactory();
+        var created = await (await factory.CallerFrom("88.1.2.3")
+            .PostJson("/api/v1/rooms", RoomRequests.Create("88.1.2.3:2080"))).Read<CreateResult>();
+
+        await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join", RoomRequests.Join("77.4.5.6:41320"));
+
+        /* The punch failed and the joiner tapped again. Its own claim is still
+         * standing, and being told a stranger took the room is both wrong and
+         * the end of the road: the retry has to work. */
+        var retry = await factory.CallerFrom("77.4.5.6")
+            .PostJson($"/api/v1/rooms/{created.Id}/join", RoomRequests.Join("77.4.5.6:41321"));
+
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+
+        /* And the host comes back with it, or the second attempt would have
+         * nothing to dial. */
+        var answer = await retry.Read<JoinResult>();
+        Assert.Equal("88.1.2.3:2080", answer.Host.Public);
+    }
+
+    [Fact]
     public async Task Second_client_to_a_room_gets_a_clean_conflict()
     {
         using var factory = new LobbyFactory();

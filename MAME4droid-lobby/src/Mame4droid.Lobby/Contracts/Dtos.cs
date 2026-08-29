@@ -104,7 +104,12 @@ public sealed record JoinRequest(
     NatDto? Nat,
     string? Country,
     /* Required by a private room, ignored by an open one. */
-    string? Pin = null);
+    string? Pin = null,
+    /* Names the joining attempt rather than the address it came from, which is
+     * the only way to tell two phones behind one router apart when one retries.
+     * Minted by the client and repeated on every try at the same room. Older
+     * builds send none, and those are still judged by address. */
+    string? Claim = null);
 
 /// SameSite means both sides reached the lobby from the same public IP, so the
 /// LAN addresses are the ones to use. It is the server-side equivalent of the

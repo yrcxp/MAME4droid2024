@@ -32,9 +32,12 @@ public sealed class TelemetrySink
 {
     /* "connected" says a pairing completed; "played" and "dropped" close it
      * afterwards with how long it lasted, which is what tells a working match
-     * from a handshake that fell apart seconds later. */
+     * from a handshake that fell apart seconds later. "withdrawn" is the room
+     * taking itself off the board -- the drop-in gate refusing a savestate the
+     * rollback ring cannot hold -- as against "cancelled", which is a person. */
     private static readonly string[] Outcomes =
-        { "connected", "played", "dropped", "timeout", "rom_missing", "build_mismatch", "cancelled" };
+        { "connected", "played", "dropped", "timeout", "rom_missing", "build_mismatch",
+          "cancelled", "withdrawn" };
 
     /* "v6" is its own path: a pair that dialled an IPv6 literal never punched
      * through anything, and counting those as punches flatters the rate. */

@@ -178,6 +178,8 @@
     <string name="np_msg_connection_lost">NetPlay: conexão perdida. Retornando ao jogo offline...</string>
     <string name="np_msg_no_ack">NetPlay: o outro jogador continua a pedir para entrar, ou seja, a nossa resposta não lhe chega. O tráfego só passa num sentido.</string>
     <string name="np_no_answer">O anfitrião não responde.\n\nOu não lhe chegou nada, ou as respostas dele não voltam até ti. Se estão na mesma wi-fi, verifica se os dois aparelhos estão na mesma banda e se o router não está a isolar os clientes.</string>
+    <string name="np_lobby_lockstep_far">Lockstep à distância: o jogo espera por cada quadro, então engasga em vez de atrasar. Rollback lida melhor.</string>
+    <string name="np_lockstep_slow">Esta conexão mede %1$d ms.\n\nLockstep espera por cada quadro, então engasga em vez de ficar atrasado. Rollback lida muito melhor com a distância.</string>
     <string name="np_lan_silent_fallback">A rede local não responde: o roteador pode estar isolando os clientes sem fio.\n\nTentando novamente através do endereço público…</string>
     <string name="np_msg_peer_disconnected">NetPlay: o outro jogador se desconectou. Retornando ao jogo offline...</string>
     <string name="np_msg_send_failed">NetPlay: falha ao enviar dados.\nErro: %1$s</string>

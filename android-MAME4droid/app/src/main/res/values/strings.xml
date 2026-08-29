@@ -190,6 +190,8 @@
     <string name="np_msg_connection_lost">NetPlay: Connection lost. Resuming offline play...</string>
     <string name="np_msg_no_ack">NetPlay: the other player keeps asking to join, so our answer is not reaching them. Traffic is only getting through one way.</string>
     <string name="np_no_answer">No answer from the host.\n\nIt received nothing, or its replies are not getting back to you. If you are both on the same Wi-Fi, check that the two devices are on the same band and that the router is not isolating clients.</string>
+    <string name="np_lobby_lockstep_far">Lockstep at a distance: the game waits for every frame, so it stutters instead of lagging. Rollback copes better.</string>
+    <string name="np_lockstep_slow">This connection measures %1$d ms.\n\nLockstep waits for every frame, so it stutters rather than lagging behind. Rollback handles distance much better.</string>
     <string name="np_lan_silent_fallback">No answer on the local network — the router may be isolating its wireless clients.\n\nRetrying through the public address…</string>
     <string name="np_msg_peer_disconnected">NetPlay: Peer disconnected. Resuming offline play...</string>
     <string name="np_msg_send_failed">NetPlay: Failed to send data.\nError: %1$s</string>

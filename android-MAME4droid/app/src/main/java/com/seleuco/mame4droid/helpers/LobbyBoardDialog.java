@@ -85,6 +85,8 @@ public class LobbyBoardDialog {
     private volatile String etag;
     private volatile int idleRounds;
     private volatile String mySite;
+    /* Our own country, kept from the sort so the rows can use it too. */
+    private volatile String myCountry;
     private volatile boolean configured = false;
 
     /* Parked while the app is in the background: the loop stays alive but
@@ -386,6 +388,7 @@ public class LobbyBoardDialog {
     private void sortByPromise(List<LobbyClient.Room> board) {
         final String home = (mySite != null) ? mySite : "";
         final String here = LobbySession.country(mm);
+        myCountry = here;
         final LobbyClient.Nat self = lastKnownNat();
 
         java.util.Collections.sort(board, new java.util.Comparator<LobbyClient.Room>() {
@@ -409,6 +412,14 @@ public class LobbyBoardDialog {
                 return Long.compare(a.since, b.since);
             }
         });
+    }
+
+    /** Two different countries: the only distance the board can see before
+     *  anybody connects, and every cross-border pairing measured so far has
+     *  been well past what lockstep can absorb. */
+    private boolean farAway(LobbyClient.Room room) {
+        String here = myCountry;
+        return here != null && room.country != null && !here.equals(room.country);
     }
 
     private boolean isLocal(LobbyClient.Room room, String home) {
@@ -526,6 +537,17 @@ public class LobbyBoardDialog {
             locked.setTextColor(Color.CYAN);
             locked.setText(mm.getString(R.string.np_lobby_private));
             row.addView(locked);
+        }
+
+        /* Lockstep waits for every frame and its buffer stops at five of them,
+         * so distance turns into stalling rather than into lag. Said before the
+         * tap, since the mode cannot be changed once the session is up. */
+        if (room.mode == 0 && playable && !local && farAway(room)) {
+            TextView slow = new TextView(mm);
+            slow.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            slow.setTextColor(Color.YELLOW);
+            slow.setText(mm.getString(R.string.np_lobby_lockstep_far));
+            row.addView(slow);
         }
 
         if (room.plugins) {
@@ -670,7 +692,7 @@ public class LobbyBoardDialog {
                 LobbyClient.JoinResult result = LobbyClient.join(base, room.id, proto,
                         LobbySession.appVersion(mm), mine, null, lan,
                         LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped()),
-                        LobbySession.country(mm), pin);
+                        LobbySession.country(mm), pin, netplay.claimTokenFor(room.id));
 
                 final String target = (result.host != null) ? pickAddress(result.host) : null;
                 /* When the LAN side is the pick, keep the public tuple at
