@@ -71,7 +71,7 @@ public sealed class RoomListCache
         room.Mode,
         room.Delay,
         room.Plugins,
-        new NatDto(room.Host.Nat.Sym, room.Host.Nat.Pp, room.Host.Nat.Upnp, room.Host.Nat.V6),
+        new NatDto(room.Host.Nat.Sym, room.Host.Nat.Pp, room.Host.Nat.Upnp, room.Host.Nat.V6, room.Host.Nat.Mob),
         room.Host.Verified,
         room.Host.Lan.Length > 0,
         room.App,

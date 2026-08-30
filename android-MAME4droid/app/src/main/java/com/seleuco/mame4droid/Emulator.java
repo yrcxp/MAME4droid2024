@@ -1325,9 +1325,14 @@ public class Emulator {
 					 * STATS push and the disconnect notification can both be
 					 * in-flight around the same moment, so a stale push must
 					 * not resurrect the overlay after it's already hidden. */
-					if (mm.getPrefsHelper().isNetplayStatsEnabled() && getValue(NETPLAY_HAS_CONNECTION) == 1)
-						com.seleuco.mame4droid.widgets.StatsWidget.update(mm, msg.substring(6));
-					else
+					if (mm.getPrefsHelper().isNetplayStatsEnabled() && getValue(NETPLAY_HAS_CONNECTION) == 1) {
+						/* Where the two players are, worked out here rather than
+						 * natively: the countries come from the board, and the
+						 * native side knows nothing about it. */
+						String flags = (mm.getNetPlay() != null)
+								? mm.getNetPlay().getLiveFlagPair() : null;
+						com.seleuco.mame4droid.widgets.StatsWidget.update(mm, msg.substring(6), flags);
+					} else
 						com.seleuco.mame4droid.widgets.StatsWidget.hide(mm);
 				} else {
 					/* Unprefixed native warnings (disconnect, hangup, socket

@@ -104,6 +104,11 @@
     <string name="np_lobby_title">Salas públicas</string>
     <string name="np_lobby_loading">Buscando partidas…</string>
     <string name="np_lobby_empty">No hay partidas ahora mismo. Crea una y los demás la verán aquí.</string>
+    <string name="np_lobby_stats_rooms">%1$d partidas creadas aquí en los últimos %2$d días.</string>
+    <string name="np_lobby_stats_played">%1$d de ellas acabaron en partida de verdad.</string>
+    <string name="np_lobby_stats_games">Los más buscados: %1$s</string>
+    <string name="np_lobby_stats_countries">Jugadores de %1$d países</string>
+    <string name="np_lobby_stats_suggest">Crea una partida con entrada en caliente de %1$s y alguien podrá unirse sobre la marcha.</string>
     <string name="np_lobby_count">%1$d partida(s) disponible(s)</string>
     <string name="np_lobby_refresh">Actualizar</string>
     <string name="np_lobby_offline">Tablón inaccesible. Puedes compartir la IP a mano igualmente.</string>
@@ -178,6 +183,12 @@
     <string name="np_msg_connection_lost">NetPlay: conexión perdida. Volviendo al juego sin conexión...</string>
     <string name="np_msg_no_ack">NetPlay: el otro jugador sigue pidiendo entrar, así que nuestra respuesta no le llega. El tráfico solo pasa en un sentido.</string>
     <string name="np_no_answer">El host no responde.\n\nO no le ha llegado nada, o sus respuestas no vuelven hasta ti. Si estáis en la misma wifi, mira que los dos aparatos estén en la misma banda y que el router no aísle a los clientes.</string>
+    <string name="np_host_carrier_nat">Tu router ha abierto el puerto, pero tu operador tiene otro NAT por encima y no se puede llegar hasta él. Unirte a una sala del tablón sí funciona.</string>
+    <string name="np_host_cannot_host">No puedes hospedar desde datos móviles con IPv4: tu operador da una dirección distinta a cada destino y no hay router en el que abrir un puerto, así que nadie podría llegar a tu sala.\n\nPor IPv6 no hay NAT que atravesar y hospedar sí funciona. Esta conexión no tiene IPv6: o tu operador no te la da, o el protocolo de red no está en Auto en los ajustes de netplay.\n\nUnirte a una sala del tablón sí funciona, y por WiFi también puedes hospedar.</string>
+    <string name="np_host_cannot_host_v6">No puedes hospedar desde datos móviles con IPv4: tu operador da una dirección distinta a cada destino y no hay router en el que abrir un puerto.\n\nPero esta conexión sí tiene IPv6, y por IPv6 no hay NAT que atravesar. Pon el protocolo de red en Auto en los ajustes de netplay y podrás hospedar.</string>
+    <string name="np_host_v6_only">Tu IPv4 no acepta conexiones entrantes, así que solo podrán entrar jugadores que tengan IPv6.</string>
+    <string name="np_host_unreachable">Tu conexión da una dirección distinta a cada destino, así que nadie podrá llegar a tu sala. Se arregla abriendo el puerto en tu router; unirte a una sala del tablón funciona igual.</string>
+    <string name="np_host_unreachable_mobile">Los datos móviles no aceptan conexiones entrantes, así que nadie podrá llegar a tu sala. Unirte a una sala del tablón sí funciona.</string>
     <string name="np_lobby_lockstep_far">Lockstep a distancia: el juego espera cada frame, así que da tirones en vez de retraso. Rollback lo lleva mejor.</string>
     <string name="np_lockstep_slow">Esta conexión mide %1$d ms.\n\nLockstep espera cada frame, así que da tirones en vez de ir retrasado. Rollback lleva mucho mejor la distancia.</string>
     <string name="np_lan_silent_fallback">La red local no responde: puede que el router esté aislando a sus clientes inalámbricos.\n\nProbando de nuevo a través de la dirección pública…</string>

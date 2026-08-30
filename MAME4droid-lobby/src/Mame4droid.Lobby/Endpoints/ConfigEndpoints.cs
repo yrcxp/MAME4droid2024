@@ -34,10 +34,12 @@ public static class ConfigEndpoints
     {
         routes.MapGet("/api/v1/config", (
                 IOptionsMonitor<LobbyOptions> options,
+                StatsStore stats,
                 [FromQuery(Name = "proto")] int? proto,
                 [FromQuery(Name = "app")] string? appVersion) =>
             {
                 var o = options.CurrentValue;
+                var recent = stats.Snapshot();
                 return Results.Json(new ConfigResponse(
                     o.Enabled,
                     o.PollSeconds,
@@ -48,7 +50,15 @@ public static class ConfigEndpoints
                     o.Notice,
                     /* Advice only. A build older than minApp is still served:
                      * refusing it would turn a soft nudge into an outage. */
-                    AppVersion.IsOlder(appVersion, o.MinApp)));
+                    AppVersion.IsOlder(appVersion, o.MinApp),
+                    /* Omitted entirely while nothing has cleared its threshold,
+                     * so an old build sees the field it always saw and a new
+                     * one has nothing to draw rather than a row of zeros. */
+                    recent.Interesting
+                        ? new StatsDto(recent.Since, recent.Rooms, recent.Played,
+                                       recent.Games.ToArray(), recent.Countries,
+                                       recent.Flags.ToArray())
+                        : null));
             })
             .RequireRateLimiting(RateLimitPolicies.Config)
             .NoStore();

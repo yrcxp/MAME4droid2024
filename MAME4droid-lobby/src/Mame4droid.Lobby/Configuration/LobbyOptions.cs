@@ -83,6 +83,31 @@ public sealed class LobbyOptions
     /* Sliding window used for the "N players browsing" line in the host dialog. */
     public int ViewerWindowSeconds { get; set; } = 30;
 
+    /* The showcase an empty board draws. A rolling window, not a running total,
+     * so it describes the board as it is now. Wide while the board is young;
+     * narrow it once a single week stands up on its own. */
+    public int StatsWindowDays { get; set; } = 30;
+    public int StatsTopGames { get; set; } = 3;
+    public int StatsTopCountries { get; set; } = 3;
+
+    /* How often the counters reach the disk. Everything is served from memory,
+     * so this only trades how much a restart forgets against how much work the
+     * instance does while otherwise idle. */
+    public int StatsSaveSeconds { get; set; } = 300;
+
+    /* Counted and kept but not sent: beside the rooms figure it reads as a gulf,
+     * because a room counts when it opens and a game only once two people
+     * finished one. Turn on when the two can stand side by side. */
+    public bool StatsShowPlayed { get; set; } = false;
+
+    /* Nothing under these is shown at all. A figure that reads as small does
+     * the opposite of what the showcase is for, so "1 country" and "3 rooms"
+     * are better left unsaid than said honestly. */
+    public int StatsMinRooms { get; set; } = 10;
+    public int StatsMinPlayed { get; set; } = 3;
+    public int StatsMinCountries { get; set; } = 5;
+    public int StatsMinGames { get; set; } = 3;
+
     public RateLimitOptions RateLimits { get; set; } = new();
 }
 

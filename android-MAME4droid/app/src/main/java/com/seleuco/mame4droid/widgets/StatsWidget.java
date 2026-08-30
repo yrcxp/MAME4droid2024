@@ -45,6 +45,9 @@
 package com.seleuco.mame4droid.widgets;
 
 import android.graphics.Color;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -68,12 +71,15 @@ public class StatsWidget {
 
 	private static TextView textView = null;
 
-	/* payload = "<COLOR>:<text>", COLOR one of GREEN/YELLOW/RED. */
-	public static void update(final MAME4droid mm, String payload) {
+	/* payload = "<COLOR>:<text>", COLOR one of GREEN/YELLOW/RED. flags is the
+	 * "here-there" pair drawn ahead of it, or null when unknown. Passed apart,
+	 * not prepended: everything up to the first colon is read as the colour. */
+	public static void update(final MAME4droid mm, String payload, String flags) {
 		int sep = payload.indexOf(':');
 		if (sep < 0) return;
 		final String colorName = payload.substring(0, sep);
-		final String text = payload.substring(sep + 1);
+		final String body = payload.substring(sep + 1);
+		final String text = (flags != null) ? flags + " | " + body : body;
 		final int color;
 		if ("RED".equals(colorName))
 			color = Color.RED;
@@ -107,16 +113,57 @@ public class StatsWidget {
 						int shortEdge = Math.min(dm.widthPixels, dm.heightPixels);
 						float textPx = Math.max(14f, Math.min(44f, shortEdge * 0.025f));
 						textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx);
+						/* The line is one row of text over the game: the padding the
+						 * font asks for on top of that is space taken from the screen
+						 * for nothing, and it is what a tall glyph grows. */
+						textView.setIncludeFontPadding(false);
 						textView.setBackgroundColor(Color.TRANSPARENT);
 						textView.setShadowLayer(3, 1, 1, Color.BLACK);
 
 						frame.addView(textView);
 					}
 					textView.setTextColor(color);
-					textView.setText(text);
+					textView.setText(shrinkFlags(text));
 				} catch (Throwable ignored) {}
 			}
 		});
+	}
+
+	/* A flag is drawn from the system emoji font, whose glyphs are taller than
+	 * the digits beside them: left alone it grows the line box and reads as
+	 * oversized next to the text. Scaled to sit at the height of the line. */
+	private static final float FLAG_SCALE = 0.8f;
+
+	/**
+	 * The same text with any flag scaled down. One span covers the whole pair
+	 * of regional indicators: splitting them breaks what the font shapes into
+	 * a flag, leaving two boxed letters instead.
+	 */
+	private static CharSequence shrinkFlags(String text) {
+		SpannableStringBuilder out = null;
+		int i = 0;
+
+		while (i < text.length()) {
+			int code = text.codePointAt(i);
+			if (code < 0x1F1E6 || code > 0x1F1FF) {
+				i += Character.charCount(code);
+				continue;
+			}
+
+			/* Walk the whole run of indicators, not just this one. */
+			int start = i;
+			while (i < text.length()) {
+				int next = text.codePointAt(i);
+				if (next < 0x1F1E6 || next > 0x1F1FF) break;
+				i += Character.charCount(next);
+			}
+
+			if (out == null) out = new SpannableStringBuilder(text);
+			out.setSpan(new RelativeSizeSpan(FLAG_SCALE), start, i,
+					Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+		}
+
+		return (out != null) ? out : text;
 	}
 
 	public static void hide(final MAME4droid mm) {

@@ -217,6 +217,10 @@ public class NetPlayHelper {
     private volatile int joinMode = 0;
     private volatile int joinDelay = 0;
     private volatile boolean joinSameSite = false;
+    /* The family this device actually dialled. Ground truth for the joiner:
+     * it is the one side that chose an address, so its report is what says
+     * whether a pairing used IPv6 at all. */
+    private volatile boolean joinDialedV6 = false;
     private volatile boolean joinLocked = false;
     private volatile String joinRoom = null;
     private volatile boolean joinFromBoard = false;
@@ -235,6 +239,10 @@ public class NetPlayHelper {
     private volatile boolean dropIn = false;
 
     private volatile boolean lobbyPrivate = false;
+    /* Whether the room went up with a router mapping. Latched at publish and
+     * not read live at the end: the teardown deletes the mapping before the
+     * report is built, so the host was denying a UPnP the peer had seen. */
+    private volatile boolean publishedWithUpnp = false;
     private volatile boolean samplerRunning = false;
     private volatile int publishRetrySeconds = 3;
     private volatile long publishWaitingSince = 0;
@@ -1176,6 +1184,73 @@ public class NetPlayHelper {
         return "\n\n" + mm.getString(R.string.np_drop_in_again);
     }
 
+    /**
+     * Why nobody will be able to join, when we can already tell: STUN has run
+     * and the router has been asked before the room goes up, so saying it here
+     * beats letting a quarter of an hour of waiting explain it.
+     *
+     * @return the line to add, or "" when hosting looks viable.
+     */
+    private String hostReachabilityWarning() {
+        String info = Emulator.netplayGetPublicAddr();
+        if (info == null || info.length() == 0) return "";
+
+        /* The forward landed on an address the world does not see us at: another
+         * NAT sits above the router, so the mapping is real and unreachable.
+         * Only meaningful against our v4 -- a v6 primary has no router NAT. */
+        String wan = UpnpHelper.getExternalIp();
+        String seen = publicIPv4Of(info);
+        if (wan != null && seen != null && !wan.equals(seen))
+            return mm.getString(R.string.np_host_carrier_nat);
+
+        /* A different address per destination and no forward to bypass it. sym
+         * is the IPv4 leg alone, so a v6 primary hosts fine and what is left to
+         * say is who cannot come. On mobile there is not even a router to ask. */
+        if (info.contains("sym=1") && !UpnpHelper.isMapped())
+            return info.startsWith("[")
+                    ? mm.getString(R.string.np_host_v6_only)
+                    : mm.getString(R.string.np_host_unreachable);
+
+        return "";
+    }
+
+    /**
+     * Hosting cannot work and no reachable setting changes it: an address per
+     * destination, no router to forward on, no IPv6 to sidestep the NAT. No
+     * symmetric host in the field logs was ever reached. Joining still works.
+     */
+    private boolean hostCannotHost() {
+        String info = Emulator.netplayGetPublicAddr();
+        return info != null && info.length() > 0
+                && info.contains("sym=1")
+                && !info.startsWith("[")
+                && !UpnpHelper.isMapped()
+                && LobbySession.isMobileOnly();
+    }
+
+    /**
+     * What to tell them. Over IPv6 there is no NAT at all, so the useful half
+     * is not "you cannot" but "here is how you can" -- and when only the
+     * protocol setting stands in the way, that is worth saying outright.
+     */
+    private String cannotHostMessage() {
+        boolean settingIsTheBlocker = mm.getPrefsHelper().getNetplayIpProtocol() == 0
+                && hasUsableIPv6();
+        return mm.getString(settingIsTheBlocker
+                ? R.string.np_host_cannot_host_v6 : R.string.np_host_cannot_host);
+    }
+
+    /** Our public IPv4 out of the STUN string, or null when we only have v6. */
+    private static String publicIPv4Of(String info) {
+        String[] tuples = LobbySession.publicTuples(info);
+        for (String tuple : tuples) {
+            if (tuple == null || tuple.startsWith("[")) continue;
+            String host = LobbySession.splitHostPort(tuple)[0];
+            if (isIPv4Address(host)) return host;
+        }
+        return null;
+    }
+
     /** Repaint the host waiting dialog from hostBaseMsg + upnpLine. */
     private void postHostMessage() {
         final String base = hostBaseMsg;
@@ -1183,7 +1258,12 @@ public class NetPlayHelper {
         /* extra starts with "\n"; the added "\n" makes the blank line
          * between the IP block and the UPnP/fallback status. */
         final String extra = (upnpLine != null) ? upnpLine : upnpFallbackHint;
+        /* First and not last: it is a verdict on whether any of the rest
+         * matters, and this dialog is long enough that anything below the
+         * fold is a message nobody reads. */
+        String warn = hostReachabilityWarning();
         String body = extra.isEmpty() ? base : base + "\n" + extra;
+        if (warn.length() > 0) body = warn + "\n\n" + body;
         /* Board status goes last: it is the newest information and the one
          * that changes while the dialog is up. The room's own code rides with
          * it so the host can read it out: "join the one called K7M2QP4A" is
@@ -1397,6 +1477,7 @@ public class NetPlayHelper {
 
         lobby = published ? board : null;
         lobbyPrivate = published && pin != null;
+        publishedWithUpnp = UpnpHelper.isMapped();
 
         /* How soon to try again, decided by who said no. A call that never
          * reached the lobby means the free instance is still waking, and those
@@ -1478,13 +1559,9 @@ public class NetPlayHelper {
     }
 
     /**
-     * The gate said no before the room ever went up. There is nothing to
-     * withdraw and closeLobby has no session to report through, so without
-     * this the commonest refusal of all leaves no trace at all -- which is
-     * every game whose savestate cannot fit the ring.
-     *
-     * Same outcome as a room that retires itself: the question both answer is
-     * which games cannot keep the drop-in promise, and one counter beats two.
+     * The gate said no before the room went up: nothing to withdraw, and no
+     * session for closeLobby to report through -- so without this the commonest
+     * refusal of all, a savestate too big for the ring, leaves no trace.
      */
     private void reportDropInRefused() {
         if (!LobbySession.isUsable(mm)) return;
@@ -1669,7 +1746,8 @@ public class NetPlayHelper {
                 ? joinGameName : Emulator.getValueStr(Emulator.GAME_SELECTED);
 
         new LobbySession(mm).report(game, "client",
-                outcome, self, joinPeerNat, LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped()), waitMs,
+                outcome, self, joinPeerNat,
+                LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped(), joinDialedV6), waitMs,
                 joinPeerCountry, joinMode, joinDelay, 0, 0, 0, 0, 0, joinLocked, joinRoom,
                 joinIsDropIn);
 
@@ -1827,6 +1905,34 @@ public class NetPlayHelper {
                 playMs, rtt, jitter, rttMin, rttMax, playedLocked, playedRoom, playedDropIn);
     }
 
+    /* Our own code asks the telephony service, and the stats overlay repaints
+     * every two seconds. It cannot change mid-session, so ask once. Empty
+     * means asked and not known, which is not worth asking about again. */
+    private volatile String homeCountry = null;
+
+    /**
+     * Here and there as a pair of flags, or null when nobody told us where the
+     * other player is. Tied to the live session because the peer's country
+     * outlives its game: a later manual match would wear the old flag.
+     */
+    public String getLiveFlagPair() {
+        if (sessionStartMs == 0) return null;
+
+        String there = playedPeerCountry;
+        if (there == null || there.length() != 2) return null;
+
+        if (homeCountry == null) {
+            String own = LobbySession.country(mm);
+            homeCountry = (own != null) ? own : "";
+        }
+
+        String far = LobbySession.flagOf(there);
+        if (far.length() == 0) far = there;
+
+        String near = LobbySession.flagOf(homeCountry);
+        return (near.length() == 0) ? far : near + "-" + far;
+    }
+
     /** Remembered between the board claiming a room and this device's STUN. */
     void setLobbyClaim(String base, String roomId, boolean playing, String game) {
         joinIsDropIn = playing;
@@ -1916,10 +2022,17 @@ public class NetPlayHelper {
 
         /* Which route we ended up taking is the interesting half: it is what
          * turns "punching works unless a side is symmetric" into a measurement. */
+        /* What the host would have dialled us on, or what it aimed at if a
+         * poll got that far: the host never chooses an address itself, so
+         * this is the closest it can honestly get. */
+        String aimed = (lobbyAimedAt != null) ? lobbyAimedAt
+                : (peer == null) ? null
+                : (peer.publicAddr != null) ? peer.publicAddr : peer.publicAlt;
         String path = (peer == null) ? null
-                : LobbySession.pathOf(peer.sameSite, UpnpHelper.isMapped());
+                : LobbySession.pathOf(peer.sameSite, publishedWithUpnp,
+                        LobbySession.isV6Tuple(aimed));
         board.report(Emulator.getValueStr(Emulator.GAME_SELECTED), "host", outcome,
-                LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped()),
+                LobbySession.natOf(Emulator.netplayGetPublicAddr(), publishedWithUpnp),
                 (peer != null) ? peer.nat : null, path, waitMs,
                 (peer != null) ? peer.country : null,
                 rollbackMode ? 1 : 0, mm.getPrefsHelper().getNetplayDelayValue(), 0,
@@ -1939,7 +2052,7 @@ public class NetPlayHelper {
             playedRole = "host";
             playedPath = path;
             playedPeerCountry = (peer != null) ? peer.country : null;
-            playedSelfNat = LobbySession.natOf(Emulator.netplayGetPublicAddr(), UpnpHelper.isMapped());
+            playedSelfNat = LobbySession.natOf(Emulator.netplayGetPublicAddr(), publishedWithUpnp);
             playedPeerNat = (peer != null) ? peer.nat : null;
             playedMode = rollbackMode ? 1 : 0;
             playedDelay = mm.getPrefsHelper().getNetplayDelayValue();
@@ -1979,7 +2092,11 @@ public class NetPlayHelper {
                 boolean mobileOnly = getMainLocalIPv4() == null;
                 int ipp = mm.getPrefsHelper().getNetplayIpProtocol();
                 if (info.contains("sym=1") && v4primary) {
-                    sb.append('\n').append(mm.getString(R.string.np_symmetric_nat));
+                    /* Only while a mapping might still rescue it: with none,
+                     * hostReachabilityWarning says this AND what to do about
+                     * it, and two wordings of one fact read as two problems. */
+                    if (UpnpHelper.isMapped())
+                        sb.append('\n').append(mm.getString(R.string.np_symmetric_nat));
                     /* On Wi-Fi v6 is uncertain -> suggest Auto (safe fallback). */
                     if (ipp == 0 && !mobileOnly)
                         sb.append('\n').append(mm.getString(R.string.np_try_auto));
@@ -2266,6 +2383,11 @@ public class NetPlayHelper {
                             }
                         }).start();
                     }
+                } else {
+                    /* No router here, so anything remembered from an earlier
+                     * network is a forward we do not have -- and it feeds the
+                     * board's forecast, the telemetry and the warning below. */
+                    UpnpHelper.forget();
                 }
                 if (ip == null && !hasAnyIPv4() && !hasUsableIPv6()) {
                     try {
@@ -2336,6 +2458,18 @@ public class NetPlayHelper {
                         mm.runOnUiThread(new Runnable() {
                             public void run() {
                                 showNetplayError(mm.getString(R.string.np_ipv6_none));
+                            }
+                        });
+                    }
+
+                    /* Same shape, one step further: not "this may fail" but
+                     * "nobody will ever arrive". Refused here so the room is
+                     * never published at all. */
+                    if (!canceled && hostCannotHost()) {
+                        canceled = true;
+                        mm.runOnUiThread(new Runnable() {
+                            public void run() {
+                                showNetplayError(cannotHostMessage());
                             }
                         });
                     }
@@ -2606,6 +2740,9 @@ public class NetPlayHelper {
         }
 
         final boolean inetMode = destV6 ? !isPrivateIPv6(destHost) : !isPrivateIPv4(destHost);
+        /* Recorded here because this is where the address was chosen; the
+         * report is built much later, by which time nothing else remembers. */
+        joinDialedV6 = destV6;
         final String addrShown = addr;
 
         Emulator.netplaySetDesyncDetectorEnabled(mm.getPrefsHelper().isNetplayDesyncDetectorEnabled() ? 1 : 0);
@@ -2790,6 +2927,7 @@ public class NetPlayHelper {
                                  * re-aim its punch at it. */
                                 correctLobbyTuple(claimBase, claimRoom, localPort);
                                 joinSameSite = false;
+                                joinDialedV6 = fbV6;
                                 deadlineStart = System.currentTimeMillis();
                                 mm.runOnUiThread(new Runnable() {
                                     public void run() {
@@ -2816,7 +2954,8 @@ public class NetPlayHelper {
                 /* Read before the report clears them: the connected notice
                  * below still has to say where the other player is. */
                 final String originCountry = joinPeerCountry;
-                final String originPath = LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped());
+                final String originPath = LobbySession.pathOf(joinSameSite,
+                        UpnpHelper.isMapped(), joinDialedV6);
                 /* Both ends report, or the numbers only ever describe hosts --
                  * and it is the joining side that feels a pairing fail. */
                 reportJoinOutcome(unanswered ? "timeout"

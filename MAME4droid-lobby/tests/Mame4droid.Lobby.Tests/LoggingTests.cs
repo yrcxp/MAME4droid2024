@@ -17,11 +17,13 @@
  * along with this program; if not, see <http://www.gnu.org/licenses>.
  */
 
+using Mame4droid.Lobby.Configuration;
 using Mame4droid.Lobby.Contracts;
 using Mame4droid.Lobby.Services;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Mame4droid.Lobby.Tests;
@@ -56,7 +58,7 @@ public class LoggingTests
     public void A_valid_report_is_written_with_every_field_that_matters()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         Assert.True(sink.Record(Report()));
 
@@ -69,8 +71,8 @@ public class LoggingTests
 
         /* The NAT pair is the whole point: it is what turns a pile of sessions
          * into "punching works unless a side is symmetric". */
-        Assert.Contains("self=sym0pp1up1v60", line);
-        Assert.Contains("peer=sym1pp0up0v60", line);
+        Assert.Contains("self=sym0pp1up1v60mob0", line);
+        Assert.Contains("peer=sym1pp0up0v60mob0", line);
         Assert.Contains("waitMs=4200", line);
     }
 
@@ -78,7 +80,7 @@ public class LoggingTests
     public void Both_halves_of_one_match_carry_the_same_tag()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         sink.Record(Report(role: "host", room: "K7M2QP4A"));
         sink.Record(Report(role: "client", room: "K7M2QP4A"));
@@ -97,7 +99,7 @@ public class LoggingTests
     public void A_report_from_outside_the_board_is_still_recorded()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         /* Sessions arranged by hand have no room, and losing them would bias
          * every rate towards the people who use the board. */
@@ -116,7 +118,7 @@ public class LoggingTests
     public void A_line_says_who_played_whom_and_in_which_mode()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         Assert.True(sink.Record(Report(mode: 1, delay: 2)));
 
@@ -137,7 +139,7 @@ public class LoggingTests
     public void Latency_is_averaged_per_route_so_the_log_answers_the_question()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         sink.Record(Report(outcome: "played", playMs: 600000, rttMs: 40, jitterMs: 5));
         sink.Record(Report(outcome: "played", playMs: 600000, rttMs: 60, jitterMs: 9));
@@ -155,7 +157,7 @@ public class LoggingTests
     public void The_range_says_whether_an_average_describes_the_session()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         sink.Record(Report(outcome: "played", rttMs: 95, jitterMs: 12,
             rttMinMs: 70, rttMaxMs: 180));
@@ -172,7 +174,7 @@ public class LoggingTests
     [Fact]
     public void A_session_that_reported_no_range_still_counts_as_itself()
     {
-        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>());
+        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>(), Stats());
 
         /* An older build sends no floor or ceiling; its average is still
          * evidence, and folding a zero in would invent a perfect link. */
@@ -184,7 +186,7 @@ public class LoggingTests
     [Fact]
     public void A_session_without_a_measurement_does_not_drag_the_average()
     {
-        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>());
+        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>(), Stats());
 
         sink.Record(Report(outcome: "played", rttMs: 80, jitterMs: 4));
 
@@ -198,7 +200,7 @@ public class LoggingTests
     [Fact]
     public void A_session_that_died_at_once_is_not_a_session_that_worked()
     {
-        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>());
+        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>(), Stats());
 
         Assert.True(sink.Record(Report(outcome: "connected")));
         Assert.True(sink.Record(Report(outcome: "played", playMs: 20 * 60 * 1000)));
@@ -213,14 +215,14 @@ public class LoggingTests
     [Fact]
     public void Repeated_outcomes_accumulate_so_a_success_rate_can_be_read_off()
     {
-        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>());
+        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>(), Stats());
 
         sink.Record(Report());
         sink.Record(Report());
         sink.Record(Report(outcome: "timeout"));
 
-        Assert.Equal(2, sink.Counters["connected|punch|sym0pp1up1v60|sym1pp0up0v60"]);
-        Assert.Equal(1, sink.Counters["timeout|punch|sym0pp1up1v60|sym1pp0up0v60"]);
+        Assert.Equal(2, sink.Counters["connected|punch|sym0pp1up1v60mob0|sym1pp0up0v60mob0"]);
+        Assert.Equal(1, sink.Counters["timeout|punch|sym0pp1up1v60mob0|sym1pp0up0v60mob0"]);
     }
 
 
@@ -228,7 +230,7 @@ public class LoggingTests
     public void A_pairing_that_went_over_IPv6_is_told_apart_from_one_that_punched()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         /* Two symmetric CGNAT phones connect fine when both have IPv6, since
          * that route has no NAT to punch through. Counting them beside the v4
@@ -238,15 +240,15 @@ public class LoggingTests
             new NatDto(true, false, false, true), new NatDto(true, false, false, true),
             "punch", 1200, "ES", "AR", 1, 0, 0, 0, 0, 0, 0, false, "K7M2QP4A"));
 
-        Assert.Contains("self=sym1pp0up0v61", Assert.Single(log.Messages));
-        Assert.Equal(1, sink.Counters["connected|punch|sym1pp0up0v61|sym1pp0up0v61"]);
+        Assert.Contains("self=sym1pp0up0v61mob0", Assert.Single(log.Messages));
+        Assert.Equal(1, sink.Counters["connected|punch|sym1pp0up0v61mob0|sym1pp0up0v61mob0"]);
     }
 
     [Fact]
     public void A_drop_in_session_is_counted_apart_from_a_normal_start()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         sink.Record(Report(outcome: "connected"));
         sink.Record(Report(outcome: "connected") with { DropIn = true });
@@ -266,7 +268,7 @@ public class LoggingTests
     [Fact]
     public void A_LAN_game_and_an_internet_one_are_never_averaged_together()
     {
-        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>());
+        var sink = new TelemetrySink(new RecordingLogger<TelemetrySink>(), Stats());
 
         sink.Record(Report(outcome: "played", path: "lan", rttMs: 8));
         sink.Record(Report(outcome: "played", path: "punch", rttMs: 90));
@@ -288,7 +290,7 @@ public class LoggingTests
         string outcome, string role, string path)
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         Assert.False(sink.Record(Report(outcome: outcome, role: role, path: path)));
         Assert.Empty(log.Messages);
@@ -298,7 +300,7 @@ public class LoggingTests
     public void An_unknown_path_still_records_the_outcome()
     {
         var log = new RecordingLogger<TelemetrySink>();
-        var sink = new TelemetrySink(log);
+        var sink = new TelemetrySink(log, Stats());
 
         /* A cancelled session never took a path; losing the outcome over that
          * would bias the very rate we are trying to measure. */
@@ -334,7 +336,7 @@ public class LoggingTests
             using (var serilog = configuration.CreateLogger())
             {
                 var factory = new Serilog.Extensions.Logging.SerilogLoggerFactory(serilog);
-                new TelemetrySink(factory.CreateLogger<TelemetrySink>()).Record(Report());
+                new TelemetrySink(factory.CreateLogger<TelemetrySink>(), Stats()).Record(Report());
                 factory.CreateLogger("Mame4droid.Lobby.Startup").LogWarning("port already in use");
             }
 
@@ -359,6 +361,14 @@ public class LoggingTests
 
     private static string ReadAll(string directory, string pattern)
         => string.Concat(Directory.GetFiles(directory, pattern).Select(File.ReadAllText));
+
+    /// The sink needs a stats store; these tests are about what it logs, not
+    /// about what it counts, so it is pointed at a file nothing will read.
+    private static StatsStore Stats()
+        => new(new FixedOptions<LobbyOptions>(new LobbyOptions()),
+               new RecordingLogger<StatsStore>(),
+               Path.Combine(Path.GetTempPath(),
+                            "m4d-stats-" + Guid.NewGuid().ToString("N") + ".txt"));
 
     private sealed class FakeEnvironment : IHostEnvironment
     {

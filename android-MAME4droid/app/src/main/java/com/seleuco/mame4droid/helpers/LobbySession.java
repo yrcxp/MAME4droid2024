@@ -306,26 +306,30 @@ public class LobbySession {
         }
         if (hostPort[0] == null || hostPort[0].length() == 0) return false;
 
-        /* An IPv6 literal is the only thing here that carries colons, and the
-         * address we actually dialled is the only honest answer to "did this
-         * go over v6": the peer's flags on the board are from publish time. */
-        s_aimedV6 = hostPort[0].indexOf(':') >= 0;
-
         Emulator.netplaySetPunchAddr(hostPort[0], port);
         if (LobbyClient.DEBUG) Log.d(TAG, "lobby: aiming at " + target);
         return true;
     }
 
-    private static volatile boolean s_aimedV6 = false;
+    /** Whether a dialled tuple is an IPv6 one. Brackets on the board's form,
+     *  bare colons on a literal: either says the same thing. */
+    public static boolean isV6Tuple(String tuple) {
+        if (tuple == null) return false;
+        return tuple.startsWith("[") || tuple.indexOf(':') != tuple.lastIndexOf(':');
+    }
 
     /**
      * How the two of us actually reached each other. "punch" stays the
      * catch-all, so anything this cannot name lands there and the old numbers
      * remain comparable.
+     *
+     * overV6 is passed in, not remembered here: as a static only the host ever
+     * wrote it, so a joiner read whatever a previous session left behind. Each
+     * caller knows which address it really used; none can learn it from here.
      */
-    public static String pathOf(boolean sameSite, boolean upnpMapped) {
+    public static String pathOf(boolean sameSite, boolean upnpMapped, boolean overV6) {
         if (sameSite) return "lan";
-        if (s_aimedV6) return "v6";
+        if (overV6) return "v6";
         return upnpMapped ? "upnp" : "punch";
     }
 
@@ -420,6 +424,31 @@ public class LobbySession {
      * on the pairing. Deciding what it means belongs in chanceOf(), which can
      * see both sides.
      */
+    /**
+     * Every non-loopback IPv4 belongs to a carrier interface, so this is mobile
+     * data: no router to forward on, which separates an unreachable host that
+     * can be fixed from one that cannot. Same filter getMainLocalIPv4() uses.
+     */
+    public static boolean isMobileOnly() {
+        try {
+            for (java.net.NetworkInterface intf :
+                    java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                String name = intf.getName().toLowerCase(Locale.US);
+                if (name.contains("rmnet") || name.contains("ccmni")
+                        || name.contains("p2p") || name.contains("dummy")) continue;
+                for (java.net.InetAddress addr :
+                        java.util.Collections.list(intf.getInetAddresses())) {
+                    if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address)
+                        return false;
+                }
+            }
+        } catch (Exception e) {
+            /* Cannot tell: claim nothing rather than a wrong verdict. */
+            return false;
+        }
+        return true;
+    }
+
     public static LobbyClient.Nat natOf(String info, boolean upnpMapped) {
         if (info == null) return new LobbyClient.Nat(false, false, upnpMapped, false, false);
 
@@ -432,8 +461,10 @@ public class LobbySession {
          * comes back then is the initialised value, not a measurement. */
         boolean symKnown = !v6 || info.contains("|alt=");
 
-        return new LobbyClient.Nat(info.contains("sym=1"), info.contains("pp=1"),
+        LobbyClient.Nat out = new LobbyClient.Nat(info.contains("sym=1"), info.contains("pp=1"),
                 upnpMapped, v6, symKnown);
+        out.mob = isMobileOnly();
+        return out;
     }
 
     /**

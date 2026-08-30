@@ -30,7 +30,7 @@ public enum RoomState
 /// NAT quality as reported by the peer's own STUN pass (pp = the NAT preserved
 /// our source port, sym = the mapping changes per destination).  V6 = the peer
 /// has an IPv6 tuple, which is a route with no NAT on it at all.
-public sealed record NatInfo(bool Sym, bool Pp, bool Upnp, bool V6 = false);
+public sealed record NatInfo(bool Sym, bool Pp, bool Upnp, bool V6 = false, bool Mob = false);
 
 /// One side's rendezvous data. Public/PublicAlt are STUN tuples kept verbatim:
 /// the NAT may rewrite the port, so nothing here is ever normalised.

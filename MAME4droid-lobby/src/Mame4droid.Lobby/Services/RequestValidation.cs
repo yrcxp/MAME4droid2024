@@ -139,7 +139,7 @@ public static partial class RequestValidation
             Public = advertised,
             PublicAlt = advertisedAlt,
             Lan = NormaliseLan(lan, options.MaxLanTuples),
-            Nat = nat is null ? new NatInfo(false, false, false) : new NatInfo(nat.Sym, nat.Pp, nat.Upnp, nat.V6),
+            Nat = nat is null ? new NatInfo(false, false, false) : new NatInfo(nat.Sym, nat.Pp, nat.Upnp, nat.V6, nat.Mob),
             Country = NormaliseCountry(country),
             Verified = matched,
             ObservedIp = observed

@@ -104,6 +104,11 @@
     <string name="np_lobby_title">公開ルーム</string>
     <string name="np_lobby_loading">ゲームを探しています…</string>
     <string name="np_lobby_empty">現在ゲームはありません。あなたが開けば、他のプレイヤーがここで見つけられます。</string>
+    <string name="np_lobby_stats_rooms">過去 %2$d 日間に %1$d 件のゲームが作られました。</string>
+    <string name="np_lobby_stats_played">そのうち %1$d 件が実際に対戦になりました。</string>
+    <string name="np_lobby_stats_games">人気のゲーム: %1$s</string>
+    <string name="np_lobby_stats_countries">%1$d か国のプレイヤー</string>
+    <string name="np_lobby_stats_suggest">%1$s の途中参加ルームを開けば、誰かが対戦中に加わることができます。</string>
     <string name="np_lobby_count">%1$d 件のゲームがあります</string>
     <string name="np_lobby_refresh">更新</string>
     <string name="np_lobby_offline">ボードに接続できません。これまでどおり手動でIPを共有できます。</string>
@@ -178,6 +183,12 @@
     <string name="np_msg_connection_lost">ネットプレイ：接続が切断されました。オフラインプレイに戻ります…</string>
     <string name="np_msg_no_ack">ネットプレイ：相手が参加要求を送り続けています。こちらの応答が届いていません。通信が一方向しか通っていません。</string>
     <string name="np_no_answer">ホストから応答がありません。\n\n届いていないか、応答が戻ってきていません。同じWi-Fiにいる場合は、2台が同じ帯域につながっているか、ルーターが端末同士の通信を遮断していないか確認してください。</string>
+    <string name="np_host_carrier_nat">ルーターはポートを開きましたが、プロバイダー側にもう一つNATがあるため、そこには誰も到達できません。掲示板から参加する方法は使えます。</string>
+    <string name="np_host_cannot_host">IPv4のモバイル回線ではホストできません。接続先ごとに異なるアドレスが割り当てられ、ポートを開放するルーターもないため、誰もあなたの部屋に到達できません。\n\nIPv6なら間にNATがなく、ホストできます。この回線にはIPv6アドレスがありません。通信事業者が提供していないか、ネットプレイ設定のネットワークプロトコルがAutoになっていません。\n\n掲示板から参加することはできますし、Wi-Fiならホストもできます。</string>
+    <string name="np_host_cannot_host_v6">IPv4のモバイル回線ではホストできません。接続先ごとに異なるアドレスが割り当てられ、ポートを開放するルーターもありません。\n\nただしこの回線にはIPv6があり、IPv6なら間にNATがありません。ネットプレイ設定のネットワークプロトコルをAutoにすればホストできます。</string>
+    <string name="np_host_v6_only">IPv4は着信接続を受け付けないため、参加できるのはIPv6を持つプレイヤーだけです。</string>
+    <string name="np_host_unreachable">この回線は接続先ごとに異なるアドレスを割り当てるため、あなたの部屋には誰も参加できません。ルーターでポートを開放すると解決します。掲示板から参加する方法はそのまま使えます。</string>
+    <string name="np_host_unreachable_mobile">モバイル回線は着信接続を受け付けないため、あなたの部屋には誰も参加できません。掲示板から参加することはできます。</string>
     <string name="np_lobby_lockstep_far">遠距離でのロックステップ: 毎フレーム相手を待つため、遅延ではなくカクつきになります。ロールバックの方が適しています。</string>
     <string name="np_lockstep_slow">この接続は %1$d ms です。\n\nロックステップは毎フレーム相手を待つため、遅延ではなくカクつきが出ます。距離があるときはロールバックの方がはるかに快適です。</string>
     <string name="np_lan_silent_fallback">ローカルネットワークの応答がありません。ルーターが無線クライアントを分離している可能性があります。\n\nパブリックアドレス経由で再試行しています…</string>

@@ -208,6 +208,22 @@ public sealed class RoomStore
         return open.Count > max ? open.GetRange(0, max) : open;
     }
 
+    /// Every open room, whatever protocol it speaks, newest first. The board
+    /// asks per protocol because a client can only join its own; the status
+    /// page is just looking, so splitting it would hide half the service.
+    public IReadOnlyList<Room> ListOpen(int max, out int total)
+    {
+        Sweep(DateTimeOffset.UtcNow);
+
+        var open = _index.Values
+            .Where(r => r.State == RoomState.Open)
+            .OrderByDescending(r => r.CreatedUtc)
+            .ToList();
+
+        total = open.Count;
+        return open.Count > max ? open.GetRange(0, max) : open;
+    }
+
     public int CountForOwner(string ownerKey)
         => _index.Values.Count(r => string.Equals(r.OwnerKey, ownerKey, StringComparison.Ordinal));
 

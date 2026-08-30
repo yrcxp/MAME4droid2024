@@ -550,7 +550,11 @@ void netplay_pre_frame_net(netplay_t *handle)
                     else if (n1_count >= 2)  optimal += 1;   /* moderate loss: add 1         */
 
                     if (optimal < 2)  optimal = 2;
-                    if (optimal > 10) optimal = 10;
+                    /* ceiling 10 -> 8.  Only the one-way trip needs
+                     * covering and rtt_to_use already carries jitter, so a full
+                     * RTT provisioned twice over: smooth at 154 ms RTT, but
+                     * 167 ms of felt lag.  Keep EVEN or the round-up overshoots. */
+                    if (optimal > 8) optimal = 8;
                     if (optimal % 2 != 0) optimal++;
 
                     NLOG("Auto-Frameskip: rtt_to_use=%u optimal=%u current=%u",

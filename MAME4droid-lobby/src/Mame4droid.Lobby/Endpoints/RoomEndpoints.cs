@@ -43,6 +43,7 @@ public static class RoomEndpoints
         HttpContext ctx,
         CreateRoomRequest request,
         RoomStore store,
+        StatsStore stats,
         IOptionsMonitor<LobbyOptions> options)
     {
         var o = options.CurrentValue;
@@ -88,6 +89,10 @@ public static class RoomEndpoints
             ctx.Response.Headers.RetryAfter = o.OpenTtlSeconds.ToString();
             return Results.Json(new ErrorResponse("too_many_rooms"), statusCode: StatusCodes.Status429TooManyRequests);
         }
+
+        /* Counted once the room really exists, so a refusal never inflates the
+         * showcase an empty board draws. */
+        stats.RoomCreated(room.Game, room.Host.Country);
 
         return Results.Json(new CreateRoomResponse(
             room.Id, room.Token, o.OpenTtlSeconds, o.PollSeconds, room.Host.Verified));
@@ -188,7 +193,7 @@ public static class RoomEndpoints
 
         return Results.Json(new JoinResponse(new HostDto(
             host.Public, host.PublicAlt, host.Lan, room.Game, room.Mode, room.Delay, room.Plugins,
-            new NatDto(host.Nat.Sym, host.Nat.Pp, host.Nat.Upnp, host.Nat.V6),
+            new NatDto(host.Nat.Sym, host.Nat.Pp, host.Nat.Upnp, host.Nat.V6, host.Nat.Mob),
             host.Country, host.Verified, sameSite)));
     }
 
@@ -260,7 +265,7 @@ public static class RoomEndpoints
             ? null
             : new PeerDto(
                 peer.Public, peer.PublicAlt, peer.Lan,
-                new NatDto(peer.Nat.Sym, peer.Nat.Pp, peer.Nat.Upnp, peer.Nat.V6),
+                new NatDto(peer.Nat.Sym, peer.Nat.Pp, peer.Nat.Upnp, peer.Nat.V6, peer.Nat.Mob),
                 peer.Country, peer.Verified,
                 ClientAddress.SameSite(peer.ObservedIp, room.Host.ObservedIp));
 

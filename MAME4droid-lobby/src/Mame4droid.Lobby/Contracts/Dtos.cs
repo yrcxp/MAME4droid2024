@@ -25,7 +25,9 @@ namespace Mame4droid.Lobby.Contracts;
 /// has one. V6 says the peer reached STUN over IPv6 and would dial that way:
 /// two of those need no punching at all, whatever their v4 looks like.
 /// Optional so a build that predates it still deserialises (false = unknown).
-public sealed record NatDto(bool Sym, bool Pp, bool Upnp, bool V6 = false);
+/// Mob says the reporter had only a carrier address: mobile data, with no
+/// router to forward on. It separates "unreachable and fixable" from not.
+public sealed record NatDto(bool Sym, bool Pp, bool Upnp, bool V6 = false, bool Mob = false);
 
 public sealed record ConfigResponse(
     bool Enabled,
@@ -35,7 +37,17 @@ public sealed record ConfigResponse(
     int ListMaxSeconds,
     string MinApp,
     string Notice,
-    bool UpdateAvailable);
+    bool UpdateAvailable,
+    /* Rides here and nowhere else: /config is fetched once when the board opens,
+     * so the showcase costs no request of its own. In the listing it would move
+     * the ETag on every change and undo the 304s the traffic budget rests on. */
+    StatsDto? Stats = null);
+
+/// Recent activity, for a board with nothing on it right now. Every figure is
+/// already past its threshold server-side, so a zero means "do not show this".
+/// Flags is the busiest few ISO-3166 codes behind Countries, drawn as flags.
+public sealed record StatsDto(
+    string Since, int Rooms, int Played, string[] Games, int Countries, string[] Flags);
 
 /// Public is the primary STUN tuple ("ip:port", or "[v6]:port" on a v6 host);
 /// PublicAlt carries the "alt=" v4 tuple a dual-stack host also learned.

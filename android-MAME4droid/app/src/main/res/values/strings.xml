@@ -114,6 +114,11 @@
     <string name="np_lobby_title">Public rooms</string>
     <string name="np_lobby_loading">Looking for games…</string>
     <string name="np_lobby_empty">No games right now. Host one and others will see it here.</string>
+    <string name="np_lobby_stats_rooms">%1$d rooms opened here in the last %2$d days.</string>
+    <string name="np_lobby_stats_played">%1$d of them turned into real games.</string>
+    <string name="np_lobby_stats_games">Most wanted: %1$s</string>
+    <string name="np_lobby_stats_countries">Players from %1$d countries</string>
+    <string name="np_lobby_stats_suggest">Open a drop-in room for %1$s and someone can join you mid-game.</string>
     <string name="np_lobby_count">%1$d game(s) available</string>
     <string name="np_lobby_refresh">Refresh</string>
     <string name="np_lobby_offline">Board unreachable. You can still share an IP by hand.</string>
@@ -190,6 +195,12 @@
     <string name="np_msg_connection_lost">NetPlay: Connection lost. Resuming offline play...</string>
     <string name="np_msg_no_ack">NetPlay: the other player keeps asking to join, so our answer is not reaching them. Traffic is only getting through one way.</string>
     <string name="np_no_answer">No answer from the host.\n\nIt received nothing, or its replies are not getting back to you. If you are both on the same Wi-Fi, check that the two devices are on the same band and that the router is not isolating clients.</string>
+    <string name="np_host_carrier_nat">Your router forwarded the port, but your provider has another NAT above it, so nothing can reach the forward. Joining a room from the board still works.</string>
+    <string name="np_host_cannot_host">You cannot host from mobile data over IPv4: your carrier gives a different address to each destination and there is no router to forward a port on, so nobody would be able to reach your room.\n\nOver IPv6 there is no NAT in the way and hosting works. This connection has no IPv6 address: either your carrier does not provide one, or the network protocol is not set to Auto in the netplay settings.\n\nJoining a room from the board works, and so does hosting over Wi-Fi.</string>
+    <string name="np_host_cannot_host_v6">You cannot host from mobile data over IPv4: your carrier gives a different address to each destination and there is no router to forward a port on.\n\nBut this connection does have IPv6, and over IPv6 there is no NAT in the way. Set the network protocol to Auto in the netplay settings and you will be able to host.</string>
+    <string name="np_host_v6_only">Your IPv4 does not accept incoming connections, so only players who have IPv6 will be able to join you.</string>
+    <string name="np_host_unreachable">Your connection gives each destination a different address, so players will not be able to reach your room. Forwarding the port on your router fixes it; joining a room from the board works either way.</string>
+    <string name="np_host_unreachable_mobile">Mobile data does not accept incoming connections, so players will not be able to reach your room. Joining a room from the board does work.</string>
     <string name="np_lobby_lockstep_far">Lockstep at a distance: the game waits for every frame, so it stutters instead of lagging. Rollback copes better.</string>
     <string name="np_lockstep_slow">This connection measures %1$d ms.\n\nLockstep waits for every frame, so it stutters rather than lagging behind. Rollback handles distance much better.</string>
     <string name="np_lan_silent_fallback">No answer on the local network — the router may be isolating its wireless clients.\n\nRetrying through the public address…</string>

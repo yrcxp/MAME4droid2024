@@ -84,6 +84,14 @@ public class UpnpHelper {
     private static String sServiceType = null;
     private static int sExtPort = 0;
     private static boolean sMapped = false;
+    private static String sExternalIp = null;
+
+    /** The WAN address the router believes it has, or null if it never said.
+     *  Against the STUN result it answers what a listed mapping cannot: whether
+     *  this router holds the public address, or another NAT sits above it. */
+    public static synchronized String getExternalIp() {
+        return sExternalIp;
+    }
 
     public static synchronized boolean isMapped() {
         return sMapped;
@@ -121,6 +129,7 @@ public class UpnpHelper {
                 Log.d(TAG, "UPnP: mapped UDP " + port + " -> " + internalIp + ":" + port
                         + " (" + serviceType + ")");
                 verifyMapping(controlUrl, serviceType, port);
+                sExternalIp = readExternalIp(controlUrl, serviceType);
                 return true;
             }
             Log.d(TAG, "UPnP: gateway found but no WAN*Connection service");
@@ -129,6 +138,17 @@ public class UpnpHelper {
             Log.d(TAG, "UPnP: " + e);
             return false;
         }
+    }
+
+    /** Drop what we remember, without talking to anyone. A mapping belongs to
+     *  the network it was made on, so carrying the flag onward claims a forward
+     *  this device does not have -- and that router is out of reach anyway. */
+    public static synchronized void forget() {
+        sMapped = false;
+        sExternalIp = null;
+        sControlUrl = null;
+        sServiceType = null;
+        sExtPort = 0;
     }
 
     /** Remove the mapping created by addPortMapping(); no-op if none. */
@@ -144,7 +164,7 @@ public class UpnpHelper {
         } catch (Throwable e) {
             Log.d(TAG, "UPnP: delete: " + e);
         }
-        sMapped = false;
+        sMapped = false; sExternalIp = null;
     }
 
     /* SSDP M-SEARCH for InternetGatewayDevice; replies are unicast so no
@@ -291,6 +311,25 @@ public class UpnpHelper {
         int vs = i + tag.length() + 1;
         int ve = xml.indexOf('<', vs);
         return ve > vs ? xml.substring(vs, ve).trim() : "?";
+    }
+
+    /* The router's own WAN address. A forward is only reachable if this is the
+     * address the rest of the internet sees; when it is private, the provider
+     * has another NAT above and nothing the user opens here can be reached. */
+    private static String readExternalIp(String controlUrl, String serviceType) {
+        try {
+            String rsp = soapRaw(controlUrl, serviceType, "GetExternalIPAddress", "");
+            if (rsp == null || statusOf(rsp) != 200) {
+                Log.d(TAG, "UPnP: external IP: no answer");
+                return null;
+            }
+            String ip = tagValue(rsp, "NewExternalIPAddress");
+            Log.d(TAG, "UPnP: router says its WAN address is " + ip);
+            return (ip != null && ip.length() > 0) ? ip : null;
+        } catch (Throwable e) {
+            Log.d(TAG, "UPnP: external IP: " + e);
+            return null;
+        }
     }
 
     /* Read the mapping back from the router: some firmwares answer 200 to

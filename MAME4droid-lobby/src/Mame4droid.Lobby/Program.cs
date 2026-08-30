@@ -38,6 +38,7 @@ builder.Services.AddSingleton<RoomListCache>();
 builder.Services.AddSingleton<ViewerCounter>();
 builder.Services.AddSingleton<SiteHash>();
 builder.Services.AddSingleton<TelemetrySink>();
+builder.Services.AddSingleton<StatsStore>();
 builder.Services.AddLobbyRateLimiting();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -118,11 +119,119 @@ app.MapRoomEndpoints();
 app.MapTelemetryEndpoints();
 app.MapDiagnosticsEndpoints();
 
-app.MapGet("/", (HttpContext ctx) =>
+app.MapGet("/", (HttpContext ctx, StatsStore store, RoomStore board,
+                 IOptionsMonitor<LobbyOptions> settings) =>
 {
     // This page exists to answer "which build is live and when did it wake".
     // A cached copy would lie about both, and nothing on it is worth storing.
     ctx.Response.Headers.CacheControl = "no-store";
+
+    /* Unlike the board's showcase this holds nothing back: whoever reads this
+     * page runs the service, and a threshold would only hide what they came
+     * for -- games that actually got played above all. */
+    var recent = store.Full();
+    var activity = "<h2 style='color: #ffffff; font-size: 1.1rem; margin-top: 2.5rem;'>Recent activity</h2>";
+
+    if (recent.Rooms == 0 && recent.Played == 0)
+    {
+        activity += "<p style='color: #a0a0a0;'>Nothing recorded yet.</p>";
+    }
+    else
+    {
+        activity +=
+            $"<p>Rooms created: <b style='color: #ffffff;'>{recent.Rooms}</b></p>" +
+            $"<p>Games played: <b style='color: #4ade80;'>{recent.Played}</b></p>";
+
+        if (recent.Games.Count > 0)
+            activity += "<p>Most wanted: <code style='color: #a0a0a0;'>" +
+                System.Net.WebUtility.HtmlEncode(string.Join(", ", recent.Games)) + "</code></p>";
+
+        if (recent.Countries > 0)
+            activity += $"<p>Countries: <b style='color: #ffffff;'>{recent.Countries}</b></p>";
+
+        activity += "<p style='color: #a0a0a0; font-size: 0.9rem;'>Since " +
+            System.Net.WebUtility.HtmlEncode(recent.Since) +
+            $", rolling {Math.Max(1, settings.CurrentValue.StatsWindowDays)}-day window.</p>";
+
+        /* The whole file added up -- the counts above are cuts of this, and the
+         * operator has no reason to see only the top. Capped all the same: it
+         * grows with every driver anyone ever hosts. */
+        var (allGames, allCountries) = store.Totals();
+
+        if (allGames.Count > 0)
+            activity += "<h3 style='color: #ffffff; font-size: 0.95rem; margin-top: 2rem;'>Games</h3>" +
+                "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
+                "overflow-wrap: anywhere;'>" + Tally(allGames) + "</p>";
+
+        if (allCountries.Count > 0)
+            activity += "<h3 style='color: #ffffff; font-size: 0.95rem; margin-top: 1.5rem;'>Rooms by country</h3>" +
+                "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
+                "overflow-wrap: anywhere;'>" + Tally(allCountries) + "</p>";
+    }
+
+    /* The board for a human rather than a client, and strictly less than
+     * /api/v1/rooms already serves anyone: no address, no room id (that is the
+     * join handle, which the telemetry hashes), and no site hash. */
+    var live = board.ListOpen(Math.Max(1, settings.CurrentValue.MaxRoomsListed), out var waiting);
+    var table = "<h2 style='color: #ffffff; font-size: 1.1rem; margin-top: 2.5rem;'>" +
+                $"On the board now ({waiting})</h2>";
+
+    if (live.Count == 0)
+    {
+        table += "<p style='color: #a0a0a0;'>Nobody is hosting at the moment.</p>";
+    }
+    else
+    {
+        table += "<table style='border-collapse: collapse; font-size: 0.85rem; margin-top: 0.5rem;'>" +
+            "<tr style='color: #6b6b6b; text-align: left;'>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Game</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>From</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Mode</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Delay</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Waiting</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Build</th>" +
+            "<th style='padding: 0.2rem 1.2rem 0.2rem 0;'>Net</th>" +
+            "<th style='padding: 0.2rem 0;'>Notes</th></tr>";
+
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var room in live)
+        {
+            var notes = new List<string>(3);
+            if (room.Playing) notes.Add("drop-in");
+            if (room.IsLocked) notes.Add("private");
+            if (room.Host.Lan.Length > 0) notes.Add("LAN");
+
+            /* The same flags the telemetry lines carry, so a room on screen
+             * and a session in the log read the same way. Only what is true
+             * is named: a row of zeroes is harder to scan than three words. */
+            var net = new List<string>(6);
+            if (room.Host.Nat.Sym) net.Add("sym");
+            if (room.Host.Nat.Pp) net.Add("pp");
+            if (room.Host.Nat.Upnp) net.Add("upnp");
+            if (room.Host.Nat.V6) net.Add("v6");
+            if (room.Host.Nat.Mob) net.Add("mob");
+            if (!room.Host.Verified) net.Add("unverified");
+
+            table +=
+                "<tr style='color: #e0e0e0;'>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0;'><code>{System.Net.WebUtility.HtmlEncode(room.Game)}</code></td>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0;'>{System.Net.WebUtility.HtmlEncode(room.Host.Country ?? "--")}</td>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0;'>{(room.Mode == 1 ? "Rollback" : "Lockstep")}</td>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0;'>{(room.Delay > 0 ? room.Delay.ToString() : "auto")}</td>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0;'>{Elapsed(now - room.CreatedUtc)}</td>" +
+                "<td style='padding: 0.2rem 1.2rem 0.2rem 0; color: #a0a0a0;'><code>" +
+                System.Net.WebUtility.HtmlEncode(string.IsNullOrEmpty(room.App) ? "?" : room.App) +
+                $"</code> <span style='color: #6b6b6b;'>p{room.Proto}</span></td>" +
+                $"<td style='padding: 0.2rem 1.2rem 0.2rem 0; color: #a0a0a0;'>{string.Join(" ", net)}</td>" +
+                $"<td style='padding: 0.2rem 0; color: #a0a0a0;'>{string.Join(" · ", notes)}</td></tr>";
+        }
+
+        table += "</table>";
+
+        if (waiting > live.Count)
+            table += $"<p style='color: #a0a0a0; font-size: 0.85rem;'>+{waiting - live.Count} more not shown.</p>";
+    }
 
     return Results.Content(
     "<html><head><meta charset=\"utf-8\"></head><body style='font-family: sans-serif; padding: 2rem; background-color: #121212; color: #e0e0e0;'>" +
@@ -136,16 +245,50 @@ app.MapGet("/", (HttpContext ctx) =>
     // and rewritten to the reader's own clock below, so it needs no converting.
     $"<p>Awake since: <code style='color: #a0a0a0;' data-utc='{BuildInfo.Started:O}'>{BuildInfo.Started:yyyy-MM-dd HH:mm:ss} UTC</code> " +
     $"<span style='color: #a0a0a0;'>({System.Net.WebUtility.HtmlEncode(BuildInfo.UptimeText)})</span></p>" +
-    "<p><em style='color: #a0a0a0;'>Rendezvous server is ready for matchmaking.</em></p>" +
+    activity + table +
+    "<p style='margin-top: 2.5rem;'><em style='color: #a0a0a0;'>Rendezvous server is ready for matchmaking.</em></p>" +
     "<script>for (const el of document.querySelectorAll('code[data-utc]')) {" +
     " const d = new Date(el.dataset.utc); if (!isNaN(d)) el.textContent = d.toLocaleString(); }</script>" +
     "</body></html>", "text/html; charset=utf-8");
 }).RequireRateLimiting(RateLimitPolicies.Config);
 
+/* Resolved before the first request so the day buckets are read once at boot,
+ * and the line below is followed by what it found. Written back on the way out
+ * because idling out of memory is this instance's normal end, not a crash. */
+var stats = app.Services.GetRequiredService<StatsStore>();
+app.Lifetime.ApplicationStopping.Register(stats.Flush);
+
 app.Logger.LogInformation("Init MAME4droid lobby, build {Build} published {Published}",
     BuildInfo.Version, BuildInfo.Published);
 
 app.Run();
+
+/// How long a room has been up, in the largest unit that still says something.
+/// Rendered here rather than sent as a timestamp: this page is never cached,
+/// so unlike the room listing there is no ETag for a ticking value to spoil.
+static string Elapsed(TimeSpan waited)
+{
+    if (waited < TimeSpan.Zero) waited = TimeSpan.Zero;
+
+    if (waited.TotalMinutes < 1) return $"{(int)waited.TotalSeconds}s";
+    if (waited.TotalHours < 1) return $"{(int)waited.TotalMinutes}m";
+    return $"{(int)waited.TotalHours}h {waited.Minutes}m";
+}
+
+/// A name with its count, busiest first, as one wrapped line. No flag emoji
+/// here unlike the app: this page is read in a desktop browser, and Windows
+/// draws a flag as the two letters it is made of -- so it said the code twice.
+static string Tally(IReadOnlyList<KeyValuePair<string, int>> counts)
+{
+    const int Shown = 250;
+
+    var line = string.Join(" &nbsp; ", counts.Take(Shown).Select(entry =>
+        System.Net.WebUtility.HtmlEncode(entry.Key) +
+        $" <span style='color: #6b6b6b;'>{entry.Value}</span>"));
+
+    var rest = counts.Count - Shown;
+    return rest > 0 ? line + $" &nbsp; <em>+{rest} more</em>" : line;
+}
 
 /* Needed by WebApplicationFactory in the test project. */
 public partial class Program;

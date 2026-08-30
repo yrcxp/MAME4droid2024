@@ -89,6 +89,11 @@ public class LobbyBoardDialog {
     private volatile String myCountry;
     private volatile boolean configured = false;
 
+    /* What an empty board says instead of just "nobody is here". Rides on the
+     * config call, made once when the board opens, so it costs no request of
+     * its own. Null whenever the server had nothing worth showing. */
+    private volatile LobbyClient.Stats showcase;
+
     /* Parked while the app is in the background: the loop stays alive but
      * stops calling out, so a board nobody is looking at spends neither the
      * server's traffic budget nor the battery. */
@@ -282,6 +287,7 @@ public class LobbyBoardDialog {
                         listSeconds = config.listSeconds;
                         backoff = config.listBackoff;
                         maxSeconds = config.listMaxSeconds;
+                        showcase = config.stats;
                         configured = true;
                         waitingSince = android.os.SystemClock.elapsedRealtime();
                     }
@@ -372,6 +378,14 @@ public class LobbyBoardDialog {
                 statusText.setText(fresh.isEmpty()
                         ? mm.getString(R.string.np_lobby_empty)
                         : mm.getString(R.string.np_lobby_count, board.total));
+
+                /* Inside listBox on purpose: every render clears it, so the
+                 * showcase cannot survive into a board that has since filled
+                 * up, and it comes back by itself if the last room leaves. */
+                if (fresh.isEmpty()) {
+                    View pitch = buildShowcase();
+                    if (pitch != null) listBox.addView(pitch);
+                }
 
                 for (final LobbyClient.Room room : fresh)
                     listBox.addView(buildRow(room));
@@ -468,6 +482,103 @@ public class LobbyBoardDialog {
     private long nowSeconds() {
         if (clockSeconds <= 0) return System.currentTimeMillis() / 1000L;
         return clockSeconds + (android.os.SystemClock.elapsedRealtime() - clockTakenAt) / 1000L;
+    }
+
+    /**
+     * The pitch an empty board makes: what has happened lately, and one thing
+     * to do about it. Null when the server sent no figures, its way of saying
+     * there is nothing to boast about yet -- silence beats small numbers.
+     */
+    private View buildShowcase() {
+        LobbyClient.Stats recent = showcase;
+        if (recent == null) return null;
+
+        float density = mm.getResources().getDisplayMetrics().density;
+
+        LinearLayout box = new LinearLayout(mm);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(0, (int) (14 * density), 0, 0);
+
+        int days = daysSince(recent.since);
+        if (recent.rooms > 0 && days > 0)
+            box.addView(line(mm.getString(R.string.np_lobby_stats_rooms, recent.rooms, days),
+                    14, Color.WHITE));
+
+        if (recent.played > 0)
+            box.addView(line(mm.getString(R.string.np_lobby_stats_played, recent.played),
+                    13, Color.LTGRAY));
+
+        if (recent.games.length > 0)
+            box.addView(line(mm.getString(R.string.np_lobby_stats_games,
+                    join(recent.games)), 13, Color.LTGRAY));
+
+        if (recent.countries > 0) {
+            String where = mm.getString(R.string.np_lobby_stats_countries, recent.countries);
+            String flags = flagsOf(recent.flags);
+            box.addView(line(flags.length() > 0 ? where + "   " + flags : where,
+                    13, Color.LTGRAY));
+        }
+
+        /* Named whether or not this build has the driver: the line is a pitch,
+         * and somebody who wants the game can go and find the ROM. */
+        if (recent.games.length > 0) {
+            TextView call = line(
+                    mm.getString(R.string.np_lobby_stats_suggest, recent.games[0]), 13, Color.CYAN);
+            call.setPadding(0, (int) (8 * density), 0, 0);
+            box.addView(call);
+        }
+
+        return box.getChildCount() > 0 ? box : null;
+    }
+
+    private TextView line(String text, int sizeSp, int colour) {
+        TextView view = new TextView(mm);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+        view.setTextColor(colour);
+        view.setText(text);
+        return view;
+    }
+
+    private static String join(String[] values) {
+        StringBuilder out = new StringBuilder();
+        for (String value : values) {
+            if (out.length() > 0) out.append(", ");
+            out.append(value);
+        }
+        return out.toString();
+    }
+
+    /** Whole days covered by the figures, or 0 if the server sent a date this
+     *  build cannot read -- left unsaid rather than guessed at. */
+    private static int daysSince(String since) {
+        if (since == null || since.length() != 10) return 0;
+        try {
+            java.text.SimpleDateFormat format =
+                    new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+            format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            java.util.Date first = format.parse(since);
+            if (first == null) return 0;
+
+            long elapsed = System.currentTimeMillis() - first.getTime();
+            /* Inclusive: figures dated today cover one day, not none. */
+            int days = (int) (elapsed / 86400000L) + 1;
+            return (days >= 1 && days <= 400) ? days : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** The busiest countries as flags. A code that will not convert is simply
+     *  left out, rather than drawn as a pair of stray boxes. */
+    private static String flagsOf(String[] codes) {
+        StringBuilder out = new StringBuilder();
+        for (String code : codes) {
+            String flag = LobbySession.flagOf(code);
+            if (flag.length() == 0) continue;
+            if (out.length() > 0) out.append(' ');
+            out.append(flag);
+        }
+        return out.toString();
     }
 
     private View buildRow(final LobbyClient.Room room) {

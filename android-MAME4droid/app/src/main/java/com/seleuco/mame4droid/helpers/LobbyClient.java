@@ -110,6 +110,27 @@ public class LobbyClient {
         public String minApp = "";
         public String notice = "";
         public boolean updateAvailable;
+
+        /* Null unless the server had something worth showing: every figure is
+         * already past its own threshold there, so nothing here needs judging
+         * again before it is drawn. */
+        public Stats stats;
+    }
+
+    /**
+     * Recent activity behind the board, so an empty list reads as "you are
+     * early" rather than "this is dead". A zero means the server chose not to
+     * show that figure, not that nothing happened.
+     */
+    public static class Stats {
+        public String since = "";
+        public int rooms;
+        public int played;
+        public String[] games = new String[0];
+        public int countries;
+
+        /** ISO-3166 pairs for the busiest few, drawn as flags. */
+        public String[] flags = new String[0];
     }
 
     /**
@@ -123,6 +144,11 @@ public class LobbyClient {
         public boolean pp;
         public boolean upnp;
         public boolean v6;
+
+        /* No address of our own except the carrier's: mobile data, where there
+         * is no router to ask for a forward and nothing the user can open.
+         * Ours only, like symKnown -- a peer's flags say what they measured. */
+        public boolean mob;
 
         /* Whether sym was measured at all. The symmetric test is a second v4
          * STUN query, so a device that only ever asked over IPv6 reports the
@@ -305,7 +331,29 @@ public class LobbyClient {
         out.minApp = body.optString("minApp", "");
         out.notice = body.optString("notice", "");
         out.updateAvailable = body.optBoolean("updateAvailable", false);
+
+        JSONObject stats = body.optJSONObject("stats");
+        if (stats != null) {
+            Stats recent = new Stats();
+            recent.since = stats.optString("since", "");
+            recent.rooms = stats.optInt("rooms", 0);
+            recent.played = stats.optInt("played", 0);
+            recent.games = readStrings(stats.optJSONArray("games"));
+            recent.countries = stats.optInt("countries", 0);
+            recent.flags = readStrings(stats.optJSONArray("flags"));
+            out.stats = recent;
+        }
         return out;
+    }
+
+    private static String[] readStrings(JSONArray array) {
+        if (array == null) return new String[0];
+        List<String> values = new ArrayList<String>(array.length());
+        for (int i = 0; i < array.length(); i++) {
+            String value = array.optString(i, "");
+            if (value.length() > 0) values.add(value);
+        }
+        return values.toArray(new String[0]);
     }
 
     /**
@@ -562,6 +610,7 @@ public class LobbyClient {
             out.pp = json.optBoolean("pp", false);
             out.upnp = json.optBoolean("upnp", false);
             out.v6 = json.optBoolean("v6", false);
+            out.mob = json.optBoolean("mob", false);
         }
         return out;
     }
@@ -572,6 +621,7 @@ public class LobbyClient {
         out.put("pp", nat != null && nat.pp);
         out.put("upnp", nat != null && nat.upnp);
         out.put("v6", nat != null && nat.v6);
+        out.put("mob", nat != null && nat.mob);
         return out;
     }
 

@@ -48,7 +48,13 @@ public sealed class TelemetrySink
     private readonly ILogger<TelemetrySink> _log;
     private readonly ConcurrentDictionary<string, long> _counters = new(StringComparer.Ordinal);
 
-    public TelemetrySink(ILogger<TelemetrySink> log) => _log = log;
+    private readonly StatsStore _stats;
+
+    public TelemetrySink(ILogger<TelemetrySink> log, StatsStore stats)
+    {
+        _log = log;
+        _stats = stats;
+    }
 
     public bool Record(TelemetryRequest report)
     {
@@ -72,6 +78,12 @@ public sealed class TelemetrySink
 
         var key = $"{outcome}|{path ?? "?"}|{self}|{peer}";
         _counters.AddOrUpdate(key, 1, static (_, current) => current + 1);
+
+        /* Feeds the showcase. Host's line only, or both peers reporting the same
+         * finished game would double it; real names only, so "?" never becomes a
+         * game somebody is told to go and play. */
+        if (outcome == "played" && role == "host" && game != "?")
+            _stats.GamePlayed(game, RequestValidation.NormaliseCountry(report.Country));
 
         /* Second tally, by country pair: the one that answers whether a board
          * has enough people in reach of each other to be worth keeping up. */
@@ -151,9 +163,12 @@ public sealed class TelemetrySink
 
     /// The whole point of the counters: which NAT pairs actually connect.
     /// v6 rides along because a pair that dialled over IPv6 never punched at
-    /// all, and folding those in with the v4 attempts flatters the rate.
+    /// all, and folding those in with the v4 attempts flatters the rate. mob
+    /// separates a host nobody could reach because of its carrier from one
+    /// whose router could have been opened.
     private static string Describe(NatDto? nat)
-        => nat is null ? "?" : $"sym{(nat.Sym ? 1 : 0)}pp{(nat.Pp ? 1 : 0)}up{(nat.Upnp ? 1 : 0)}v6{(nat.V6 ? 1 : 0)}";
+        => nat is null ? "?"
+            : $"sym{(nat.Sym ? 1 : 0)}pp{(nat.Pp ? 1 : 0)}up{(nat.Upnp ? 1 : 0)}v6{(nat.V6 ? 1 : 0)}mob{(nat.Mob ? 1 : 0)}";
 
     /// Both peers of a match send the same room, so the same tag appears on
     /// every line of that game -- the join, and how each side saw it end.

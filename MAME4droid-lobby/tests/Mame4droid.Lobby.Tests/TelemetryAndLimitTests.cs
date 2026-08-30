@@ -49,10 +49,9 @@ public class TelemetryAndLimitTests
         Assert.Equal(HttpStatusCode.NoContent, junk.StatusCode);
     }
 
-    /// A withdrawn room and a cancelled one look the same over HTTP -- both
-    /// answer 204 -- so this reads the counters instead. It matters because an
-    /// outcome missing from the whitelist does not fail: the whole report is
-    /// dropped in silence, and we would be measuring nothing without knowing.
+    /// Both answer 204 over HTTP, so this reads the counters instead. It matters
+    /// because an outcome missing from the whitelist does not fail: the report
+    /// is dropped in silence and we would measure nothing without knowing.
     [Fact]
     public async Task A_room_that_withdraws_itself_is_counted_apart_from_one_a_person_cancelled()
     {

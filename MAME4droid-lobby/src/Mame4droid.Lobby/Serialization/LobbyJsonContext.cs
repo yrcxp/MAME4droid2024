@@ -28,6 +28,7 @@ namespace Mame4droid.Lobby.Serialization;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(ConfigResponse))]
+[JsonSerializable(typeof(StatsDto))]
 [JsonSerializable(typeof(CreateRoomRequest))]
 [JsonSerializable(typeof(CreateRoomResponse))]
 [JsonSerializable(typeof(RoomListResponse))]
