@@ -121,8 +121,8 @@
 
     /* Adaptive input delay, auto mode only: frame_skip tracks half the
      * smoothed RTT, clamped to MIN/MAX.
-     * DAV HACK: MAX 6 -> 4.  Buying the whole one-way trip with delay is what
-     * lockstep does; rollback is here to predict it instead.  Field-tested at
+     * MAX 6 -> 4: buying the whole one-way trip with delay is what lockstep
+     * does, and rollback is here to predict it instead.  Field-tested at
      * 210-230ms RTT, where 4 felt better than the 6 the cap was giving.      */
     #define NETPLAY_INPUT_DELAY_MIN 2
     #define NETPLAY_INPUT_DELAY_MAX 4
@@ -566,6 +566,7 @@
      * here so the window around the first mismatch is dumped once, on the
      * game thread.                                                          */
     extern "C" void netplay_applied_ring_arm(const char *reason, uint32_t frame);
+    extern "C" void netplay_applied_ring_reset(void);
 
     /* Perform a DEFERRED savestate reload at a clean scheduler boundary (never
      * inside the vblank timer callback -- load()->postload() would corrupt the

@@ -1431,6 +1431,9 @@ void myosd_netplay_rearm_screen_timers()
         screen.netplay_rearm_vblank();
 }
 
+/* Resync counterpart: finish the interrupted vblank_begin instead of
+ * re-firing it whole.  A resync has no FF replay to absorb a duplicated
+
 /* Query the fast-forward suppression flag set above. */
 int myosd_netplay_get_ff_active()
 {
@@ -1829,8 +1832,26 @@ typedef struct {
     uint32_t    frame;
     uint32_t    local;
     uint32_t    peer;
+    /* Hash of the WHOLE applied state, not just the digital bits: every
+     * mismatch seen so far was on an analog axis with identical digitals,
+     * which a digital-only trace cannot see at all. */
+    uint32_t    local_h;
+    uint32_t    peer_h;
     const char *src;
 } applied_entry_t;
+
+/* Order-dependent mix over every field netplay_state_differs compares, so two
+ * peers that applied the same input produce the same number. */
+static uint32_t netplay_state_hash(const netplay_state_t &s)
+{
+    uint32_t h = 2166136261u;
+    const unsigned char *p = (const unsigned char *)&s;
+    for (size_t i = 0; i < sizeof(netplay_state_t); i++) {
+        h ^= p[i];
+        h *= 16777619u;
+    }
+    return h;
+}
 
 static applied_entry_t g_applied_ring[APPLIED_RING_SIZE];
 static uint32_t        g_applied_head = 0;     /* next write slot (monotonic)   */
@@ -1838,6 +1859,7 @@ static volatile int    g_applied_arm  = 0;     /* 1 = trigger seen, counting dow
 static int             g_applied_arm_high = 0; /* armed by a high-prio trigger   */
 static int             g_applied_post = 0;     /* entries left before flush      */
 static int             g_applied_done = 0;     /* at least one dump has happened */
+static int             g_applied_desync_done = 0; /* the DESYNC dump has its own turn */
 static uint32_t        g_applied_last_dump_frame = 0; /* frame of the last flush */
 static uint32_t        g_applied_trigger_frame = 0;
 static const char     *g_applied_trigger_reason = "";
@@ -1861,9 +1883,10 @@ static void netplay_applied_ring_flush(void)
          g_applied_trigger_reason, g_applied_trigger_frame, count);
     for (uint32_t k = 0; k < count; k++) {
         uint32_t i = (start + k) % APPLIED_RING_SIZE;
-        NLOG("APPLIED f=%u local=0x%x peer=0x%x src=%s",
+        NLOG("APPLIED f=%u local=0x%x peer=0x%x lh=0x%08x ph=0x%08x src=%s",
              g_applied_ring[i].frame, g_applied_ring[i].local,
-             g_applied_ring[i].peer, g_applied_ring[i].src);
+             g_applied_ring[i].peer, g_applied_ring[i].local_h,
+             g_applied_ring[i].peer_h, g_applied_ring[i].src);
     }
     NLOG("APPLIED_DUMP end trigger_frame=%u", g_applied_trigger_frame);
 }
@@ -1876,10 +1899,12 @@ static inline void netplay_trace_applied(uint32_t frame,
                                          const char *src)
 {
     uint32_t i = g_applied_head % APPLIED_RING_SIZE;
-    g_applied_ring[i].frame = frame;
-    g_applied_ring[i].local = loc.digital;
-    g_applied_ring[i].peer  = peer.digital;
-    g_applied_ring[i].src   = src;
+    g_applied_ring[i].frame   = frame;
+    g_applied_ring[i].local   = loc.digital;
+    g_applied_ring[i].peer    = peer.digital;
+    g_applied_ring[i].local_h = netplay_state_hash(loc);
+    g_applied_ring[i].peer_h  = netplay_state_hash(peer);
+    g_applied_ring[i].src     = src;
     g_applied_head++;
 
     /* After a trigger, capture a short post-window (covers the FF replay) then
@@ -1893,6 +1918,20 @@ static inline void netplay_trace_applied(uint32_t frame,
  * fills, so all NLOG I/O stays on one thread.  A HIGH trigger (ROLLBACK_
  * mismatch) may upgrade an in-flight LOW arm (CRC DESYNC) in place, since it
  * precedes the FF re-sim whose window we actually want. */
+/* A resync restarts the timeline at frame 0, so ring entries from the
+ * previous episode carry the SAME frame numbers as the new ones and make
+ * the dump uncrossable.  Drop them and re-arm the instrument.        */
+extern "C" void netplay_applied_ring_reset(void)
+{
+    g_applied_desync_done     = 0;
+    g_applied_head            = 0;
+    g_applied_arm             = 0;
+    g_applied_arm_high        = 0;
+    g_applied_post            = 0;
+    g_applied_done            = 0;
+    g_applied_last_dump_frame = 0;
+}
+
 extern "C" void netplay_applied_ring_arm(const char *reason, uint32_t frame)
 {
     constexpr bool APPLIED_TRACE_ENABLED = false;
@@ -1901,6 +1940,19 @@ extern "C" void netplay_applied_ring_arm(const char *reason, uint32_t frame)
 
     /* "ROLLBACK_mismatch" starts with 'R'; "DESYNC" with 'D'.                */
     int high = (reason && reason[0] == 'R');
+
+    /* A confirmed desync often IS the end of the session (the user stops
+     * right there), and the deferred flush needs more traced frames that
+     * never come.  Dump it now instead of arming and losing it.         */
+    if (!high) {
+        if (g_applied_desync_done)
+            return;                 /* one desync dump per episode: the log is throttled, we are not */
+        g_applied_desync_done = 1;
+        g_applied_trigger_reason = reason;
+        g_applied_trigger_frame  = frame;
+        netplay_applied_ring_flush();
+        return;
+    }
 
     if (g_applied_arm) {
         /* Already counting down: only upgrade LOW->HIGH (restart post-window
@@ -1914,10 +1966,13 @@ extern "C" void netplay_applied_ring_arm(const char *reason, uint32_t frame)
         return;
     }
 
+    /* A confirmed CRC desync is the event we are here for: never let the
+     * cooldown swallow it.  The cooldown exists to throttle the noisy
+     * ROLLBACK_mismatch trigger, nothing else.                          */
     /* Signed delta: `frame` is NOT monotonic across calls (netplay.cpp's
      * confirm loop walks newest->oldest within a packet), so unsigned
      * subtraction would underflow and defeat the cooldown below. */
-    if (g_applied_done && (int32_t)(frame - g_applied_last_dump_frame) < APPLIED_REARM_COOLDOWN_FRAMES)
+    if (high && g_applied_done && (int32_t)(frame - g_applied_last_dump_frame) < APPLIED_REARM_COOLDOWN_FRAMES)
         return;                                     /* cooldown: too soon, skip */
 
     g_applied_arm_high       = high;

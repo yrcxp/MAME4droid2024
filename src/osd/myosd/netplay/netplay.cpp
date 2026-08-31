@@ -329,13 +329,18 @@ void netplay_pre_frame_net(netplay_t *handle)
          * We wait until we have received the first packet from the peer. */
         if (handle->frame == handle->frame_skip && !handle->has_received_data) {
             NLOG("ROLLBACK: Waiting for peer's first frame to synchronize start...");
-            while (handle->has_connection && !handle->has_received_data) {
+            /* Also leave on a resync starting: a drop-in hands the machine
+             * over WITHOUT sending data first, so both peers parked here
+             * waiting for each other -- and this wait has no timeout. */
+            while (handle->has_connection && !handle->has_received_data
+                   && handle->initial_sync_complete) {
                 struct timespec ts;
                 clock_gettime(CLOCK_REALTIME, &ts);
                 ts.tv_sec += 1;
                 pthread_cond_timedwait(&handle->sync_cond, &handle->sync_mutex, &ts);
             }
-            NLOG("ROLLBACK: Initial sync complete!");
+            NLOG("ROLLBACK: Initial sync complete! (recv=%d sync=%d)",
+                 handle->has_received_data, handle->initial_sync_complete);
         }
 
         /* 3. Predict peer input: repeat last known confirmed input.
@@ -792,8 +797,10 @@ void netplay_post_frame_net(netplay_t *handle)
 
         pthread_mutex_unlock(&handle->sync_mutex);
 
-        /* Send this frame's input (and our confirmed-watermark CRC) to the peer. */
-        if (!netplay_send_data(handle)) {
+        /* Send this frame's input (and our confirmed-watermark CRC) to the peer,
+         * unless a resync is replacing the timeline: this frame belongs to the
+         * old one, and the peer treats the gap as ordinary UDP loss. */
+        if (handle->initial_sync_complete && !netplay_send_data(handle)) {
             handle->has_connection = 0;
             netplay_warn_hangup(handle);
         }
@@ -938,6 +945,26 @@ static int netplay_check_build_compat(netplay_t *handle, const netplay_msg_t *ms
  * comparison on purpose -- any tolerance/epsilon is a guaranteed silent
  * desync the moment predicted and confirmed values differ below it.  `ext`
  * is excluded (never applied to emulation).                               */
+/* Which field broke the match, for the log: a mismatch on equal digitals says
+ * the cause is one of the analog/mouse/lightgun fields, and naming it is the
+ * difference between a diagnosis and a guess. Diagnostic only. */
+static const char *netplay_state_diff_field(const netplay_state_t *a, const netplay_state_t *b)
+{
+    if (a->digital      != b->digital)      return "digital";
+    if (a->analog_x     != b->analog_x)     return "analog_x";
+    if (a->analog_y     != b->analog_y)     return "analog_y";
+    if (a->analog_rx    != b->analog_rx)    return "analog_rx";
+    if (a->analog_ry    != b->analog_ry)    return "analog_ry";
+    if (a->analog_lz    != b->analog_lz)    return "analog_lz";
+    if (a->analog_rz    != b->analog_rz)    return "analog_rz";
+    if (a->mouse_x      != b->mouse_x)      return "mouse_x";
+    if (a->mouse_y      != b->mouse_y)      return "mouse_y";
+    if (a->mouse_status != b->mouse_status) return "mouse_status";
+    if (a->lightgun_x   != b->lightgun_x)   return "lightgun_x";
+    if (a->lightgun_y   != b->lightgun_y)   return "lightgun_y";
+    return "none";
+}
+
 static int netplay_state_differs(const netplay_state_t *a, const netplay_state_t *b)
 {
     return (a->digital      != b->digital      ||
@@ -1119,6 +1146,13 @@ int netplay_read_data(netplay_t *handle)
                  * stale pre-correction capture (see crc_dirty, netplay.h).    */
                 (!handle->crc_dirty || msg_chk_frame < handle->crc_dirty_low)) {
                 uint32_t our_crc = handle->rollback_query_checksum(msg_chk_frame);
+                /* Remember the newest frame the two sides actually AGREED on: it
+                 * bounds when a later divergence started, which the desync
+                 * line alone cannot tell you.                             */
+                if (our_crc != 0 && our_crc == msg_checksum &&
+                    (int32_t)(msg_chk_frame - handle->last_crc_match_frame) > 0)
+                    handle->last_crc_match_frame = msg_chk_frame;
+
                 if (our_crc != 0 && our_crc != msg_checksum) {
                     static int desync_print_count = 0;
                     static bool s_item_probe_done = false;
@@ -1137,9 +1171,10 @@ int netplay_read_data(netplay_t *handle)
                      * watermark comparison also differs -- throttle the log
                      * (first handful, then 1 in 30) to keep logcat sane.        */
                     if (desync_print_count < 5 || (desync_print_count % 30) == 0) {
-                        NLOG("=== DESYNC DETECTED (confirmed) === frame=%u our_crc=0x%08x peer_crc=0x%08x wm=%u rtt=%u",
+                        NLOG("=== DESYNC DETECTED (confirmed) === frame=%u our_crc=0x%08x peer_crc=0x%08x wm=%u rtt=%u last_match=%u",
                              msg_chk_frame, our_crc, msg_checksum,
-                             my_watermark, handle->smoothed_rtt);
+                             my_watermark, handle->smoothed_rtt,
+                             handle->last_crc_match_frame);
                         netplay_applied_ring_arm("DESYNC", msg_chk_frame);
                         if (desync_print_count < 3)
                             myosd_netplay_log_sectional_crc(msg_chk_frame);
@@ -1274,8 +1309,12 @@ int netplay_read_data(netplay_t *handle)
 
                 /* Trigger rollback on prediction mismatch.                */
                 if (netplay_state_differs(&pred, &real_state)) {
-                    NLOG("ROLLBACK mismatch frame=%u pred_dig=0x%x real_dig=0x%x",
-                         chk_frame, pred.digital, real_state.digital);
+                    NLOG("ROLLBACK mismatch frame=%u field=%s pred_dig=0x%x real_dig=0x%x "
+                         "pred_mx=%.3f real_mx=%.3f pred_my=%.3f real_my=%.3f",
+                         chk_frame, netplay_state_diff_field(&pred, &real_state),
+                         pred.digital, real_state.digital,
+                         pred.mouse_x, real_state.mouse_x,
+                         pred.mouse_y, real_state.mouse_y);
                     netplay_applied_ring_arm("ROLLBACK_mismatch", chk_frame);
                     /* Mute the CRC detector for the stale window (see
                      * netplay.h) — states >= chk_frame were executed/captured
@@ -2550,8 +2589,31 @@ bool netplay_initial_sync(netplay_t *handle)
      * higher ceiling only costs time when the peer is genuinely slow. */
     constexpr long SYNC_INITIAL_TIMEOUT_MS = 60000;
     int resync_iter = 0;
+    /* Heartbeat for the drop-in freeze hunt: a stall shows up as silence
+     * otherwise, and silence cannot tell "receiving slowly" from "stuck
+     * missing one chunk". Once a second, both roles. */
+    int wait_iter = 0;
+    uint32_t last_seen_chunks = 0xFFFFFFFFu;
+    int rearms = 0;
     while (!handle->initial_sync_complete && handle->has_connection) {
         myosd_netplay_sync_poll();
+
+        if ((++wait_iter % 64) == 0) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - sync_wait_start).count();
+            uint32_t got = handle->sync_chunks_received;
+            /* recv/inject are the two halves of the client handover: the net
+             * thread sets recv once the state is uncompressed, and this loop
+             * injects it -- the gap where a frozen drop-in was last seen. */
+            NLOG("SYNCWAIT role=%s kind=%s chunks=%u/%u acked=%u rearms=%d "
+                 "stalled=%d recv=%d inject=%d elapsed_ms=%lld",
+                 handle->player1 ? "HOST" : "CLIENT", is_resync ? "resync" : "initial",
+                 got, handle->sync_total_chunks, handle->sync_last_acked_chunk,
+                 rearms, (got == last_seen_chunks) ? 1 : 0,
+                 handle->sync_state_received, handle->rollback_inject_state ? 1 : 0,
+                 (long long)ms);
+            last_seen_chunks = got;
+        }
 
         /* Resync reliability: the request travels over lossy UDP and
          * the peer may not have latched the episode yet, so while
@@ -2567,6 +2629,7 @@ bool netplay_initial_sync(netplay_t *handle)
                 pthread_mutex_lock(&handle->sync_mutex);
                 handle->sync_last_acked_chunk = 0;   /* re-arm blast   */
                 pthread_mutex_unlock(&handle->sync_mutex);
+                rearms++;
                 NLOG("RESYNC: re-arming state blast (no final ACK yet)");
             }
         }
@@ -2724,7 +2787,13 @@ void netplay_start_barrier(netplay_t *handle)
             handle->has_begun_game = 0;
             return;
         }
-        netplay_resync_begin(handle, "drop-in");
+        if (netplay_resync_begin(handle, "drop-in")) {
+            /* Told BEFORE the blast starts, as the manual resync already does:
+             * a peer that has not latched the episode discards every chunk,
+             * and the notice cannot cross a link we are saturating. */
+            for (int i = 0; i < 3; i++)
+                netplay_send_resync(handle);
+        }
     }
 }
 
@@ -2833,6 +2902,7 @@ int netplay_resync_begin(netplay_t *handle, const char *origin)
      * an OLD-timeline input for a now-zeroed frame.  Zero it (and the input
      * snapshots) so prediction restarts from silence on both sides.        */
     handle->prev_target_frame = 0;
+    netplay_applied_ring_reset();   /* diagnostics only */
     memset(&handle->prev_state_sent, 0, sizeof(handle->prev_state_sent));
     memset(&handle->state_tmp,       0, sizeof(handle->state_tmp));
     memset(&handle->state,           0, sizeof(handle->state));
