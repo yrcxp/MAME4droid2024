@@ -107,7 +107,9 @@
     <string name="np_lobby_stats_rooms">最近 %2$d 天里这里创建了 %1$d 个游戏。</string>
     <string name="np_lobby_stats_played">其中 %1$d 个真正开打了。</string>
     <string name="np_lobby_stats_games">最热门: %1$s</string>
+    <string name="np_lobby_stats_best">最常玩的: %1$s</string>
     <string name="np_lobby_stats_countries">来自 %1$d 个国家的玩家</string>
+    <string name="np_lobby_stats_top">最多 %1$s</string>
     <string name="np_lobby_stats_suggest">开一个 %1$s 的中途加入房间，别人就能在游戏中加入你。</string>
     <string name="np_lobby_count">有 %1$d 个游戏</string>
     <string name="np_lobby_refresh">刷新</string>
@@ -121,7 +123,7 @@
     <string name="np_lobby_delay_auto">延迟：自动</string>
     <string name="np_lobby_waiting">已等待 %1$d 秒</string>
     <string name="np_lobby_conn_lan">同一网络：直接连接</string>
-    <string name="np_lobby_conn_good">预计连接良好</string>
+    <string name="np_lobby_conn_good">应能顺利连接</string>
     <string name="np_lobby_conn_maybe">连接可能失败</string>
     <string name="np_lobby_conn_bad">无法连接：双方路由器都有限制</string>
     <string name="np_lobby_conn_bad_why">你们双方都在对称NAT之后，无法直接连接。请改用Wi-Fi而不是移动数据，或在路由器上转发端口。</string>

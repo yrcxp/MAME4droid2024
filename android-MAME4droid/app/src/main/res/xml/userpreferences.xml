@@ -896,7 +896,7 @@
         android:summary="@string/prefscr_netplay_summary" android:persistent="false">
 		<EditTextPreference android:title="@string/pref_netplay_port_title" android:key="PREF_NETPLAY_PORT" android:defaultValue="2080" />
 		<ListPreference android:entries="@array/pref_netplay_delay_options" android:title="@string/pref_netplay_delay_title" android:key="PREF_NETPLAY_DELAY" android:entryValues="@array/pref_netplay_delay_values" android:defaultValue="0" />
-		<CheckBoxPreference android:title="@string/pref_netplay_stats_title" android:summary="@string/pref_netplay_stats_summary" android:key="PREF_NETPLAY_STATS_ENABLED" android:defaultValue="false" />
+		<CheckBoxPreference android:title="@string/pref_netplay_stats_title" android:summary="@string/pref_netplay_stats_summary" android:key="PREF_NETPLAY_STATS_ENABLED_2" android:defaultValue="true" />
 		<CheckBoxPreference android:title="@string/pref_netplay_desync_title" android:summary="@string/pref_netplay_desync_summary" android:key="PREF_NETPLAY_DESYNC_DETECTOR_ENABLED" android:defaultValue="true" />
 		<CheckBoxPreference android:title="@string/pref_netplay_upnp_title" android:summary="@string/pref_netplay_upnp_summary" android:key="PREF_NETPLAY_UPNP" android:defaultValue="true" />
 		<com.seleuco.mame4droid.prefs.CheckBoxPrefWithWarn android:key="PREF_NETPLAY_ALLOW_PLUGINS"

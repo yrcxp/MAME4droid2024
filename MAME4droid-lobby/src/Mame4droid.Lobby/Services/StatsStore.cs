@@ -27,15 +27,19 @@ namespace Mame4droid.Lobby.Services;
 
 /// What the board shows when nobody is hosting: how much has happened lately,
 /// so an empty list reads as "you are early" instead of "this is dead".
+/// Games is what people reach for, counting a room opened and a game finished
+/// alike. Best is only what they played to the end -- a smaller list, and the
+/// one worth recommending.
 public sealed record StatsSnapshot(
     string Since, int Rooms, int Played, IReadOnlyList<string> Games,
-    int Countries, IReadOnlyList<string> Flags)
+    IReadOnlyList<string> Best, int Countries, IReadOnlyList<string> Flags)
 {
-    public static readonly StatsSnapshot Empty =
-        new("", 0, 0, Array.Empty<string>(), 0, Array.Empty<string>());
+    public static readonly StatsSnapshot Empty = new("", 0, 0,
+        Array.Empty<string>(), Array.Empty<string>(), 0, Array.Empty<string>());
 
     /// Nothing cleared its threshold, so there is no showcase to draw.
-    public bool Interesting => Rooms > 0 || Played > 0 || Games.Count > 0 || Countries > 0;
+    public bool Interesting
+        => Rooms > 0 || Played > 0 || Games.Count > 0 || Best.Count > 0 || Countries > 0;
 }
 
 /// Day-bucketed counters behind that showcase, in a file rather than memory
@@ -95,6 +99,12 @@ public sealed class StatsStore
         var day = Today();
         Interlocked.Increment(ref day.Played);
         Note(day, game, country);
+
+        /* Also on its own list: what people finish is a different claim from
+         * what they open a room for, and it is the better recommendation. */
+        if (!string.IsNullOrEmpty(game) && (day.Finished.Count < MaxGamesPerDay
+                                            || day.Finished.ContainsKey(game)))
+            day.Finished.AddOrUpdate(game, 1, static (_, had) => had + 1);
     }
 
     /// What the board may show. Anything under its threshold comes back as
@@ -111,10 +121,11 @@ public sealed class StatsStore
     /// what the file itself would tell you, only added up across its days.
     /// The board never sees this; it is for whoever runs the service.
     public (IReadOnlyList<KeyValuePair<string, int>> Games,
+            IReadOnlyList<KeyValuePair<string, int>> Finished,
             IReadOnlyList<KeyValuePair<string, int>> Countries) Totals()
     {
         var window = Gather();
-        return (Order(window.Games), Order(window.Countries));
+        return (Order(window.Games), Order(window.Finished), Order(window.Countries));
     }
 
     private static KeyValuePair<string, int>[] Order(Dictionary<string, int> counts)
@@ -132,6 +143,7 @@ public sealed class StatsStore
         var rooms = 0;
         var played = 0;
         var games = new Dictionary<string, int>(StringComparer.Ordinal);
+        var finished = new Dictionary<string, int>(StringComparer.Ordinal);
         var countries = new Dictionary<string, int>(StringComparer.Ordinal);
         var since = DateTime.UtcNow.Date;
 
@@ -146,31 +158,38 @@ public sealed class StatsStore
             played += Volatile.Read(ref day.Played);
             foreach (var (name, count) in day.Games)
                 games[name] = games.TryGetValue(name, out var had) ? had + count : count;
+            foreach (var (name, count) in day.Finished)
+                finished[name] = finished.TryGetValue(name, out var was) ? was + count : count;
             foreach (var (iso, count) in day.Countries)
                 countries[iso] = countries.TryGetValue(iso, out var seen) ? seen + count : count;
         }
 
         return new Window(
             since.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            rooms, played, games, countries);
+            rooms, played, games, finished, countries);
     }
 
     private readonly record struct Window(
-        string Since, int Rooms, int Played,
-        Dictionary<string, int> Games, Dictionary<string, int> Countries);
+        string Since, int Rooms, int Played, Dictionary<string, int> Games,
+        Dictionary<string, int> Finished, Dictionary<string, int> Countries);
 
     private StatsSnapshot Collect(bool forBoard)
     {
         var o = _options.CurrentValue;
-        var (stamp, rooms, played, games, countries) = Gather();
+        var (stamp, rooms, played, games, finished, countries) = Gather();
 
         if (!forBoard)
             return new StatsSnapshot(stamp, rooms, played,
-                Rank(games, o.StatsTopGames),
+                Rank(games, o.StatsTopGames), Rank(finished, o.StatsTopBest),
                 countries.Count, Rank(countries, o.StatsTopCountries));
 
-        var top = games.Count >= o.StatsMinGames ? Rank(games, o.StatsTopGames)
-                                                 : Array.Empty<string>();
+        /* Held back the same way the played figure is: counted and kept, just
+         * not sent, until it says something worth reading beside the rest. */
+        var top = o.StatsShowGames && games.Count >= o.StatsMinGames
+            ? Rank(games, o.StatsTopGames) : Array.Empty<string>();
+
+        var best = finished.Count >= o.StatsMinBest
+            ? Rank(finished, o.StatsTopBest) : Array.Empty<string>();
 
         /* The flags ride on the same threshold as the count they illustrate:
          * three of them next to "2 countries" would say more than the figure
@@ -182,7 +201,7 @@ public sealed class StatsStore
             /* Withheld, not uncounted: the file keeps every one of these so the
              * figure is already there on the day it is worth showing. */
             o.StatsShowPlayed && played >= o.StatsMinPlayed ? played : 0,
-            top,
+            top, best,
             enough ? countries.Count : 0,
             enough ? Rank(countries, o.StatsTopCountries) : Array.Empty<string>());
     }
@@ -273,6 +292,10 @@ public sealed class StatsStore
                 .Append(string.Join(',', day.Games.OrderByDescending(g => g.Value)
                                                   .Take(MaxGamesPerDay)
                                                   .Select(g => g.Key + ":" + g.Value)))
+                .Append("|finished=")
+                .Append(string.Join(',', day.Finished.OrderByDescending(g => g.Value)
+                                                     .Take(MaxGamesPerDay)
+                                                     .Select(g => g.Key + ":" + g.Value)))
                 .Append("|countries=")
                 .Append(string.Join(',', day.Countries.OrderByDescending(c => c.Value)
                                                       .Select(c => c.Key + ":" + c.Value)))
@@ -330,6 +353,16 @@ public sealed class StatsStore
                                     day.Games[entry[..colon]] = count;
                             }
                             break;
+                        /* Absent from a file written before this existed, which
+                         * only costs those days their finished list. */
+                        case "finished":
+                            foreach (var entry in value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                var colon = entry.LastIndexOf(':');
+                                if (colon > 0 && int.TryParse(entry[(colon + 1)..], out var done))
+                                    day.Finished[entry[..colon]] = done;
+                            }
+                            break;
                         case "countries":
                             foreach (var entry in value.Split(',', StringSplitOptions.RemoveEmptyEntries))
                             {
@@ -360,7 +393,12 @@ public sealed class StatsStore
     {
         public int Rooms;
         public int Played;
+
+        /* Two tallies, not one. Games counts every time a name came up, room
+         * opened or game finished alike -- what people reach for. Finished
+         * counts only games two people actually played to the end. */
         public readonly ConcurrentDictionary<string, int> Games = new(StringComparer.Ordinal);
+        public readonly ConcurrentDictionary<string, int> Finished = new(StringComparer.Ordinal);
         public readonly ConcurrentDictionary<string, int> Countries = new(StringComparer.Ordinal);
     }
 }

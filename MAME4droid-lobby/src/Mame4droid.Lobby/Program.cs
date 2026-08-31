@@ -156,17 +156,31 @@ app.MapGet("/", (HttpContext ctx, StatsStore store, RoomStore board,
         /* The whole file added up -- the counts above are cuts of this, and the
          * operator has no reason to see only the top. Capped all the same: it
          * grows with every driver anyone ever hosts. */
-        var (allGames, allCountries) = store.Totals();
+        var (allGames, allFinished, allCountries) = store.Totals();
+
+        /* Wanted and Countries count a room opening AND a game finishing, so
+         * they add up past the rooms figure. Said once here rather than left to
+         * whoever notices the totals disagree. */
+        if (allGames.Count > 0 || allCountries.Count > 0)
+            activity += "<h3 style='color: #ffffff; font-size: 0.95rem; margin-top: 2rem;'>Breakdown</h3>" +
+                "<p style='color: #6b6b6b; font-size: 0.8rem;'>Wanted counts every time a name " +
+                "came up, a room opened and a game finished alike. Played counts only games " +
+                "two people saw through.</p>";
+
+        if (allFinished.Count > 0)
+            activity += "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
+                "overflow-wrap: anywhere;'><b style='color: #4ade80;'>Played</b> &nbsp; " +
+                Tally(allFinished) + "</p>";
 
         if (allGames.Count > 0)
-            activity += "<h3 style='color: #ffffff; font-size: 0.95rem; margin-top: 2rem;'>Games</h3>" +
-                "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
-                "overflow-wrap: anywhere;'>" + Tally(allGames) + "</p>";
+            activity += "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
+                "overflow-wrap: anywhere;'><b style='color: #ffffff;'>Wanted</b> &nbsp; " +
+                Tally(allGames) + "</p>";
 
         if (allCountries.Count > 0)
-            activity += "<h3 style='color: #ffffff; font-size: 0.95rem; margin-top: 1.5rem;'>Rooms by country</h3>" +
-                "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
-                "overflow-wrap: anywhere;'>" + Tally(allCountries) + "</p>";
+            activity += "<p style='color: #a0a0a0; font-size: 0.85rem; line-height: 1.7; " +
+                "overflow-wrap: anywhere;'><b style='color: #ffffff;'>Countries</b> &nbsp; " +
+                Tally(allCountries) + "</p>";
     }
 
     /* The board for a human rather than a client, and strictly less than
@@ -197,10 +211,12 @@ app.MapGet("/", (HttpContext ctx, StatsStore store, RoomStore board,
 
         foreach (var room in live)
         {
-            var notes = new List<string>(3);
+            /* Only what makes this room unusual. Having a local address is not:
+             * every host on wi-fi publishes one, so it was true in nearly every
+             * row -- and mob already marks the rare case, the host without. */
+            var notes = new List<string>(2);
             if (room.Playing) notes.Add("drop-in");
             if (room.IsLocked) notes.Add("private");
-            if (room.Host.Lan.Length > 0) notes.Add("LAN");
 
             /* The same flags the telemetry lines carry, so a room on screen
              * and a session in the log read the same way. Only what is true

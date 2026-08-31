@@ -93,6 +93,12 @@ public class UpnpHelper {
         return sExternalIp;
     }
 
+    /** The external port the router forwards, or 0 with no mapping. On a
+     *  symmetric NAT this is the only port anybody else can reach. */
+    public static synchronized int getMappedPort() {
+        return sMapped ? sExtPort : 0;
+    }
+
     public static synchronized boolean isMapped() {
         return sMapped;
     }

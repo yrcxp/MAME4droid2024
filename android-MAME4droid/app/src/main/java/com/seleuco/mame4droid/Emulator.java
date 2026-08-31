@@ -178,6 +178,12 @@ public class Emulator {
 	 *  savestate actually was instead of just being refused. Read-only. */
 	final static public int NETPLAY_DROP_IN_STATE_KB = 86;
 
+	/** What rollback costs: mispredictions so far, and the frames they had to
+	 *  re-simulate. Ping says whether a link is fast; these say whether the
+	 *  device can afford it. Zero in lockstep. Read-only. */
+	final static public int NETPLAY_ROLLBACKS = 87;
+	final static public int NETPLAY_ROLLBACK_FRAMES = 88;
+
 	//set str
 	final static public int SAF_PATH = 1;
 	final static public int ROM_NAME = 2;
@@ -1326,12 +1332,12 @@ public class Emulator {
 					 * in-flight around the same moment, so a stale push must
 					 * not resurrect the overlay after it's already hidden. */
 					if (mm.getPrefsHelper().isNetplayStatsEnabled() && getValue(NETPLAY_HAS_CONNECTION) == 1) {
-						/* Where the two players are, worked out here rather than
-						 * natively: the countries come from the board, and the
+						/* Where the game is being played, worked out here rather
+						 * than natively: it comes from the board, and the
 						 * native side knows nothing about it. */
-						String flags = (mm.getNetPlay() != null)
-								? mm.getNetPlay().getLiveFlagPair() : null;
-						com.seleuco.mame4droid.widgets.StatsWidget.update(mm, msg.substring(6), flags);
+						String origin = (mm.getNetPlay() != null)
+								? mm.getNetPlay().getLiveOriginTag() : null;
+						com.seleuco.mame4droid.widgets.StatsWidget.update(mm, msg.substring(6), origin);
 					} else
 						com.seleuco.mame4droid.widgets.StatsWidget.hide(mm);
 				} else {

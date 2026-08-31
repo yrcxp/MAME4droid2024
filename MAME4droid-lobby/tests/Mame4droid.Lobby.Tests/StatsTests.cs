@@ -59,7 +59,7 @@ public class StatsTests : IDisposable
     [Fact]
     public void Past_the_threshold_the_busiest_games_come_back_in_order()
     {
-        var stats = Store();
+        var stats = Store(new LobbyOptions { StatsShowGames = true });
 
         for (var i = 0; i < 12; i++) stats.RoomCreated("dino", "ES");
         for (var i = 0; i < 5; i++) stats.RoomCreated("mslug", "ES");
@@ -86,6 +86,90 @@ public class StatsTests : IDisposable
         var seen = stats.Snapshot();
         Assert.Equal(20, seen.Rooms);
         Assert.Empty(seen.Games);
+    }
+
+    [Fact]
+    public void What_people_finish_is_ranked_apart_from_what_they_open_rooms_for()
+    {
+        var stats = Store(new LobbyOptions { StatsShowGames = true });
+
+        /* A game everyone opens a room for and nobody finishes, against ones
+         * that get played. Opening a room is a wish; finishing is a fact. */
+        for (var i = 0; i < 30; i++) stats.RoomCreated("kinst", "ES");
+        for (var i = 0; i < 4; i++) stats.RoomCreated("dino", "ES");
+        for (var i = 0; i < 8; i++) stats.GamePlayed("dino", "ES");
+        for (var i = 0; i < 5; i++) stats.GamePlayed("mslug", "AR");
+        for (var i = 0; i < 2; i++) stats.GamePlayed("sf2", "BR");
+
+        var seen = stats.Snapshot();
+
+        Assert.Equal("kinst", seen.Games[0]);
+        Assert.Equal(new[] { "dino", "mslug", "sf2" }, seen.Best);
+
+        /* The one nobody saw through never reaches the recommendation. */
+        Assert.DoesNotContain("kinst", seen.Best);
+    }
+
+    [Fact]
+    public void One_finished_game_is_already_worth_showing()
+    {
+        var stats = Store();
+
+        for (var i = 0; i < 20; i++) stats.RoomCreated("kinst", "ES");
+        stats.GamePlayed("dino", "ES");
+
+        /* Unlike a ranking of wishes, which needs a few names before it says
+         * anything, one game somebody saw through is a fact on its own. */
+        Assert.Equal(new[] { "dino" }, stats.Snapshot().Best);
+    }
+
+    [Fact]
+    public void The_played_list_runs_deeper_than_the_wanted_one()
+    {
+        var stats = Store();
+
+        string[] roms = { "dino", "mslug", "sf2ce", "kof97", "garou",
+                          "punisher", "sfa3", "mk2", "1944", "contra", "tmnt2po" };
+
+        /* Descending, so the order is the ranking and not the insertion. */
+        for (var i = 0; i < roms.Length; i++)
+            for (var n = roms.Length - i; n > 0; n--) stats.GamePlayed(roms[i], "ES");
+
+        var best = stats.Snapshot().Best;
+
+        /* A leaderboard, so it goes ten deep rather than three -- and the
+         * eleventh is left out, most played first. */
+        Assert.Equal(10, best.Count);
+        Assert.Equal("dino", best[0]);
+        Assert.Equal("contra", best[9]);
+        Assert.DoesNotContain("tmnt2po", best);
+    }
+
+    [Fact]
+    public void The_most_wanted_list_is_counted_but_withheld_until_turned_on()
+    {
+        var stats = Store();
+
+        for (var i = 0; i < 12; i++) stats.RoomCreated("kinst", "ES");
+        for (var i = 0; i < 6; i++) stats.RoomCreated("dino", "ES");
+        for (var i = 0; i < 3; i++) stats.RoomCreated("sf2", "ES");
+        for (var i = 0; i < 4; i++) stats.GamePlayed("dino", "ES");
+        for (var i = 0; i < 3; i++) stats.GamePlayed("mslug", "ES");
+        for (var i = 0; i < 2; i++) stats.GamePlayed("sf2", "ES");
+
+        var seen = stats.Snapshot();
+
+        /* Two lists of games at once is one too many, and the played one is
+         * the better recommendation -- so only that one goes out. */
+        Assert.Empty(seen.Games);
+        Assert.Equal(new[] { "dino", "mslug", "sf2" }, seen.Best);
+        stats.Flush();
+
+        /* Withheld, not uncounted. */
+        var shown = new StatsStore(
+            new FixedOptions<LobbyOptions>(new LobbyOptions { StatsShowGames = true }),
+            NullLogger<StatsStore>.Instance, _path);
+        Assert.Equal("kinst", shown.Snapshot().Games[0]);
     }
 
     [Fact]
@@ -169,7 +253,7 @@ public class StatsTests : IDisposable
     [Fact]
     public void Counts_survive_the_restart_the_free_instance_makes_routine()
     {
-        var first = Store(new LobbyOptions { StatsShowPlayed = true });
+        var first = Store(new LobbyOptions { StatsShowPlayed = true, StatsShowGames = true });
         for (var i = 0; i < 11; i++) first.RoomCreated("dino", "ES");
         for (var i = 0; i < 5; i++) first.RoomCreated("mslug", "AR");
         first.RoomCreated("sf2", "BR");
@@ -178,7 +262,11 @@ public class StatsTests : IDisposable
 
         /* The whole reason this is a file: an idle unload must not reset the
          * numbers to zero exactly when an empty board needs them most. */
-        var reloaded = Store(new LobbyOptions { StatsShowPlayed = true }).Snapshot();
+        var reloaded = Store(new LobbyOptions
+        {
+            StatsShowPlayed = true,
+            StatsShowGames = true
+        }).Snapshot();
         Assert.Equal(17, reloaded.Rooms);
         Assert.Equal(4, reloaded.Played);
         Assert.Equal("dino", reloaded.Games[0]);

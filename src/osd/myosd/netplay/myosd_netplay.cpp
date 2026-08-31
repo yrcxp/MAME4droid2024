@@ -705,6 +705,12 @@ static bool netplay_iu_rollback_normal_step(netplay_t *handle, bool is_new_mame_
         } else if (depth <= safe_depth) {
             NLOG("ROLLBACK: rewind %u frames (%u to %u) [deferred load]", depth, cur_frame, rb_frame);
 
+            /* Counted here and nowhere else: this is the branch that actually
+             * re-simulates, so depth==0 and the too-deep case below stay out
+             * of an average meant to say what a miss costs. */
+            handle->tel_rollbacks++;
+            handle->tel_rollback_frames += depth;
+
             /* N-1 recovery data is not tracked here: the ACK sends the
              * last known correct input instead. */
 

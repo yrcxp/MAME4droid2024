@@ -167,12 +167,17 @@ public class NetPlayHelper {
      * within the board's own deadline. */
     private static final long LAN_SILENCE_MS = 10000;
 
-    /* Lockstep's automatic delay stops at ten internal ticks -- five frames,
-     * about 83ms -- so past this the buffer is spent and the emulation waits
-     * on packets instead of lagging behind them. */
+    /* Lockstep's automatic delay stops at 8 frames, about 133ms of buffer, so
+     * past roughly twice that the emulation waits on packets instead of just
+     * lagging behind them. Warn below it: the lag is felt long before then. */
     private static final int LOCKSTEP_CEILING_MS = 200;
     /* Ten seconds of it, so a Wi-Fi spike never passes for a verdict. */
     private static final int LOCKSTEP_SLOW_SAMPLES = 10;
+
+    /* How long the native handshake may take after the board has paired two
+     * players. Generous: it is only ever waited out in full when the two never
+     * manage to reach each other at all. */
+    private static final int CONNECT_GRACE_MS = 20000;
 
     /* Said once per session: the mode is fixed before the session begins, so
      * repeating it would only take the screen away from the game. */
@@ -252,6 +257,12 @@ public class NetPlayHelper {
     private volatile int playedJitter = 0;
     private volatile int playedRttMin = 0;
     private volatile int playedRttMax = 0;
+
+    /* What rollback cost this session: misses and the frames they had to
+     * re-simulate. Sampled like the rest, because the native counters go
+     * with the handle and read zero once it is torn down. */
+    private volatile int playedRollbacks = 0;
+    private volatile int playedRollbackFrames = 0;
     private volatile int playedMode = 0;
     private volatile int playedDelay = 0;
     private volatile boolean playedLocked = false;
@@ -1571,7 +1582,7 @@ public class NetPlayHelper {
                 "host", "withdrawn", LobbySession.natOf(info, UpnpHelper.isMapped()),
                 null, null, 0, null, rollbackMode ? 1 : 0,
                 mm.getPrefsHelper().getNetplayDelayValue(), 0, 0, 0, 0, 0,
-                false, null, true);
+                false, null, true, 0, 0);
     }
 
     /**
@@ -1749,7 +1760,7 @@ public class NetPlayHelper {
                 outcome, self, joinPeerNat,
                 LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped(), joinDialedV6), waitMs,
                 joinPeerCountry, joinMode, joinDelay, 0, 0, 0, 0, 0, joinLocked, joinRoom,
-                joinIsDropIn);
+                joinIsDropIn, 0, 0);
 
         if ("connected".equals(outcome)) {
             sessionStartMs = System.currentTimeMillis();
@@ -1758,7 +1769,10 @@ public class NetPlayHelper {
             advisedRollback = false;
             playedGame = game;
             playedRole = "client";
-            playedPath = joinSameSite ? "lan" : "punch";
+            /* The same reckoning the join above reports, not a two-way guess:
+             * hardcoding "punch" filed every v6 session as a punch when it
+             * ended, so one match described itself two different ways. */
+            playedPath = LobbySession.pathOf(joinSameSite, UpnpHelper.isMapped(), joinDialedV6);
             playedPeerCountry = joinPeerCountry;
             playedSelfNat = self;
             playedPeerNat = joinPeerNat;
@@ -1800,9 +1814,44 @@ public class NetPlayHelper {
 
         new Thread(new Runnable() {
             public void run() {
+                /* The board pairs before the native handshake finishes, so
+                 * entering the loop below early read as "already down" and
+                 * filed a drop into a game that had not started. */
+                boolean up = false;
+                long deadline = System.currentTimeMillis() + CONNECT_GRACE_MS;
+
+                while (samplerRunning && System.currentTimeMillis() < deadline) {
+                    if (Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 1) {
+                        up = true;
+                        break;
+                    }
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+
+                if (!up) {
+                    /* Agreed to meet and never connected -- the same thing the
+                     * joiner's own punch timeout reports, and not a game that
+                     * dropped after being played. */
+                    if (samplerRunning) reportSessionEnded("timeout");
+                    samplerRunning = false;
+                    return;
+                }
+
+                /* Timed from here: pairing costs seconds the players never
+                 * spent in the game, and playMs is meant to say how long the
+                 * session lasted. */
+                sessionStartMs = System.currentTimeMillis();
+
                 int slowSamples = 0;
                 while (samplerRunning && Emulator.getValue(Emulator.NETPLAY_HAS_CONNECTION) == 1) {
                     int rtt = Emulator.getValue(Emulator.NETPLAY_RTT);
+                    playedRollbacks = Emulator.getValue(Emulator.NETPLAY_ROLLBACKS);
+                    playedRollbackFrames = Emulator.getValue(Emulator.NETPLAY_ROLLBACK_FRAMES);
                     if (rtt > 0) {
                         playedRtt = rtt;
                         playedJitter = Emulator.getValue(Emulator.NETPLAY_JITTER);
@@ -1893,7 +1942,10 @@ public class NetPlayHelper {
         final int jitter = playedJitter;
         final int rttMin = playedRttMin;
         final int rttMax = playedRttMax;
+        final int rollbacks = playedRollbacks;
+        final int rollbackFrames = playedRollbackFrames;
         playedRtt = playedJitter = playedRttMin = playedRttMax = 0;
+        playedRollbacks = playedRollbackFrames = 0;
 
         /* The room's own mode, delay and privacy, captured when the session
          * started -- not this device's settings. A joiner runs whatever the
@@ -1902,7 +1954,8 @@ public class NetPlayHelper {
         final LobbySession board = new LobbySession(mm);
         board.report(playedGame, playedRole, outcome, playedSelfNat, playedPeerNat,
                 playedPath, 0, playedPeerCountry, playedMode, playedDelay,
-                playMs, rtt, jitter, rttMin, rttMax, playedLocked, playedRoom, playedDropIn);
+                playMs, rtt, jitter, rttMin, rttMax, playedLocked, playedRoom, playedDropIn,
+                rollbacks, rollbackFrames);
     }
 
     /* Our own code asks the telephony service, and the stats overlay repaints
@@ -1911,12 +1964,16 @@ public class NetPlayHelper {
     private volatile String homeCountry = null;
 
     /**
-     * Here and there as a pair of flags, or null when nobody told us where the
-     * other player is. Tied to the live session because the peer's country
-     * outlives its game: a later manual match would wear the old flag.
+     * Where the game is being played: "LAN", or here and there as a pair of
+     * flags, or null when nobody told us. Tied to the live session because the
+     * peer's country outlives its game and a later match would wear it.
      */
-    public String getLiveFlagPair() {
+    public String getLiveOriginTag() {
         if (sessionStartMs == 0) return null;
+
+        /* On our own network two flags say nothing -- they are the same one --
+         * and what matters about the link is that it never left the house. */
+        if ("lan".equals(playedPath)) return "LAN";
 
         String there = playedPeerCountry;
         if (there == null || there.length() != 2) return null;
@@ -1977,10 +2034,15 @@ public class NetPlayHelper {
         for (String local : getAllLocalIPv4())
             lan.add(local + ":" + localPort);
 
+        /* Same correction the first publish makes: on a symmetric NAT the port
+         * STUN just observed is useless to anyone but STUN. */
+        LobbyClient.Nat nat = LobbySession.natOf(info, UpnpHelper.isMapped());
+
         LobbyClient.Response result = LobbyClient.updatePeer(base, room,
                 Emulator.netplayGetProtocolVersion(), LobbySession.appVersion(mm),
-                tuples[0], tuples[1], lan,
-                LobbySession.natOf(info, UpnpHelper.isMapped()), LobbySession.country(mm),
+                LobbySession.reachableTuple(tuples[0], nat.sym, UpnpHelper.isMapped()),
+                tuples[1], lan,
+                nat, LobbySession.country(mm),
                 heldClaimToken(room));
 
         /* If this does not land, the host punches at whatever guess we sent
@@ -2038,7 +2100,7 @@ public class NetPlayHelper {
                 rollbackMode ? 1 : 0, mm.getPrefsHelper().getNetplayDelayValue(), 0,
                 Emulator.getValue(Emulator.NETPLAY_RTT), Emulator.getValue(Emulator.NETPLAY_JITTER),
                 Emulator.getValue(Emulator.NETPLAY_RTT_MIN), Emulator.getValue(Emulator.NETPLAY_RTT_MAX),
-                lobbyPrivate, roomId, dropIn);
+                lobbyPrivate, roomId, dropIn, 0, 0);
 
         /* From here the session either plays or dies; how long it lasts is
          * reported separately, since "connected" on its own cannot tell a real

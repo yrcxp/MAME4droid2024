@@ -218,8 +218,14 @@ public class LobbySession {
          * room nobody claimed, never hears a thing. */
         dropPreviousRoom();
 
+        /* A symmetric host with a forward is reachable, but only at the port
+         * the router forwards -- see reachableTuple. Publishing the STUN port
+         * instead sent joiners at a port that answers nobody. */
+        LobbyClient.Nat nat = natOf(info, upnpMapped);
+        String primary = reachableTuple(tuples[0], nat.sym, upnpMapped);
+
         LobbyClient.Created created = LobbyClient.create(base, proto, app, game, mode, delay,
-                plugins, tuples[0], tuples[1], lanAddresses, natOf(info, upnpMapped),
+                plugins, primary, tuples[1], lanAddresses, nat,
                 country(mm), pin, playing);
 
         lastPublishStatus = created.status;
@@ -387,14 +393,16 @@ public class LobbySession {
                        final int mode, final int delay, final long playMs,
                        final int rttMs, final int jitterMs,
                        final int rttMinMs, final int rttMaxMs, final boolean locked,
-                       final String room, final boolean dropIn) {
+                       final String room, final boolean dropIn,
+                       final int rollbacks, final int rollbackFrames) {
         if (proto <= 0) return;
         final String here = country(mm);
         new Thread(new Runnable() {
             public void run() {
                 LobbyClient.telemetry(base, proto, app, game, role, outcome,
                         self, peer, path, waitMs, here, peerCountry, mode, delay, playMs,
-                        rttMs, jitterMs, rttMinMs, rttMaxMs, locked, room, dropIn);
+                        rttMs, jitterMs, rttMinMs, rttMaxMs, locked, room, dropIn,
+                        rollbacks, rollbackFrames);
             }
         }).start();
     }
@@ -416,6 +424,24 @@ public class LobbySession {
         for (String part : parts)
             if (part.startsWith("alt=")) out[1] = part.substring(4);
         return out;
+    }
+
+    /**
+     * The port to advertise on a symmetric NAT with a forward: it opens a
+     * different one per destination, so the port STUN saw lets nobody else in
+     * and only the forwarded one does. A cone NAT punches fine, so left alone.
+     */
+    public static String reachableTuple(String tuple, boolean sym, boolean upnpMapped) {
+        if (tuple == null || !sym || !upnpMapped) return tuple;
+
+        int mapped = UpnpHelper.getMappedPort();
+        int colon = tuple.lastIndexOf(':');
+        if (mapped <= 0 || colon <= 0) return tuple;
+
+        /* Host part untouched: the server verifies the advertised address
+         * against the one our own request came from, and only the port is
+         * wrong here. */
+        return tuple.substring(0, colon + 1) + mapped;
     }
 
     /**

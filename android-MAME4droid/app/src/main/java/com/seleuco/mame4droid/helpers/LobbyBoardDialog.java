@@ -508,22 +508,34 @@ public class LobbyBoardDialog {
             box.addView(line(mm.getString(R.string.np_lobby_stats_played, recent.played),
                     13, Color.LTGRAY));
 
+        if (recent.best.length > 0)
+            box.addView(line(mm.getString(R.string.np_lobby_stats_best,
+                    join(recent.best)), 13, Color.LTGRAY));
+
         if (recent.games.length > 0)
             box.addView(line(mm.getString(R.string.np_lobby_stats_games,
                     join(recent.games)), 13, Color.LTGRAY));
 
         if (recent.countries > 0) {
             String where = mm.getString(R.string.np_lobby_stats_countries, recent.countries);
+            /* Labelled, or three flags after "players from 14 countries" read
+             * as the whole list rather than the busiest of it. */
             String flags = flagsOf(recent.flags);
-            box.addView(line(flags.length() > 0 ? where + "   " + flags : where,
-                    13, Color.LTGRAY));
+            box.addView(line(flags.length() > 0
+                    ? where + "   " + mm.getString(R.string.np_lobby_stats_top, flags)
+                    : where, 13, Color.LTGRAY));
         }
 
-        /* Named whether or not this build has the driver: the line is a pitch,
-         * and somebody who wants the game can go and find the ROM. */
-        if (recent.games.length > 0) {
+        /* Suggested off what people finish, not what they open rooms for: a
+         * game everyone tries and nobody sees through is the worst thing to
+         * recommend. Named even if this build lacks the driver -- the line is
+         * a pitch, and whoever wants it can go and find the ROM. */
+        String pick = recent.best.length > 0 ? recent.best[0]
+                : recent.games.length > 0 ? recent.games[0] : null;
+
+        if (pick != null) {
             TextView call = line(
-                    mm.getString(R.string.np_lobby_stats_suggest, recent.games[0]), 13, Color.CYAN);
+                    mm.getString(R.string.np_lobby_stats_suggest, pick), 13, Color.CYAN);
             call.setPadding(0, (int) (8 * density), 0, 0);
             box.addView(call);
         }

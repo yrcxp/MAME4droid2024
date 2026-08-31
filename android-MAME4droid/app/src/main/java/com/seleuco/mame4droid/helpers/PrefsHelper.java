@@ -193,7 +193,10 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_NETPLAY_PORT = "PREF_NETPLAY_PORT";
 	final static public String PREF_NETPLAY_DELAY = "PREF_NETPLAY_DELAY";
 	final static public String PREF_NETPLAY_PEERADDR = "PREF_NETPLAY_PEERADR";
-	final static public String PREF_NETPLAY_STATS_ENABLED = "PREF_NETPLAY_STATS_ENABLED";
+	/* _2: the default moved from off to on, and a stored value always wins over
+	 * a default. Renaming the key is what makes everybody who has already
+	 * opened the settings get the new one. */
+	final static public String PREF_NETPLAY_STATS_ENABLED = "PREF_NETPLAY_STATS_ENABLED_2";
 	final static public String PREF_NETPLAY_DESYNC_DETECTOR_ENABLED = "PREF_NETPLAY_DESYNC_DETECTOR_ENABLED";
 	final static public String PREF_NETPLAY_PUNCHADDR = "PREF_NETPLAY_PUNCHADDR";
 	final static public String PREF_NETPLAY_UPNP = "PREF_NETPLAY_UPNP";
@@ -872,7 +875,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public boolean isNetplayStatsEnabled() {
-		return getSharedPreferences().getBoolean(PREF_NETPLAY_STATS_ENABLED, false);
+		return getSharedPreferences().getBoolean(PREF_NETPLAY_STATS_ENABLED, true);
 	}
 
 	public boolean isNetplayDesyncDetectorEnabled() {

@@ -101,6 +101,14 @@ public sealed class TelemetrySink
          * value drags an average people read as advice. Its own key, with the
          * path in it: one country pair covers a LAN game at 8 ms and an
          * internet one at 90, and their average described neither. */
+        /* Reported raw so the two questions stay separable: how often rollback
+         * fired, and how much work each firing was. Per minute rather than per
+         * session, or a long game always looks worse than a short one. */
+        var misses = Math.Clamp(report.Rollbacks, 0, 10_000_000);
+        var rewound = Math.Clamp(report.RollbackFrames, 0, 100_000_000);
+        var perMin = played > 0 ? misses * 60000L / played : 0;
+        var depth = misses > 0 ? rewound / misses : 0;
+
         var rtt = Math.Clamp(report.RttMs, 0, 10000);
         var jitter = Math.Clamp(report.JitterMs, 0, 10000);
         var floor = Math.Clamp(report.RttMinMs, 0, 10000);
@@ -112,10 +120,11 @@ public sealed class TelemetrySink
             "TELEM session={Session} proto={Proto} app={App} game={Game} role={Role} outcome={Outcome} " +
             "path={Path} self={Self} peer={Peer} route={Here}-{There} mode={Mode} " +
             "delay={Delay} waitMs={WaitMs} playMs={PlayMs} rttMs={Rtt} jitterMs={Jitter} " +
-            "rangeMs={Floor}-{Ceiling} avgRttMs={AvgRtt} room={Room} start={Start} total={Total}",
+            "rangeMs={Floor}-{Ceiling} avgRttMs={AvgRtt} rbPerMin={PerMin} rbDepth={Depth} " +
+            "room={Room} start={Start} total={Total}",
             SessionTag(report.Room), report.Proto, app, game, role, outcome, path ?? "?", self, peer,
             here, there, mode, Math.Clamp(report.Delay, 0, 20), wait, played,
-            rtt, jitter, floor, ceiling, AverageRtt(link),
+            rtt, jitter, floor, ceiling, AverageRtt(link), perMin, depth,
             report.Locked ? "private" : "public",
             report.DropIn ? "dropin" : "together", _counters[key]);
 

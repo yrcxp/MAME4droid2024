@@ -107,7 +107,9 @@
     <string name="np_lobby_stats_rooms">지난 %2$d일 동안 %1$d개의 방이 만들어졌습니다.</string>
     <string name="np_lobby_stats_played">그중 %1$d개는 실제 대전으로 이어졌습니다.</string>
     <string name="np_lobby_stats_games">인기 게임: %1$s</string>
+    <string name="np_lobby_stats_best">가장 많이 플레이한 게임: %1$s</string>
     <string name="np_lobby_stats_countries">%1$d개국의 플레이어</string>
+    <string name="np_lobby_stats_top">상위 %1$s</string>
     <string name="np_lobby_stats_suggest">%1$s의 중간 참가 방을 만들면 누군가 게임 도중에 들어올 수 있습니다.</string>
     <string name="np_lobby_count">%1$d개의 게임이 있습니다</string>
     <string name="np_lobby_refresh">새로 고침</string>
@@ -121,7 +123,7 @@
     <string name="np_lobby_delay_auto">지연: 자동</string>
     <string name="np_lobby_waiting">대기 %1$d초</string>
     <string name="np_lobby_conn_lan">같은 네트워크: 직접 연결</string>
-    <string name="np_lobby_conn_good">좋은 연결이 예상됩니다</string>
+    <string name="np_lobby_conn_good">연결될 가능성이 높습니다</string>
     <string name="np_lobby_conn_maybe">연결이 실패할 수 있습니다</string>
     <string name="np_lobby_conn_bad">연결할 수 없음: 양쪽 공유기가 모두 제한적입니다</string>
     <string name="np_lobby_conn_bad_why">양쪽 모두 대칭형 NAT 뒤에 있어 직접 연결이 불가능합니다. 모바일 데이터 대신 Wi-Fi를 사용하거나 공유기에서 포트를 열어 보세요.</string>

@@ -90,6 +90,13 @@ public sealed class LobbyOptions
     public int StatsTopGames { get; set; } = 3;
     public int StatsTopCountries { get; set; } = 3;
 
+    /* Most played gets a longer list of its own: it is a leaderboard, not a
+     * flourish, and a name only earns a place there by being finished. One is
+     * enough to show -- unlike a ranking of wishes, a single one still means
+     * somebody played it through. */
+    public int StatsTopBest { get; set; } = 10;
+    public int StatsMinBest { get; set; } = 1;
+
     /* How often the counters reach the disk. Everything is served from memory,
      * so this only trades how much a restart forgets against how much work the
      * instance does while otherwise idle. */
@@ -99,6 +106,11 @@ public sealed class LobbyOptions
      * because a room counts when it opens and a game only once two people
      * finished one. Turn on when the two can stand side by side. */
     public bool StatsShowPlayed { get; set; } = false;
+
+    /* "Most wanted" -- every time a name came up, room opened or game finished.
+     * Held back the same way: what people actually finished is the better
+     * recommendation, and two lists of games at once is one too many. */
+    public bool StatsShowGames { get; set; } = false;
 
     /* Nothing under these is shown at all. A figure that reads as small does
      * the opposite of what the showcase is for, so "1 country" and "3 rooms"

@@ -107,7 +107,9 @@
     <string name="np_lobby_stats_rooms">%1$d partidas criadas aqui nos últimos %2$d dias.</string>
     <string name="np_lobby_stats_played">%1$d delas viraram jogos de verdade.</string>
     <string name="np_lobby_stats_games">Os mais procurados: %1$s</string>
+    <string name="np_lobby_stats_best">Os mais jogados: %1$s</string>
     <string name="np_lobby_stats_countries">Jogadores de %1$d países</string>
+    <string name="np_lobby_stats_top">top %1$s</string>
     <string name="np_lobby_stats_suggest">Crie uma partida com entrada durante o jogo de %1$s e alguém poderá entrar no meio.</string>
     <string name="np_lobby_count">%1$d jogo(s) disponível(is)</string>
     <string name="np_lobby_refresh">Atualizar</string>
@@ -121,7 +123,7 @@
     <string name="np_lobby_delay_auto">atraso: auto</string>
     <string name="np_lobby_waiting">esperando %1$d s</string>
     <string name="np_lobby_conn_lan">Mesma rede: conexão direta</string>
-    <string name="np_lobby_conn_good">Boa conexão esperada</string>
+    <string name="np_lobby_conn_good">Boa conectividade esperada</string>
     <string name="np_lobby_conn_maybe">A conexão pode falhar</string>
     <string name="np_lobby_conn_bad">Não é possível conectar: ambos os roteadores são restritivos</string>
     <string name="np_lobby_conn_bad_why">Vocês dois estão atrás de um NAT simétrico, então a conexão direta é impossível. Tente Wi-Fi em vez de dados móveis, ou libere a porta no seu roteador.</string>

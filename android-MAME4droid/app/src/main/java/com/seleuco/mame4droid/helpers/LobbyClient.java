@@ -126,7 +126,12 @@ public class LobbyClient {
         public String since = "";
         public int rooms;
         public int played;
+        /** What people opened rooms for. May be empty: the server decides. */
         public String[] games = new String[0];
+
+        /** What they actually played to the end -- the better recommendation. */
+        public String[] best = new String[0];
+
         public int countries;
 
         /** ISO-3166 pairs for the busiest few, drawn as flags. */
@@ -339,6 +344,7 @@ public class LobbyClient {
             recent.rooms = stats.optInt("rooms", 0);
             recent.played = stats.optInt("played", 0);
             recent.games = readStrings(stats.optJSONArray("games"));
+            recent.best = readStrings(stats.optJSONArray("best"));
             recent.countries = stats.optInt("countries", 0);
             recent.flags = readStrings(stats.optJSONArray("flags"));
             out.stats = recent;
@@ -547,7 +553,7 @@ public class LobbyClient {
                                  String path, long waitMs, String country, String peerCountry,
                                  int mode, int delay, long playMs, int rttMs, int jitterMs,
                                  int rttMinMs, int rttMaxMs, boolean locked, String room,
-                                 boolean dropIn) {
+                                 boolean dropIn, int rollbacks, int rollbackFrames) {
         try {
             JSONObject body = new JSONObject();
             body.put("proto", proto);
@@ -571,6 +577,12 @@ public class LobbyClient {
             body.put("locked", locked);
             if (room != null) body.put("room", room);
             if (dropIn) body.put("dropIn", true);
+            /* Raw, not a rate: the server has playMs and can work out
+             * both how often a prediction missed and how deep. */
+            if (rollbacks > 0) {
+                body.put("rollbacks", rollbacks);
+                body.put("rollbackFrames", rollbackFrames);
+            }
             send(base, "/api/v1/telemetry", "POST", body);
         } catch (Exception e) {
             if (DEBUG) Log.d(TAG, "lobby: telemetry failed: " + e);

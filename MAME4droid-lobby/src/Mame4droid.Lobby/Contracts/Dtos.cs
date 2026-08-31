@@ -46,8 +46,11 @@ public sealed record ConfigResponse(
 /// Recent activity, for a board with nothing on it right now. Every figure is
 /// already past its threshold server-side, so a zero means "do not show this".
 /// Flags is the busiest few ISO-3166 codes behind Countries, drawn as flags.
+/// Games is what people reach for; Best only what they played to the end, and
+/// the one a suggestion should name. Either may be empty on purpose.
 public sealed record StatsDto(
-    string Since, int Rooms, int Played, string[] Games, int Countries, string[] Flags);
+    string Since, int Rooms, int Played, string[] Games, string[] Best,
+    int Countries, string[] Flags);
 
 /// Public is the primary STUN tuple ("ip:port", or "[v6]:port" on a v6 host);
 /// PublicAlt carries the "alt=" v4 tuple a dual-stack host also learned.
@@ -206,6 +209,11 @@ public sealed record TelemetryRequest(
      * both starting one. A different shape of session -- rooms open for hours
      * rather than minutes, a state transfer rather than a boot -- so folding
      * it in with the rest would blur every rate it appears in. */
-    bool DropIn = false);
+    bool DropIn = false,
+    /* What rollback actually cost: how many predictions missed, and the frames
+     * those misses re-simulated. Latency says whether a link is fast; these say
+     * whether the device could afford it, which nothing measured before. */
+    int Rollbacks = 0,
+    int RollbackFrames = 0);
 
 public sealed record ErrorResponse(string Error, string? Notice = null);

@@ -47,12 +47,14 @@ public class LoggingTests
         int jitterMs = 0,
         int rttMinMs = 0,
         int rttMaxMs = 0,
-        string? room = "K7M2QP4A") => new(
+        string? room = "K7M2QP4A",
+        int rollbacks = 0,
+        int rollbackFrames = 0) => new(
             11, "1.39.0", game, role, outcome,
             new NatDto(false, true, true),
             new NatDto(true, false, false),
             path, waitMs, country, peerCountry, mode, delay, playMs, rttMs, jitterMs,
-            rttMinMs, rttMaxMs, false, room);
+            rttMinMs, rttMaxMs, false, room, false, rollbacks, rollbackFrames);
 
     [Fact]
     public void A_valid_report_is_written_with_every_field_that_matters()
@@ -361,6 +363,39 @@ public class LoggingTests
 
     private static string ReadAll(string directory, string pattern)
         => string.Concat(Directory.GetFiles(directory, pattern).Select(File.ReadAllText));
+
+    [Fact]
+    public void What_rollback_cost_is_logged_as_a_rate_and_a_depth()
+    {
+        var log = new RecordingLogger<TelemetrySink>();
+        var sink = new TelemetrySink(log, Stats());
+
+        /* Two minutes, 240 misses re-simulating 1200 frames between them. */
+        Assert.True(sink.Record(Report(outcome: "played", playMs: 120000,
+            rttMs: 220, rollbacks: 240, rollbackFrames: 1200)));
+
+        var line = Assert.Single(log.Messages);
+
+        /* Per minute, not per session: a long game would otherwise always
+         * look worse than a short one on the same link. */
+        Assert.Contains("rbPerMin=120", line);
+        Assert.Contains("rbDepth=5", line);
+    }
+
+    [Fact]
+    public void A_lockstep_session_reports_no_rollback_cost()
+    {
+        var log = new RecordingLogger<TelemetrySink>();
+        var sink = new TelemetrySink(log, Stats());
+
+        /* Nothing to divide by, and a stray average off zero misses would
+         * read as a link that rolled back perfectly. */
+        Assert.True(sink.Record(Report(outcome: "played", playMs: 60000, rttMs: 40)));
+
+        var line = Assert.Single(log.Messages);
+        Assert.Contains("rbPerMin=0", line);
+        Assert.Contains("rbDepth=0", line);
+    }
 
     /// The sink needs a stats store; these tests are about what it logs, not
     /// about what it counts, so it is pointed at a file nothing will read.

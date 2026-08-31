@@ -56,8 +56,8 @@ public static class ConfigEndpoints
                      * one has nothing to draw rather than a row of zeros. */
                     recent.Interesting
                         ? new StatsDto(recent.Since, recent.Rooms, recent.Played,
-                                       recent.Games.ToArray(), recent.Countries,
-                                       recent.Flags.ToArray())
+                                       recent.Games.ToArray(), recent.Best.ToArray(),
+                                       recent.Countries, recent.Flags.ToArray())
                         : null));
             })
             .RequireRateLimiting(RateLimitPolicies.Config)

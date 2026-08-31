@@ -609,6 +609,17 @@ int myosd_droid_getMyValue(int key, int i) {
             netplay_t *h = netplay_get_handle();
             return (h && h->has_begun_game) ? (intptr_t)h->tel_rtt_max : 0;
         }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_ROLLBACKS: {
+            /* How often a prediction missed, and the frames those misses had
+             * to re-simulate. Ping says whether a link is fast; these say
+             * whether this device can afford it. Zero outside rollback. */
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->tel_rollbacks : 0;
+        }
+        case com_seleuco_mame4droid_Emulator_NETPLAY_ROLLBACK_FRAMES: {
+            netplay_t *h = netplay_get_handle();
+            return (h && h->has_begun_game) ? (intptr_t)h->tel_rollback_frames : 0;
+        }
         default :
             return -1;
     }

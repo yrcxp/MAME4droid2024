@@ -71,15 +71,15 @@ public class StatsWidget {
 
 	private static TextView textView = null;
 
-	/* payload = "<COLOR>:<text>", COLOR one of GREEN/YELLOW/RED. flags is the
-	 * "here-there" pair drawn ahead of it, or null when unknown. Passed apart,
-	 * not prepended: everything up to the first colon is read as the colour. */
-	public static void update(final MAME4droid mm, String payload, String flags) {
+	/* payload = "<COLOR>:<text>", COLOR one of GREEN/YELLOW/RED. origin is "LAN"
+	 * or a pair of flags, drawn ahead of it. Passed apart, not prepended:
+	 * everything up to the first colon is read as the colour. */
+	public static void update(final MAME4droid mm, String payload, String origin) {
 		int sep = payload.indexOf(':');
 		if (sep < 0) return;
 		final String colorName = payload.substring(0, sep);
 		final String body = payload.substring(sep + 1);
-		final String text = (flags != null) ? flags + " | " + body : body;
+		final String text = (origin != null) ? origin + " | " + body : body;
 		final int color;
 		if ("RED".equals(colorName))
 			color = Color.RED;

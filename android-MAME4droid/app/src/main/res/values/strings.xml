@@ -117,7 +117,9 @@
     <string name="np_lobby_stats_rooms">%1$d rooms opened here in the last %2$d days.</string>
     <string name="np_lobby_stats_played">%1$d of them turned into real games.</string>
     <string name="np_lobby_stats_games">Most wanted: %1$s</string>
+    <string name="np_lobby_stats_best">Most played: %1$s</string>
     <string name="np_lobby_stats_countries">Players from %1$d countries</string>
+    <string name="np_lobby_stats_top">top %1$s</string>
     <string name="np_lobby_stats_suggest">Open a drop-in room for %1$s and someone can join you mid-game.</string>
     <string name="np_lobby_count">%1$d game(s) available</string>
     <string name="np_lobby_refresh">Refresh</string>
@@ -131,7 +133,7 @@
     <string name="np_lobby_delay_auto">delay: auto</string>
     <string name="np_lobby_waiting">waiting %1$d s</string>
     <string name="np_lobby_conn_lan">Same network: direct connection</string>
-    <string name="np_lobby_conn_good">Good connection expected</string>
+    <string name="np_lobby_conn_good">Should connect fine</string>
     <string name="np_lobby_conn_maybe">Connection may fail</string>
     <string name="np_lobby_conn_bad">Cannot connect: both routers are restrictive</string>
     <string name="np_lobby_conn_bad_why">Both of you are behind a symmetric NAT, so a direct connection is impossible. Try Wi-Fi instead of mobile data, or forward the port on your router.</string>

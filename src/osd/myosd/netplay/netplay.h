@@ -120,11 +120,12 @@
     #define NETPLAY_SEND_FAIL_GRACE_MS 4000
 
     /* Adaptive input delay, auto mode only: frame_skip tracks half the
-     * smoothed RTT (clamped to MIN/MAX) so rollback only absorbs residual
-     * jitter.  MAX is deliberately half of a "delay absorbs the whole RTT"
-     * cap -- past it, cheap rollback takes over instead of felt lag.        */
+     * smoothed RTT, clamped to MIN/MAX.
+     * DAV HACK: MAX 6 -> 4.  Buying the whole one-way trip with delay is what
+     * lockstep does; rollback is here to predict it instead.  Field-tested at
+     * 210-230ms RTT, where 4 felt better than the 6 the cap was giving.      */
     #define NETPLAY_INPUT_DELAY_MIN 2
-    #define NETPLAY_INPUT_DELAY_MAX 6
+    #define NETPLAY_INPUT_DELAY_MAX 4
 
 #ifndef MAX_GAME_NAME
 #define MAX_GAME_NAME 64
@@ -381,6 +382,12 @@
          * path on purpose, so filling it would move both.                  */
         uint32_t tel_rtt_min;
         uint32_t tel_rtt_max;
+
+        /* What rollback costs: how often a prediction missed, and the frames
+         * those misses re-simulated. Ping says whether a link is fast, these
+         * say whether the device can afford it. Game thread only. */
+        uint32_t tel_rollbacks;
+        uint32_t tel_rollback_frames;
         uint32_t rtt_update_time;  /* last lockstep auto-frameskip evaluation, ms */
 
         /* N-1 history: the most recently transmitted frame number and its
