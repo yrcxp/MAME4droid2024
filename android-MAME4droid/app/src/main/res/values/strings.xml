@@ -196,6 +196,7 @@
     <string name="np_msg_rom_error">NetPlay: Error loading ROM. Disconnected.</string>
     <string name="np_msg_connection_lost">NetPlay: Connection lost. Resuming offline play...</string>
     <string name="np_msg_no_ack">NetPlay: the other player keeps asking to join, so our answer is not reaching them. Traffic is only getting through one way.</string>
+    <string name="np_msg_plugins_off_peer">Plugins are off this game: the other player does not allow them</string>
     <string name="np_no_answer">No answer from the host.\n\nIt received nothing, or its replies are not getting back to you. If you are both on the same Wi-Fi, check that the two devices are on the same band and that the router is not isolating clients.</string>
     <string name="np_host_carrier_nat">Your router forwarded the port, but your provider has another NAT above it, so nothing can reach the forward. Joining a room from the board still works.</string>
     <string name="np_host_cannot_host">You cannot host from mobile data over IPv4: your carrier gives a different address to each destination and there is no router to forward a port on, so nobody would be able to reach your room.\n\nOver IPv6 there is no NAT in the way and hosting works. This connection has no IPv6 address: either your carrier does not provide one, or the network protocol is not set to Auto in the netplay settings.\n\nJoining a room from the board works, and so does hosting over Wi-Fi.</string>
@@ -588,7 +589,7 @@
     <string name="pref_netplay_upnp_title">UPnP port mapping (host)</string>
     <string name="pref_netplay_upnp_summary">When hosting, automatically forward the netplay port on the router so internet peers can join directly. Removed on disconnect</string>
     <string name="pref_netplay_allow_plugins_title">Allow Lua plugins in netplay</string>
-    <string name="pref_netplay_allow_plugins_summary">Lets cheats, autofire and macros run during netplay. May desync the game, especially in rollback — enable it only if you will use lockstep and need the plugins.</string>
+    <string name="pref_netplay_allow_plugins_summary">Lets cheats, autofire and macros run, but only if the other player allows them too: if either of you has this off, both play without plugins. They never run in a drop-in game, where somebody joins a game already under way. In rollback they can still desync: a rewind takes the game back but not the plugin.</string>
     <string name="pref_netplay_ipproto_title">Network protocol</string>
     <string name="pref_netplay_ipproto_summary">IPv4, IPv6 or automatic. IPv6 has no NAT: internet play usually connects directly, with no port forwarding and fewer connection problems. Auto prefers IPv6 and falls back to IPv4</string>
     <string name="pref_netplay_lobby_title">Public rooms</string>
@@ -645,4 +646,7 @@
     <string name="np_chat_14">👋 I have to go, bye!</string>
     <string name="np_chat_15">⚡ Let\'s switch to Rollback</string>
     <string name="np_chat_16">🔒 Let\'s switch to Lockstep</string>
+    <string name="np_chat_17">😅 I\'m terrible at this game</string>
+    <string name="np_chat_18">🚪 I\'ll open a room for another game</string>
+    <string name="np_chat_19">😎 Fair warning: I\'m a beast at this game</string>
 </resources>

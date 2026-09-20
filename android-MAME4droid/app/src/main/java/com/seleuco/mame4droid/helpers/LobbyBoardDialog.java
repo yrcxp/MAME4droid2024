@@ -677,8 +677,8 @@ public class LobbyBoardDialog {
         }
 
         if (room.plugins) {
-            /* Our plugins flag does not travel in the JOIN handshake, so a
-             * mismatch can desync with nothing to detect it. Say so. */
+            /* Only an older host still says yes: from this version plugins need
+             * both peers to opt in, so nobody advertises them. */
             TextView warn = new TextView(mm);
             warn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
             warn.setTextColor(Color.YELLOW);

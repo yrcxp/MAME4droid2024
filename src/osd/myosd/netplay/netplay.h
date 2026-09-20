@@ -74,11 +74,11 @@
 
     /* Protocol/build handshake: bump on any wire or determinism-critical change;
      * peers exchange it (+ size/ring limits) in JOIN and refuse a mismatched build
-     * rather than desync.  v13 (current): INPUT_NEED/INPUT_RESEND heal input holes
-     * past PACKET_HISTORY, and the rollback state carries ioport's live input state
-     * (new state size).  v12: clean-boundary capture, PACKET_HISTORY 8, transfer
-     * on.  Never mix builds.  (Older changelog in git.) */
-    #define NETPLAY_PROTOCOL_VERSION 13
+     * rather than desync.  v14 (current): the Lua-plugin opt-in travels in JOIN and
+     * the host answers the AND of both, and CPS-3's 16 CRC bytes changed meaning
+     * (block sketch).  v13: INPUT_NEED/INPUT_RESEND, ioport state in the rollback
+     * state.  v12: clean-boundary capture.  (Older changelog in git.) */
+    #define NETPLAY_PROTOCOL_VERSION 14
 
     /* Frame-advantage cap: max frames the local machine may run ahead before
      * stalling for the peer (else the screens drift).  Sized to absorb mobile RTT
@@ -240,6 +240,10 @@
         uint32_t state_limit;   /* sender's ROLLBACK_STATE_SIZE_LIMIT        */
         uint32_t max_frames;    /* sender's ROLLBACK_MAX_FRAMES              */
         uint32_t ring_budget;   /* sender's ROLLBACK_RING_RAM_BUDGET         */
+        /* Lua-plugin opt-in: the client sends its own, the host answers the AND
+         * of both (one "no" disables them on both machines).  In JOIN_ACK:
+         * 1 on, 0 off, 2 off because it is a drop-in game (implicit: no toast). */
+        uint8_t  plugins;
     }netplay_msg_join_t;
 
 #define STATE_CHUNK_SIZE 1024
@@ -376,6 +380,10 @@
         volatile int is_peer_paused;  /* peer reported itself paused        */
         int is_auto_frameskip;        /* frame_skip is adaptive, not fixed  */
         int new_frameskip_set;        /* unused: reserved                   */
+        /* Lua plugins for THIS session: both peers said yes in the handshake and
+         * it is not a drop-in game (see netplay_msg_join::plugins).  0 until
+         * then, so a session that never handshook runs none. */
+        int plugins_session;
 
         char game_name[MAX_GAME_NAME]; /* local/adopted game name          */
 

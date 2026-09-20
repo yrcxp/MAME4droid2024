@@ -228,8 +228,8 @@ diff --git a/ui.cpp b/ui.cpp
 +				opts.set_value(OPTION_THROTTLE, "1", OPTION_PRIORITY_CMDLINE);
 +				opts.set_value(OPTION_SKIP_GAMEINFO, "1", OPTION_PRIORITY_CMDLINE);
 +				opts.set_value(OPTION_CFG_DIRECTORY, "/dev/null", OPTION_PRIORITY_CMDLINE);
-+				// Netplay disables plugins/cheats for determinism, unless the user
-+				// opts in (Settings) -- then keep their values (may desync rollback).
++				// Netplay disables plugins/cheats for determinism, unless BOTH players opted
++				// in (Settings) and it is not a drop-in game (handshake verdict).
 +				if (!myosd_droid_netplay_plugins_allowed()) {
 +					opts.set_value(OPTION_PLUGINS, "0", OPTION_PRIORITY_CMDLINE);
 +					opts.set_value(OPTION_CHEAT,   "0", OPTION_PRIORITY_CMDLINE);

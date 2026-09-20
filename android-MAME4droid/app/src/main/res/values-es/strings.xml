@@ -184,6 +184,7 @@
     <string name="np_msg_rom_error">NetPlay: error al cargar la ROM. Desconectado.</string>
     <string name="np_msg_connection_lost">NetPlay: conexión perdida. Volviendo al juego sin conexión...</string>
     <string name="np_msg_no_ack">NetPlay: el otro jugador sigue pidiendo entrar, así que nuestra respuesta no le llega. El tráfico solo pasa en un sentido.</string>
+    <string name="np_msg_plugins_off_peer">Plugins desactivados en esta partida: el otro jugador no los permite</string>
     <string name="np_no_answer">El host no responde.\n\nO no le ha llegado nada, o sus respuestas no vuelven hasta ti. Si estáis en la misma wifi, mira que los dos aparatos estén en la misma banda y que el router no aísle a los clientes.</string>
     <string name="np_host_carrier_nat">Tu router ha abierto el puerto, pero tu operador tiene otro NAT por encima y no se puede llegar hasta él. Unirte a una sala del tablón sí funciona.</string>
     <string name="np_host_cannot_host">No puedes hospedar desde datos móviles con IPv4: tu operador da una dirección distinta a cada destino y no hay router en el que abrir un puerto, así que nadie podría llegar a tu sala.\n\nPor IPv6 no hay NAT que atravesar y hospedar sí funciona. Esta conexión no tiene IPv6: o tu operador no te la da, o el protocolo de red no está en Auto en los ajustes de netplay.\n\nUnirte a una sala del tablón sí funciona, y por WiFi también puedes hospedar.</string>
@@ -567,7 +568,7 @@
     <string name="pref_netplay_upnp_title">Mapeo de puertos UPnP (anfitrión)</string>
     <string name="pref_netplay_upnp_summary">Al hacer de anfitrión, abre automáticamente el puerto de netplay en el router para que los compañeros de internet puedan unirse directamente. Se elimina al desconectar</string>
     <string name="pref_netplay_allow_plugins_title">Permitir plugins Lua en netplay</string>
-    <string name="pref_netplay_allow_plugins_summary">Deja funcionar cheats, autofire y macros durante el netplay. Puede desincronizar la partida, sobre todo en rollback: actívalo solo si vas a usar lockstep y necesitas los plugins.</string>
+    <string name="pref_netplay_allow_plugins_summary">Deja funcionar cheats, autofire y macros, pero solo si el otro jugador también los permite: si uno de los dos lo tiene desactivado, jugáis sin plugins los dos. No funcionan en las partidas drop-in, donde alguien entra a un juego ya empezado. En rollback pueden desincronizar: el rebobinado devuelve la partida pero no el plugin.</string>
     <string name="pref_netplay_ipproto_title">Protocolo de red</string>
     <string name="pref_netplay_ipproto_summary">IPv4, IPv6 o automático. IPv6 no usa NAT: el juego por internet suele conectar directamente, sin abrir puertos y con menos problemas de conexión. Auto prefiere IPv6 y cae a IPv4</string>
     <string name="pref_netplay_lobby_title">Salas públicas</string>
@@ -622,4 +623,7 @@
     <string name="np_chat_14">👋 Me tengo que ir, ¡adiós!</string>
     <string name="np_chat_15">⚡ Cambiemos a Rollback</string>
     <string name="np_chat_16">🔒 Cambiemos a Lockstep</string>
+    <string name="np_chat_17">😅 Soy malísimo en este juego</string>
+    <string name="np_chat_18">🚪 Voy a abrir una sala de otro juego</string>
+    <string name="np_chat_19">😎 Aviso: soy un crack a este juego</string>
 </resources>

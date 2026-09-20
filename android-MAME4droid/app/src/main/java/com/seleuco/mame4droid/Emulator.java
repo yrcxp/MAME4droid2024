@@ -1264,6 +1264,7 @@ public class Emulator {
 			case "rom_error":              resId = R.string.np_msg_rom_error; break;
 			case "connection_lost":        resId = R.string.np_msg_connection_lost; break;
 			case "no_ack":                 resId = R.string.np_msg_no_ack; break;
+			case "plugins_off_peer":       resId = R.string.np_msg_plugins_off_peer; break;
 			case "peer_disconnected":      resId = R.string.np_msg_peer_disconnected; break;
 			case "send_failed":            resId = R.string.np_msg_send_failed; break;
 			case "bind_failed":            resId = R.string.np_msg_bind_failed; break;

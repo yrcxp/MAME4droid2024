@@ -2087,8 +2087,16 @@ int myosd_droid_is_netplay_active(void) {
 }
 
 /* Opt-in gate (Java pref): may the Lua plugin pump run during netplay? Read by
- * luaengine (freeze) and ui.cpp (plugin/cheat option override). */
-int myosd_droid_netplay_plugins_allowed(void) { return myosd_droid_netplay_allow_plugins; }
+ * luaengine (freeze) and ui.cpp (plugin/cheat override).  plugins_session is the
+ * handshake verdict: both players opted in and it is not a drop-in game. */
+int myosd_droid_netplay_plugins_allowed(void)
+{
+    netplay_t *h = netplay_get_handle();
+    return h && h->plugins_session;
+}
+
+/* Our own opt-in, before the handshake ANDs it with the peer's (netplay.cpp). */
+int myosd_droid_netplay_plugins_pref(void) { return myosd_droid_netplay_allow_plugins; }
 
 int myosd_droid_netplay_get_inMenu() { return myosd_droid_inMenu; }   /* whether the MAME menu is up */
 

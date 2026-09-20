@@ -298,7 +298,34 @@ public class NetPlayHelper {
         R.string.np_chat_4, R.string.np_chat_5, R.string.np_chat_6, R.string.np_chat_7,
         R.string.np_chat_8, R.string.np_chat_9, R.string.np_chat_10, R.string.np_chat_11,
         R.string.np_chat_12, R.string.np_chat_13, R.string.np_chat_14, R.string.np_chat_15,
-        R.string.np_chat_16
+        R.string.np_chat_16, R.string.np_chat_17, R.string.np_chat_18,
+        R.string.np_chat_19
+    };
+
+    /* What the menu shows, most used first (greeting, starting a game, the two
+     * replies, then the rest).  Only the ORDER lives here: the id above is what
+     * crosses the wire, so this list can be reshuffled freely. */
+    private static final int[] CHAT_ORDER = {
+        0,   /* Hello                        */
+        13,  /* Ready                        */
+        7,   /* Insert coin and press Start  */
+        19,  /* I'm a beast at this game     */
+        17,  /* ...or terrible at it         */
+        11,  /* Yes                          */
+        12,  /* No                           */
+        6,   /* Wait a moment                */
+        5,   /* Rematch?                     */
+        1,   /* Good game                    */
+        4,   /* Another game?                */
+        10,  /* I'm lagging                  */
+        2,   /* Thanks                       */
+        3,   /* Sorry                        */
+        14,  /* I have to go, bye!           */
+        8,   /* Looks like we're out of sync */
+        9,   /* Press "Resync game state"    */
+        18,  /* I'll open a room for another game */
+        15,  /* Let's switch to Rollback     */
+        16   /* Let's switch to Lockstep     */
     };
     public static final String PREF_NETPLAY_CHAT_MUTE = "PREF_NETPLAY_CHAT_MUTE";
 
@@ -1540,9 +1567,11 @@ public class NetPlayHelper {
             publishWaitingSince = android.os.SystemClock.elapsedRealtime();
 
         LobbySession board = new LobbySession(mm);
+        /* Nothing to advertise any more: plugins run only when BOTH sides opted
+         * in, which the JOIN handshake settles (and never in a drop-in). */
         boolean published = board.publish(game, rollbackMode ? 1 : 0,
                 mm.getPrefsHelper().getNetplayDelayValue(),
-                mm.getPrefsHelper().isNetplayAllowPluginsEnabled(),
+                false,
                 lan, UpnpHelper.isMapped(), pin, dropIn);
 
         lobby = published ? board : null;
@@ -2366,15 +2395,16 @@ public class NetPlayHelper {
      * button mutes / unmutes what the peer sends. */
     Button.OnClickListener chatClick = new Button.OnClickListener() {
         public void onClick(View v) {
-            final String[] labels = new String[CHAT_PHRASES.length];
-            for (int i = 0; i < CHAT_PHRASES.length; i++)
-                labels[i] = mm.getString(CHAT_PHRASES[i]);
+            final String[] labels = new String[CHAT_ORDER.length];
+            for (int i = 0; i < CHAT_ORDER.length; i++)
+                labels[i] = mm.getString(CHAT_PHRASES[CHAT_ORDER[i]]);
             final boolean muted = isChatMuted(mm);
             new AlertDialog.Builder(mm)
                 .setTitle(mm.getString(R.string.np_chat_title))
                 .setItems(labels, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int which) {
-                        boolean sent = Emulator.netplaySendChat(which) == 1;
+                        /* The list is ordered by use; send the phrase's id. */
+                        boolean sent = Emulator.netplaySendChat(CHAT_ORDER[which]) == 1;
                         Toast.makeText(mm, sent ? mm.getString(R.string.np_chat_you, labels[which])
                                                 : mm.getString(R.string.np_chat_wait),
                                 Toast.LENGTH_SHORT).show();

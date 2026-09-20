@@ -887,7 +887,8 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	/** Opt-in: run Lua plugins (cheat/autofire/macro/hiscore) during netplay.
-	 *  Off by default -- may desync, especially in rollback (safe-ish in lockstep). */
+	 *  Honoured only if the OTHER player allows them too (JOIN handshake) and the
+	 *  game is not a drop-in; in rollback they can still desync. */
 	public boolean isNetplayAllowPluginsEnabled() {
 		return getSharedPreferences().getBoolean(PREF_NETPLAY_ALLOW_PLUGINS, false);
 	}

@@ -184,6 +184,7 @@
     <string name="np_msg_rom_error">联机对战：加载 ROM 出错。已断开连接。</string>
     <string name="np_msg_connection_lost">联机对战：连接已断开。正在恢复离线游戏……</string>
     <string name="np_msg_no_ack">联机对战：对方仍在请求加入，说明我们的回应没有送达。通信只能单向通过。</string>
+    <string name="np_msg_plugins_off_peer">本局插件已关闭：对方不允许使用</string>
     <string name="np_no_answer">主机没有响应。\n\n可能是它没有收到，也可能是它的回应回不到你这里。如果你们连的是同一个 Wi-Fi，请检查两台设备是否在同一频段，以及路由器是否隔离了客户端。</string>
     <string name="np_host_carrier_nat">路由器已经打开端口，但你的运营商上层还有一层 NAT，外部无法抵达。从大厅加入别人的房间仍然可用。</string>
     <string name="np_host_cannot_host">无法用 IPv4 的移动数据创建房间：运营商为每个目标分配不同地址，也没有可以转发端口的路由器，因此没有人能连到你的房间。\n\n通过 IPv6 则没有 NAT 阻挡，可以正常创建房间。此连接没有 IPv6 地址：可能是运营商未提供，也可能是联机设置里的网络协议没有设为 Auto。\n\n从大厅加入别人的房间是可以的，用 Wi-Fi 也可以创建房间。</string>
@@ -566,8 +567,8 @@
     <string name="pref_netplay_desync_summary">检测并警告联机对战不同步（仅回滚模式）；禁用以节省额外的 CPU 开销</string>
     <string name="pref_netplay_upnp_title">UPnP 端口映射（主机）</string>
     <string name="pref_netplay_upnp_summary">作为主机时，自动在路由器上转发联机对战端口，以便互联网对方可直接加入。断开时移除</string>
-    <string name="pref_netplay_allow_plugins_title">允许联机对战中使用 Lua 插件</string>
-    <string name="pref_netplay_allow_plugins_summary">让作弊、连发和宏在联机对战中运行。可能导致游戏不同步，尤其是在 rollback 模式下——仅在你会使用 lockstep 且需要插件时才启用。</string>
+    <string name="pref_netplay_allow_plugins_title">在联机中允许Lua插件</string>
+    <string name="pref_netplay_allow_plugins_summary">运行金手指、连发和宏，但对方也要允许：只要有一方关闭，双方都不使用插件。中途加入（drop-in）的对战中不会运行，因为对方是加入一局已经在进行的游戏。回滚模式下仍可能不同步：倒回会让游戏回退，但插件不会。</string>
     <string name="pref_netplay_ipproto_title">网络协议</string>
     <string name="pref_netplay_ipproto_summary">IPv4、IPv6 或自动。IPv6 没有 NAT：互联网对战通常可直接连接，无需端口转发，连接问题更少。自动模式优先使用 IPv6，并在需要时回退到 IPv4</string>
     <string name="pref_netplay_lobby_title">公共房间</string>
@@ -622,4 +623,7 @@
     <string name="np_chat_14">👋 我得走了，再见！</string>
     <string name="np_chat_15">⚡ 换成回滚模式吧</string>
     <string name="np_chat_16">🔒 换成锁步模式吧</string>
+    <string name="np_chat_17">😅 这个游戏我玩得很烂</string>
+    <string name="np_chat_18">🚪 我去开个别的游戏的房间</string>
+    <string name="np_chat_19">😎 先说好，这个游戏我很强</string>
 </resources>

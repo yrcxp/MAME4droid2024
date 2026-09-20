@@ -60,7 +60,8 @@ void myosd_droid_netplay_set_exitPause(int val);   // unpause on netplay resume
 int myosd_droid_netplay_get_ext_status();          // reserved input-vector extension field
 int myosd_droid_netplay_restart_pending(void);     // 1 while a netplay-forced reload is pending/in flight
 int myosd_droid_netplay_game_settled(void);        // 1 once the netplay game is up and no reload is in flight
-int myosd_droid_netplay_plugins_allowed(void);     // opt-in: run Lua plugins during netplay (may desync)
+int myosd_droid_netplay_plugins_allowed(void);     // handshake verdict: both opted in, not a drop-in game
+int myosd_droid_netplay_plugins_pref(void);        // this device's own plugin opt-in (handshake input)
 
 // Per-frame local input read-back, called from netplay.cpp
 unsigned long myosd_droid_netplay_joystick_read(int i);

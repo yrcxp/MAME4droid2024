@@ -184,6 +184,7 @@
     <string name="np_msg_rom_error">ネットプレイ：ROM の読み込みエラー。切断されました。</string>
     <string name="np_msg_connection_lost">ネットプレイ：接続が切断されました。オフラインプレイに戻ります…</string>
     <string name="np_msg_no_ack">ネットプレイ：相手が参加要求を送り続けています。こちらの応答が届いていません。通信が一方向しか通っていません。</string>
+    <string name="np_msg_plugins_off_peer">このゲームではプラグインは無効です：相手が許可していません</string>
     <string name="np_no_answer">ホストから応答がありません。\n\n届いていないか、応答が戻ってきていません。同じWi-Fiにいる場合は、2台が同じ帯域につながっているか、ルーターが端末同士の通信を遮断していないか確認してください。</string>
     <string name="np_host_carrier_nat">ルーターはポートを開きましたが、プロバイダー側にもう一つNATがあるため、そこには誰も到達できません。掲示板から参加する方法は使えます。</string>
     <string name="np_host_cannot_host">IPv4のモバイル回線ではホストできません。接続先ごとに異なるアドレスが割り当てられ、ポートを開放するルーターもないため、誰もあなたの部屋に到達できません。\n\nIPv6なら間にNATがなく、ホストできます。この回線にはIPv6アドレスがありません。通信事業者が提供していないか、ネットプレイ設定のネットワークプロトコルがAutoになっていません。\n\n掲示板から参加することはできますし、Wi-Fiならホストもできます。</string>
@@ -566,8 +567,8 @@
     <string name="pref_netplay_desync_summary">ネットプレイの非同期を検出して警告します（ロールバックのみ）。追加の CPU コストを節約するには無効にしてください</string>
     <string name="pref_netplay_upnp_title">UPnP ポートマッピング（ホスト）</string>
     <string name="pref_netplay_upnp_summary">ホスト時に、インターネットの相手が直接参加できるよう、ルーターでネットプレイポートを自動的に転送します。切断時に削除されます</string>
-    <string name="pref_netplay_allow_plugins_title">ネットプレイでLuaプラグインを許可</string>
-    <string name="pref_netplay_allow_plugins_summary">チート・オートファイア・マクロをネットプレイ中に動作させます。特にrollbackでは同期ずれの恐れがあります。lockstepを使い、プラグインが必要な場合のみ有効にしてください。</string>
+    <string name="pref_netplay_allow_plugins_title">対戦でLuaプラグインを許可</string>
+    <string name="pref_netplay_allow_plugins_summary">チート・連射・マクロを動かしますが、相手も許可している場合だけです。どちらかがオフなら両方ともプラグインなしで遊びます。途中参加（ドロップイン）の対戦では動きません。すでに進行中のゲームに相手が入るためです。ロールバックではずれることがあります。巻き戻してもプラグインは戻りません。</string>
     <string name="pref_netplay_ipproto_title">ネットワークプロトコル</string>
     <string name="pref_netplay_ipproto_summary">IPv4、IPv6、または自動。IPv6 は NAT がないため、インターネット対戦は通常ポート開放なしで直接接続でき、接続の問題も少なくなります。自動は IPv6 を優先し、必要に応じて IPv4 に切り替えます</string>
     <string name="pref_netplay_lobby_title">公開ルーム</string>
@@ -622,4 +623,7 @@
     <string name="np_chat_14">👋 もう行かなきゃ、またね！</string>
     <string name="np_chat_15">⚡ ロールバックに切り替えよう</string>
     <string name="np_chat_16">🔒 ロックステップに切り替えよう</string>
+    <string name="np_chat_17">😅 このゲームは苦手なんだ</string>
+    <string name="np_chat_18">🚪 別のゲームで部屋を作るね</string>
+    <string name="np_chat_19">😎 言っとくけど、このゲームは得意だよ</string>
 </resources>

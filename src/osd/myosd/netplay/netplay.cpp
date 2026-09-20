@@ -157,6 +157,7 @@ extern float myosd_droid_netplay_lightgun_read_analog(int i, char axis);
 extern int  myosd_droid_get_effective_sound_rate(void);
 extern "C" const char *myosd_netplay_get_running_bios_name(void); /* resolved BIOS of the running host machine, or "" */
 extern void myosd_droid_set_netplay_sound_rate(int rate);
+extern int  myosd_droid_netplay_plugins_pref(void);
 /* Local input read WITH menu-combo interception (MAME-specific; lives in the
  * OSD glue myosd_netplay.cpp, so this engine stays input-semantics-agnostic). */
 extern uint32_t myosd_netplay_read_local_digital(void);
@@ -1935,6 +1936,21 @@ int netplay_read_data(netplay_t *handle)
                 break;
             }
         }
+        /* Before has_joined: that flag releases the game launch (see
+         * myosd_droid_get_netplay_force_game), and ui.cpp reads the plugin
+         * verdict as it applies the boot options. */
+        handle->plugins_session =
+            (myosd_droid_netplay_plugins_pref() && msg.u.join.plugins &&
+             !handle->drop_in) ? 1 : 0;
+        if (myosd_droid_netplay_plugins_pref() && !handle->plugins_session) {
+            NLOG("plugins OFF for this session (drop_in=%d peer=%d)",
+                 handle->drop_in, msg.u.join.plugins);
+            /* Only when the PEER refused: in a drop-in the answer is implicit
+             * (that room type never runs them), so saying it is noise. */
+            if (!handle->drop_in && handle->netplay_warn)
+                handle->netplay_warn((char*)"TOAST:@plugins_off_peer");
+        }
+
         /* Always answer JOIN with JOIN_ACK.  UDP packets can be dropped,
          * and if the Server starts the game before the Client receives the
          * ACK, we must not ignore the Client's retries.                   */
@@ -1984,6 +2000,17 @@ int netplay_read_data(netplay_t *handle)
         /* Refuse mixed builds before adopting anything.                   */
         if (!netplay_check_build_compat(handle, &msg, "JOIN_ACK"))
             break;
+
+        /* Before has_joined, which releases the game launch: ui.cpp reads this
+         * verdict as it applies the boot options.  2 = the host says drop-in,
+         * where plugins never run: implicit, no toast, and never blame the peer. */
+        handle->plugins_session = (msg.u.join.plugins == 1) ? 1 : 0;
+        if (myosd_droid_netplay_plugins_pref() && !handle->plugins_session) {
+            NLOG("plugins OFF for this session: host answered %u", msg.u.join.plugins);
+            if (msg.u.join.plugins != 2 && handle->netplay_warn)
+                handle->netplay_warn((char*)"TOAST:@plugins_off_peer");
+        }
+
         handle->has_joined  = 1;
 
         /* Same guard as the JOIN case above, and the likelier of the two:
@@ -2487,6 +2514,8 @@ int netplay_send_join(netplay_t *handle){
     msg.u.join.state_limit = htonl((uint32_t)ROLLBACK_STATE_SIZE_LIMIT);
     msg.u.join.max_frames  = htonl((uint32_t)ROLLBACK_MAX_FRAMES);
     msg.u.join.ring_budget = htonl((uint32_t)ROLLBACK_RING_RAM_BUDGET);
+    /* Our own plugin opt-in; the host answers with the AND of both. */
+    msg.u.join.plugins     = myosd_droid_netplay_plugins_pref() ? 1 : 0;
     NLOG("netplay_send_join calling send_pkt_data");
     int ret = handle->send_pkt_data(handle, &msg);
     NLOG("netplay_send_join send_pkt_data returned %d", ret);
@@ -2530,7 +2559,10 @@ int netplay_send_join_ack(netplay_t *handle){
     msg.u.join.state_limit = htonl((uint32_t)ROLLBACK_STATE_SIZE_LIMIT);
     msg.u.join.max_frames  = htonl((uint32_t)ROLLBACK_MAX_FRAMES);
     msg.u.join.ring_budget = htonl((uint32_t)ROLLBACK_RING_RAM_BUDGET);
-    
+    /* The session verdict the client must obey (set when its JOIN arrived):
+     * 1 on, 0 off, 2 off because this is a drop-in game. */
+    msg.u.join.plugins     = handle->plugins_session ? 1 : (handle->drop_in ? 2 : 0);
+
     NLOG("send join ack for %s with basetime:%s", handle->game_name, ctime(&handle->basetime));
     
     int ret = handle->send_pkt_data(handle, &msg);
